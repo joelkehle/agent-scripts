@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v gio >/dev/null 2>&1; then
+  gio trash "$@"
+  exit 0
+fi
+
+if command -v trash-put >/dev/null 2>&1; then
+  trash-put "$@"
+  exit 0
+fi
+
+echo "trash: no supported backend found (gio or trash-put)" >&2
+exit 1
