@@ -1,4 +1,4 @@
-# Global AGENTS (applies to all projects)
+# AGENTS.MD
 
 Joel owns this. Start: say hi + 1 motivating line.
 Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
@@ -6,6 +6,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
 - Workspace: `~/dev/projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
+- Mac canonical: `~/Projects`; keep `~/dev/projects` as a symlink for compatibility.
 - 3rd-party/OSS (non-joelkehle): clone under `~/dev/projects/oss`.
 - Files: repo or `~/dev/projects/agent-scripts`.
 - PRs: use `gh pr view/diff` (no URLs).
@@ -30,12 +31,10 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 
 ## Screenshots (“use a screenshot”)
-- Pick newest PNG in /mnt/c/Users/joel/Downloads (fallback: /mnt/c/Users/joel/Desktop).
+- Pick newest PNG in `~/Desktop` or `~/Downloads`.
 - Verify it’s the right UI (ignore filename).
-- If ImageMagick is installed: identify -format "%w x %h\n" <file>
-- Fallback (usually available): file <file> (prints dimensions)
-- If installed: optipng -o7 <file> or pngquant --strip --quality=65-80 <file>.
-- If not installed, note it and skip.
+- Size: `sips -g pixelWidth -g pixelHeight <file>` (prefer 2×).
+- Optimize: `imageoptim <file>` (install: `brew install imageoptim-cli`).
 - Replace asset; keep dimensions; commit; run gate; verify CI.
 
 ## Docs
@@ -83,9 +82,9 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Language/Stack Notes
 - TypeScript: use repo PM; run `docs:list`; keep files small; follow existing patterns.
 
+## macOS Permissions / Signing (TCC)
 
-
-
+- Never re-sign / ad-hoc sign / change bundle ID as “debug” without explicit ok (can mess TCC).
 
 ## Critical Thinking
 - Fix root cause (not band-aid).
@@ -98,6 +97,15 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 Read `~/dev/projects/agent-scripts/tools.md` for the full tool catalog if it exists.
 Wrappers live in `~/dev/projects/agent-scripts/bin` (e.g., `trash`).
+
+### peekaboo
+
+- Screen tools: `~/Projects/Peekaboo`. Cmds: `capture`, `see`, `click`, `list`, `tools`, `permissions status`.
+- Needs Screen Recording + Accessibility. Docs: `~/Projects/Peekaboo/docs/commands/`.
+
+### bin/browser-tools / scripts/browser-tools.ts
+- Chrome DevTools helper. Cmds: `start`, `nav`, `eval`, `screenshot`, `pick`, `cookies`, `inspect`, `kill`.
+- Rebuild: `bun build scripts/browser-tools.ts --compile --target bun --outfile bin/browser-tools`.
 
 ### committer
 
