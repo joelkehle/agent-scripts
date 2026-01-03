@@ -5,10 +5,10 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
-- Workspace: `~/dev/projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
-- Mac canonical: `~/Projects`; keep `~/dev/projects` as a symlink for compatibility.
-- 3rd-party/OSS (non-joelkehle): clone under `~/dev/projects/oss`.
-- Files: repo or `~/dev/projects/agent-scripts`.
+- Workspace: `$HOME/dev/projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
+- Mac canonical: `~/Projects`; keep `$HOME/dev/projects` as a symlink for compatibility.
+- 3rd-party/OSS (non-joelkehle): clone under `$HOME/dev/projects/oss`.
+- Files: repo or `$HOME/dev/projects/agent-scripts`.
 - PRs: use `gh pr view/diff` (no URLs).
 - “Make a note” => edit AGENTS.md (shortcut; not a blocker). Ignore `CLAUDE.md`.
 - No `./runner`. Guardrails: use `trash` for deletes.
@@ -69,7 +69,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - `git checkout` ok for PR review / explicit request.
 - Branch changes require user consent.
 - Destructive ops forbidden unless explicit (`reset --hard`, `clean`, `restore`, `rm`, …).
-- Remotes under `~/dev/projects`: prefer HTTPS; flip SSH->HTTPS before pull/push.
+- Remotes under `$HOME/dev/projects`: prefer HTTPS; flip SSH->HTTPS before pull/push.
 - Commit helper on PATH: `committer` (bash). Prefer it; if repo has `./scripts/committer`, use that.
 - Don’t delete/rename unexpected stuff; stop + ask.
 - No repo-wide S/R scripts; keep edits small/reviewable.
@@ -95,8 +95,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Tools
 
-Read `~/dev/projects/agent-scripts/tools.md` for the full tool catalog if it exists.
-Wrappers live in `~/dev/projects/agent-scripts/bin` (e.g., `trash`).
+Read `$HOME/dev/projects/agent-scripts/tools.md` for the full tool catalog if it exists.
+Wrappers live in `$HOME/dev/projects/agent-scripts/bin` (e.g., `trash`).
 
 ### peekaboo
 
@@ -113,7 +113,7 @@ Wrappers live in `~/dev/projects/agent-scripts/bin` (e.g., `trash`).
 
   ### trash
 
-  - Move files to Trash: trash … (wrapper in ~/dev/projects/agent-scripts/bin, uses gio
+  - Move files to Trash: trash … (wrapper in $HOME/dev/projects/agent-scripts/bin, uses gio
     trash or trash-put).
 
   ### bin/docs-list / scripts/docs-list.ts
