@@ -58,6 +58,16 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Use repo’s package manager/runtime; no swaps w/o approval.
 - Use Codex background for long jobs; tmux only for interactive/persistent (debugger/server).
 
+## TDG Assistant Workflow (Current)
+- Infisical env slugs: `dev`, `staging`, `prod` (no `development`).
+- Dev env folders: `/mock`, `/local`. Use CLI path to select.
+  - Mock dev: `npm run dev` (Infisical `dev` + `/mock`).
+  - Local DB dev: `npm run dev:local` (starts local Supabase + Infisical `dev` + `/local`).
+- Staging deploy: push branch `staging` (Vercel project `tdg-assistant-staging`, production branch = `staging`).
+- Prod deploy: push branch `main` (Vercel project `tdg-assistant`, production branch = `main`).
+- Secret sync: Infisical `staging` → Vercel **Production** (staging project). Infisical `prod` → Vercel **Production** (prod project). Avoid manual Vercel env edits.
+- Edge runtime: middleware must stay edge‑safe (no Node built‑ins). For Node‑only routes, add `export const runtime = 'nodejs'`.
+
 ## Build / Test
 - Before handoff: run full gate (lint/typecheck/tests/docs).
 - CI red: `gh run list/view`, rerun, fix, push, repeat til green.
