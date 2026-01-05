@@ -116,11 +116,16 @@ Wrappers live in `$HOME/dev/projects/agent-scripts/bin` (e.g., `trash`).
   - Move files to Trash: trash … (wrapper in $HOME/dev/projects/agent-scripts/bin, uses gio
     trash or trash-put).
 
-  ### bin/docs-list / scripts/docs-list.ts
+### bin/docs-list / scripts/docs-list.ts
 
   - Optional. Lists docs/ + enforces front‑matter. Ignore if missing.
   - Use repo’s existing runner (e.g., npm run docs:list, tsx scripts/docs-list.ts); don’t
     assume bun.
+
+### bird
+
+- X/Twitter CLI (GraphQL + cookie auth). Cmds: `bird whoami`, `bird read <url|id>`, `bird thread <url|id>`,
+  `bird search "<query>"`, `bird mentions -n 5`, `bird bookmarks --all --json`, `bird query-ids --fresh`.
 
 ### gh
 
