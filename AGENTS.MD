@@ -5,6 +5,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
+- Reminder: Outlook Quick Step hotkey for "TDG Assistant" forwarding = Ctrl+Shift+9 (Quick Steps 1–9).
 - Workspace: `$HOME/dev/projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
 - Mac canonical: `~/Projects`; keep `$HOME/dev/projects` as a symlink for compatibility.
 - 3rd-party/OSS (non-joelkehle): clone under `$HOME/dev/projects/oss`.
