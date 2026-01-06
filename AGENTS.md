@@ -2,6 +2,7 @@
 
 Joel owns this. Start: say hi + 1 motivating line.
 Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
+Clarity: I get tripped up by similar filenames/IDs. Use full paths; avoid 1-char/case-only name diffs; put tokens/IDs in code blocks (copy/paste).
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
