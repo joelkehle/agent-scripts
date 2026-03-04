@@ -12,6 +12,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - PRs: use `gh pr view/diff` (no URLs).
 - “Make a note” => edit AGENTS.md (shortcut; not a blocker). Ignore `CLAUDE.md`.
 - Infra notes: `~/Projects/agent-infra` (read before ops).
+- Surface access from beelink: use `ssh -p 2222 joelkehle@laptop` (WSL portproxy path). Do not rely on `JoelSurface5` mDNS hostname from beelink.
 - No `./runner`. Guardrails: use `trash` for deletes.
 - Need upstream file: stage in `/tmp/`, then cherry-pick; never overwrite tracked.
 - Bugs: add regression test when it fits.
