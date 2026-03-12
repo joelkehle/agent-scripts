@@ -3,16 +3,21 @@
 Joel owns this. Start: say hi + 1 motivating line.
 Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
+## Session Start
+- On Joel's machines, run `machine-compliance --format text` once per session when available.
+- If the wrapper is missing, fallback to `~/Projects/manager/bin/machine-compliance --format text`.
+- Surface every `FAIL` and `WARN` item before normal work starts. `FAIL` means non-compliant now; `WARN` means backlog/drift.
+
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
 - Workspace: `~/Projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
 - 3rd-party/OSS (non-joelkehle): clone under `~/Projects/oss`.
 - `~/Projects/manager`: private ops (domains/DNS, redirects/workers, runbooks).
+- `~/Projects/operations`: machine-first host state, runbooks, and compliance overlays.
+- Surface access from beelink to the laptop guest: use `ssh -p 2222 joelkehle@laptop`. Do not rely on `JoelSurface5` mDNS from beelink.
 - Files: repo or `~/Projects/agent-scripts`.
 - PRs: use `gh pr view/diff` (no URLs).
 - “Make a note” => edit AGENTS.md (shortcut; not a blocker). Ignore `CLAUDE.md`.
-- Infra notes: `~/Projects/agent-infra` (read before ops).
-- Surface access from beelink: use `ssh -p 2222 joelkehle@laptop` (WSL portproxy path). Do not rely on `JoelSurface5` mDNS hostname from beelink.
 - No `./runner`. Guardrails: use `trash` for deletes.
 - Need upstream file: stage in `/tmp/`, then cherry-pick; never overwrite tracked.
 - Bugs: add regression test when it fits.
@@ -37,7 +42,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Important Locations
 - Blog repo: `~/Projects/joelkehle.me`
-- Notes/Runbooks: `~/Projects/manager/docs/` (e.g. `mac-studio.md`, `mac-vm.md`)
+- Fleet policy/docs: `~/Projects/manager/docs/`
+- Host notes/runbooks: `~/Projects/operations/machines/`
 - LLM limits tracking: `~/Documents/joelkehle/codex limits.md`
 - Obsidian vault: `$HOME/.local/share/obsidian/joelkehle-notes`
 
@@ -117,6 +123,9 @@ Read `~/Projects/agent-scripts/tools.md` for the full tool catalog if it exists.
 
 ### trash
 - Move files to Trash: `trash …` (system command).
+
+### machine-compliance
+- Machine drift checker. Run at session start. Wrapper lives in `~/Projects/agent-scripts/bin/machine-compliance`; real implementation lives in `~/Projects/manager/bin/machine-compliance`.
 
 ### bin/docs-list / scripts/docs-list.ts
 - Optional. Lists `docs/` + enforces front-matter. Ignore if `bin/docs-list` not installed. Rebuild: `bun build scripts/docs-list.ts --compile --outfile bin/docs-list`.
