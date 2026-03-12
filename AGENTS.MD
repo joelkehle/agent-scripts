@@ -13,7 +13,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Workspace: `~/Projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
 - 3rd-party/OSS (non-joelkehle): clone under `~/Projects/oss`.
 - `~/Projects/manager`: private ops (domains/DNS, redirects/workers, runbooks).
-- `~/Projects/operations`: machine-first host state, runbooks, and compliance overlays.
+- `~/Projects/operations`: host notebooks plus released manifests, waivers, and observations.
 - Surface access from beelink to the laptop guest: use `ssh -p 2222 joelkehle@laptop`. Do not rely on `JoelSurface5` mDNS from beelink.
 - Files: repo or `~/Projects/agent-scripts`.
 - PRs: use `gh pr view/diff` (no URLs).
@@ -32,6 +32,16 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Web: search early; quote exact errors; prefer 2024–2025 sources; fallback Firecrawl (`pnpm mcp:*`) / `mcporter`.
 - Oracle: run `npx -y @steipete/oracle --help` once/session before first use.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
+
+## State And Compliance
+- Canonical host identity comes from `/etc/manager-host-id` on Linux/macOS/WSL when present.
+- Human working checkout: `~/Projects/operations`.
+- Agent state clone: `~/.local/share/ops-state`.
+- Agents should read released manifests from `~/.local/share/ops-state/manifests/<host_id>/current.json` when present.
+- Transitional fallback only: if the agent clone is missing, read manifests from `~/Projects/operations/manifests/<host_id>/current.json`.
+- Agents must not commit to `~/Projects/operations`.
+- Agents do not write `intent/`, `manifests/`, or `waivers/`.
+- Agent-written state belongs under `observations/` from the dedicated agent clone only.
 
 ## Screenshots (“use a screenshot”)
 - Pick newest PNG in `~/Desktop` or `~/Downloads`.
