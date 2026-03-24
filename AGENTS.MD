@@ -56,6 +56,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Host notes/runbooks: `~/Projects/operations/machines/`
 - LLM limits tracking: `~/Documents/joelkehle/codex limits.md`
 - Obsidian vault: `$HOME/.local/share/obsidian/joelkehle-notes`
+- `tdg-ip-agents` Langfuse follow-ups: `~/Projects/tdg-ip-agents/docs/TELEMETRY_TODOS.md`
 
 ## Docs
 - Start: run docs list (`docs:list` script, or `bin/docs-list` here if present; ignore if not installed); open docs before coding.
@@ -80,6 +81,23 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - CI red: `gh run list/view`, rerun, fix, push, repeat til green.
 - Keep it observable (logs, panes, tails, MCP/browser tools).
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
+
+## Telemetry Contract
+- Source of truth (policy/plan): `~/Projects/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.
+- Source of truth (this file): `~/Projects/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
+- New runtime service: ship `GET /health` + `GET /metrics` (Prometheus). No merge without both unless explicit temporary exception (owner + expiry).
+- Add service to ops visibility: update `~/Projects/manager/ops/config/projects.json` (URL probe + nightly/job probes if applicable).
+- Critical signals require dashboard + alert pair (availability, errors, saturation, delivery quality).
+- Every new/changed alert must link a runbook in annotations. Start from `~/Projects/manager/docs/runbooks/ops-alert-runbook-template.md`.
+
+Telemetry PR checklist (required when telemetry-affecting):
+- Metrics changed/added; labels reviewed for low cardinality.
+- Grafana dashboard/provisioning updated.
+- Prometheus alert rules updated (or explicitly not needed).
+- Runbook link added/updated for each alert touched.
+- Validation run (`promtool check rules` or equivalent config validation).
+
+- CI/merge policy: treat missing telemetry checklist items or missing runbook links as blocking.
 
 ## Git
 - Safe by default: `git status/diff/log`. Push only when user asks.
