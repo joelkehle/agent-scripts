@@ -99,6 +99,19 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 - CI/merge policy: treat missing telemetry checklist items or missing runbook links as blocking.
 
+## Pinakes Bus Architecture
+- Shared message bus: `localhost:8080`, owned by `~/Projects/pinakes`.
+- Bus container runs in `~/Projects/tdg-ip-agents/deploy/docker-compose.yml` (will move to `~/Projects/pinakes/deploy/` in a future fix).
+- Three agent stacks share one bus: `tdg-ip-agents`, `email-agents`, `email-triage`. All connect to the same Docker network (`tta-agentnet`).
+- Agent allowlist: source of truth is `~/Projects/manager/ops/config/allowlist.txt`. Bind-mounted into the bus container as `/etc/pinakes/allowlist.txt`. Bus hot-reloads on file change — no restart needed to add agents.
+- To add a new agent: add its ID to `allowlist.txt`, commit in manager. Bus picks it up automatically.
+- Agent registration: agents heartbeat every 60s. If the bus restarts, agents re-register on next heartbeat. No manual intervention needed.
+- Bus protocol: HTTP + HMAC-SHA256 signatures. See `~/Projects/pinakes/docs/BUS_HTTP_CONTRACT.md`.
+- Ops page: `techtransfer.agency/ops` shows all registered agents, bus health, and submission status.
+- When adding a new agent to any stack: add the agent ID to the allowlist file, add the agent to the stack's docker-compose.yml, and ensure it connects to the `tta-agentnet` network.
+- Do NOT put the allowlist in a Docker volume. It lives in `manager/ops/config/` so it's git-tracked and auditable.
+- Mount the config directory, not the file: `manager/ops/config:/etc/pinakes:ro`. File-level mounts break fsnotify on atomic renames.
+
 ## Git
 - Safe by default: `git status/diff/log`. Push only when user asks.
 - `git checkout` ok for PR review / explicit request.
