@@ -11,6 +11,10 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
 - Workspace: `~/Projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
+- New repo or cloned repo missing `CLAUDE.md` / `AGENTS.md`: create both before doing any work.
+  - `CLAUDE.md` is always the same 3-line stub pointing to `AGENTS.md`. Copy from any sibling repo.
+  - `AGENTS.md` first line: `READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).` Then add repo-specific purpose, start-here pointers, testing strategy, and deploy rules. Use `~/Projects/tdg-ip-agents/AGENTS.md` or `~/Projects/email-agents/AGENTS.md` as a template.
+  - Commit both files before other work.
 - 3rd-party/OSS (non-joelkehle): clone under `~/Projects/oss`.
 - `~/Projects/manager`: private ops (domains/DNS, redirects/workers, runbooks).
 - `~/Projects/operations`: host notebooks plus released manifests, waivers, and observations.
