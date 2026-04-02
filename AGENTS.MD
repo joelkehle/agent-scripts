@@ -103,7 +103,8 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 - CI/merge policy: treat missing telemetry checklist items or missing runbook links as blocking.
 
-## Pinakes Bus Architecture
+## Pinakes Bus
+- Applies to all repos under `~/Projects`.
 - Shared message bus: `localhost:8080`, owned by `~/Projects/pinakes`.
 - Bus container runs in `~/Projects/tdg-ip-agents/deploy/docker-compose.yml` (will move to `~/Projects/pinakes/deploy/` in a future fix).
 - Three agent stacks share one bus: `tdg-ip-agents`, `email-agents`, `email-triage`. All connect to the same Docker network (`tta-agentnet`).
@@ -112,6 +113,18 @@ Telemetry PR checklist (required when telemetry-affecting):
 - Agent registration: agents heartbeat every 60s. If the bus restarts, agents re-register on next heartbeat. No manual intervention needed.
 - Bus protocol: HTTP + HMAC-SHA256 signatures. See `~/Projects/pinakes/docs/BUS_HTTP_CONTRACT.md`.
 - Ops page: `techtransfer.agency/ops` shows all registered agents, bus health, and submission status.
+- Before implementing any agentic capability, first determine whether the capability already exists on the shared bus.
+- Bus discovery steps:
+  - read `~/Projects/pinakes/docs/BUS_HTTP_CONTRACT.md` plus any repo-local bus docs before adding new agent/service logic
+  - check bus health and registry: `curl -fsS http://localhost:8080/v1/health` and `curl -fsS http://localhost:8080/v1/agents`
+  - check the ops page and documented agent ids in `~/Projects/pinakes`, `~/Projects/tdg-ip-agents`, `~/Projects/email-agents`, and the current repo
+  - query the bus or available local docs before writing new agent/service code
+- Preferred order:
+  1. call an existing bus agent
+  2. reuse an existing shared package / sibling-repo implementation
+  3. write new local code only if 1 and 2 are not viable
+- Do not rebuild an existing bus-backed service/agent locally without explicit user approval.
+- If bus reuse is not viable, say why before implementing new agent/service logic.
 - When adding a new agent to any stack: add the agent ID to the allowlist file, add the agent to the stack's docker-compose.yml, and ensure it connects to the `tta-agentnet` network.
 - Do NOT put the allowlist in a Docker volume. It lives in `manager/ops/config/` so it's git-tracked and auditable.
 - Mount the config directory, not the file: `manager/ops/config:/etc/pinakes:ro`. File-level mounts break fsnotify on atomic renames.
