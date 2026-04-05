@@ -5,7 +5,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Session Start
 - On Joel's machines, run `machine-compliance --format text` once per session when available.
-- If the wrapper is missing, fallback to `~/Projects/manager/bin/machine-compliance --format text`.
+- If the wrapper is missing, fallback to `~/Projects/shared/manager/bin/machine-compliance --format text`.
 - Surface every `FAIL` and `WARN` item before normal work starts. `FAIL` means non-compliant now; `WARN` means backlog/drift.
 
 ## Agent Protocol
@@ -13,13 +13,13 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Workspace: `~/Projects`. Missing joelkehle repo: clone `https://github.com/joelkehle/<repo>.git`.
 - New repo or cloned repo missing `CLAUDE.md` / `AGENTS.md`: create both before doing any work.
   - `CLAUDE.md` is always the same 3-line stub pointing to `AGENTS.md`. Copy from any sibling repo.
-  - `AGENTS.md` first line: `READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).` Then add repo-specific purpose, start-here pointers, testing strategy, and deploy rules. Use `~/Projects/tdg-ip-agents/AGENTS.md` or `~/Projects/email-agents/AGENTS.md` as a template.
+  - `AGENTS.md` first line: `READ ~/Projects/shared/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).` Then add repo-specific purpose, start-here pointers, testing strategy, and deploy rules. Use `~/Projects/ucla-tdg/ucla-tdg-ip-agents/AGENTS.md` or `~/Projects/jk/jk-email-agents/AGENTS.md` as a template.
   - Commit both files before other work.
 - 3rd-party/OSS (non-joelkehle): clone under `~/Projects/oss`.
-- `~/Projects/manager`: private ops (domains/DNS, redirects/workers, runbooks).
-- `~/Projects/operations`: host notebooks plus released manifests, waivers, and observations.
+- `~/Projects/shared/manager`: private ops (domains/DNS, redirects/workers, runbooks).
+- `~/Projects/shared/operations`: host notebooks plus released manifests, waivers, and observations.
 - Surface access from beelink to the laptop guest: use `ssh -p 2222 joelkehle@laptop`. Do not rely on `JoelSurface5` mDNS from beelink.
-- Files: repo or `~/Projects/agent-scripts`.
+- Files: repo or `~/Projects/shared/agent-scripts`.
 - PRs: use `gh pr view/diff` (no URLs).
 - “Make a note” => edit AGENTS.md (shortcut; not a blocker). Ignore `CLAUDE.md`.
 - No `./runner`. Guardrails: use `trash` for deletes.
@@ -39,11 +39,11 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## State And Compliance
 - Canonical host identity comes from `/etc/manager-host-id` on Linux/macOS/WSL when present.
-- Human working checkout: `~/Projects/operations`.
+- Human working checkout: `~/Projects/shared/operations`.
 - Agent state clone: `~/.local/share/ops-state`.
 - Agents should read released manifests from `~/.local/share/ops-state/manifests/<host_id>/current.json` when present.
-- Transitional fallback only: if the agent clone is missing, read manifests from `~/Projects/operations/manifests/<host_id>/current.json`.
-- Agents must not commit to `~/Projects/operations`.
+- Transitional fallback only: if the agent clone is missing, read manifests from `~/Projects/shared/operations/manifests/<host_id>/current.json`.
+- Agents must not commit to `~/Projects/shared/operations`.
 - Agents do not write `intent/`, `manifests/`, or `waivers/`.
 - Agent-written state belongs under `observations/` from the dedicated agent clone only.
 
@@ -56,14 +56,14 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Important Locations
 - Blog repo: `~/Projects/joelkehle.me`
-- Fleet policy/docs: `~/Projects/manager/docs/`
-- Host notes/runbooks: `~/Projects/operations/machines/`
+- Fleet policy/docs: `~/Projects/shared/manager/docs/`
+- Host notes/runbooks: `~/Projects/shared/operations/machines/`
 - LLM limits tracking: `~/Documents/joelkehle/codex limits.md`
 - Obsidian vault: `$HOME/.local/share/obsidian/joelkehle-notes`
-- `tdg-ip-agents` Langfuse follow-ups: `~/Projects/tdg-ip-agents/docs/TELEMETRY_TODOS.md`
+- `tdg-ip-agents` Langfuse follow-ups: `~/Projects/ucla-tdg/ucla-tdg-ip-agents/docs/TELEMETRY_TODOS.md`
 
 ## Docs
-- Start: run docs list (`docs:list` script, or `bin/docs-list` here if present; ignore if not installed); open docs before coding.
+- Start: run docs list (`docs:list` script, shared `docs-list` on PATH, or repo-local `bin/docs-list`; ignore if unavailable); open docs before coding.
 - Follow links until domain makes sense; honor `Read when` hints.
 - Keep notes short; update docs when behavior/API changes (no ship w/o docs).
 - Add `read_when` hints on cross-cutting docs.
@@ -87,12 +87,12 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
 
 ## Telemetry Contract
-- Source of truth (policy/plan): `~/Projects/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.
-- Source of truth (this file): `~/Projects/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
+- Source of truth (policy/plan): `~/Projects/shared/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.
+- Source of truth (this file): `~/Projects/shared/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
 - New runtime service: ship `GET /health` + `GET /metrics` (Prometheus). No merge without both unless explicit temporary exception (owner + expiry).
-- Add service to ops visibility: update `~/Projects/manager/ops/config/projects.json` (URL probe + nightly/job probes if applicable).
+- Add service to ops visibility: update `~/Projects/shared/manager/ops/config/projects.json` (URL probe + nightly/job probes if applicable).
 - Critical signals require dashboard + alert pair (availability, errors, saturation, delivery quality).
-- Every new/changed alert must link a runbook in annotations. Start from `~/Projects/manager/docs/runbooks/ops-alert-runbook-template.md`.
+- Every new/changed alert must link a runbook in annotations. Start from `~/Projects/shared/manager/docs/runbooks/ops-alert-runbook-template.md`.
 
 Telemetry PR checklist (required when telemetry-affecting):
 - Metrics changed/added; labels reviewed for low cardinality.
@@ -105,19 +105,25 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 ## Pinakes Bus
 - Applies to all repos under `~/Projects`.
-- Shared message bus: `localhost:8080`, owned by `~/Projects/pinakes`.
-- Bus container runs in `~/Projects/tdg-ip-agents/deploy/docker-compose.yml` (will move to `~/Projects/pinakes/deploy/` in a future fix).
-- Three agent stacks share one bus: `tdg-ip-agents`, `email-agents`, `email-triage`. All connect to the same Docker network (`tta-agentnet`).
-- Agent allowlist: source of truth is `~/Projects/manager/ops/config/allowlist.txt`. Bind-mounted into the bus container as `/etc/pinakes/allowlist.txt`. Bus hot-reloads on file change — no restart needed to add agents.
+- Canonical host-port inventory: `~/Projects/shared/manager/docs/services/port-allocations.md`.
+- Tailscale-facing subset: `~/Projects/shared/manager/docs/services/beelink-services.md`.
+- Current runtime bus on beelink: `localhost:8080`, owned by `~/Projects/shared/pinakes`.
+- Current state is accidental convergence: `ucla-tdg-bus` and `jk-bus` both resolve to `localhost:8080` today.
+- Treat `8080` as current state, not permanent architecture. Check `port-allocations.md` before assuming a bus URL or changing host ports.
+- Bus container runs in `~/Projects/ucla-tdg/ucla-tdg-ip-agents/deploy/docker-compose.yml` (will move to `~/Projects/shared/pinakes/deploy/` in a future fix).
+- Three agent stacks share one bus: `ucla-tdg-ip-agents`, `jk-email-agents`, `ucla-tdg-email-triage`. All connect to the same Docker network (`tta-agentnet`).
+- Agent allowlist: source of truth is `~/Projects/shared/manager/ops/config/allowlist.txt`. Bind-mounted into the bus container as `/etc/pinakes/allowlist.txt`. Bus hot-reloads on file change — no restart needed to add agents.
 - To add a new agent: add its ID to `allowlist.txt`, commit in manager. Bus picks it up automatically.
 - Agent registration: agents heartbeat every 60s. If the bus restarts, agents re-register on next heartbeat. No manual intervention needed.
-- Bus protocol: HTTP + HMAC-SHA256 signatures. See `~/Projects/pinakes/docs/BUS_HTTP_CONTRACT.md`.
+- Bus protocol: HTTP + HMAC-SHA256 signatures. See `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md`.
 - Ops page: `techtransfer.agency/ops` shows all registered agents, bus health, and submission status.
 - Before implementing any agentic capability, first determine whether the capability already exists on the shared bus.
+- Before changing any host-facing service port, `BUS_URL`, `host.docker.internal` target, or compose `ports:` mapping, update `~/Projects/shared/manager/docs/services/port-allocations.md`.
 - Bus discovery steps:
-  - read `~/Projects/pinakes/docs/BUS_HTTP_CONTRACT.md` plus any repo-local bus docs before adding new agent/service logic
+  - read `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md` plus any repo-local bus docs before adding new agent/service logic
+  - read `~/Projects/shared/manager/docs/services/port-allocations.md` before assuming host port ownership
   - check bus health and registry: `curl -fsS http://localhost:8080/v1/health` and `curl -fsS http://localhost:8080/v1/agents`
-  - check the ops page and documented agent ids in `~/Projects/pinakes`, `~/Projects/tdg-ip-agents`, `~/Projects/email-agents`, and the current repo
+  - check the ops page and documented agent ids in `~/Projects/shared/pinakes`, `~/Projects/ucla-tdg/ucla-tdg-ip-agents`, `~/Projects/jk/jk-email-agents`, and the current repo
   - query the bus or available local docs before writing new agent/service code
 - Preferred order:
   1. call an existing bus agent
@@ -126,8 +132,8 @@ Telemetry PR checklist (required when telemetry-affecting):
 - Do not rebuild an existing bus-backed service/agent locally without explicit user approval.
 - If bus reuse is not viable, say why before implementing new agent/service logic.
 - When adding a new agent to any stack: add the agent ID to the allowlist file, add the agent to the stack's docker-compose.yml, and ensure it connects to the `tta-agentnet` network.
-- Do NOT put the allowlist in a Docker volume. It lives in `manager/ops/config/` so it's git-tracked and auditable.
-- Mount the config directory, not the file: `manager/ops/config:/etc/pinakes:ro`. File-level mounts break fsnotify on atomic renames.
+- Do NOT put the allowlist in a Docker volume. It lives in `shared/manager/ops/config/` so it's git-tracked and auditable.
+- Mount the config directory, not the file: `shared/manager/ops/config:/etc/pinakes:ro`. File-level mounts break fsnotify on atomic renames.
 
 ## Git
 - Safe by default: `git status/diff/log`. Push only when user asks.
@@ -146,7 +152,7 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 ## Language/Stack Notes
 - Swift: use workspace helper/daemon; validate `swift build` + tests; keep concurrency attrs right.
-- TypeScript: use repo PM; run `docs:list`; keep files small; follow existing patterns.
+- TypeScript: use repo PM; run `docs:list` or `docs-list`; keep files small; follow existing patterns.
 
 
 ## Critical Thinking
@@ -158,7 +164,7 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 ## Tools
 
-Read `~/Projects/agent-scripts/tools.md` for the full tool catalog if it exists.
+Read `~/Projects/shared/agent-scripts/tools.md` for the full tool catalog if it exists.
 
 ### bird
 - X CLI: `~/Projects/bird/bird`. Cmds: `tweet`, `reply`, `read`, `thread`, `search`, `mentions`, `whoami`.
@@ -183,10 +189,11 @@ Read `~/Projects/agent-scripts/tools.md` for the full tool catalog if it exists.
 - Move files to Trash: `trash …` (system command).
 
 ### machine-compliance
-- Machine drift checker. Run at session start. Wrapper lives in `~/Projects/agent-scripts/bin/machine-compliance`; real implementation lives in `~/Projects/manager/bin/machine-compliance`.
+- Machine drift checker. Run at session start. Wrapper lives in `~/Projects/shared/agent-scripts/bin/machine-compliance`; real implementation lives in `~/Projects/shared/manager/bin/machine-compliance`.
 
-### bin/docs-list / scripts/docs-list.ts
-- Optional. Lists `docs/` + enforces front-matter. Ignore if `bin/docs-list` not installed. Rebuild: `bun build scripts/docs-list.ts --compile --outfile bin/docs-list`.
+### docs-list / bin/docs-list / scripts/docs-list.ts
+- Shared helper on PATH: `~/Projects/shared/agent-scripts/bin/docs-list`. Defaults to `./docs` in the current repo, or accepts a repo root / docs dir argument.
+- Repo-local `bin/docs-list` or `docs:list` script also fine when present.
 
 ### bin/browser-tools / scripts/browser-tools.ts
 - Chrome DevTools helper. Cmds: `start`, `nav`, `eval`, `screenshot`, `pick`, `cookies`, `inspect`, `kill`.
