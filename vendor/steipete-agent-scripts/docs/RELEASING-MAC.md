@@ -8,7 +8,7 @@ read_when:
 
 Reusable checklist distilled from recent VibeTunnel, Trimmy, and CodexBar releases. Adapt the script names and paths to the target repo before running anything.
 
-> Must read: this master file lives at `~/Projects/agent-scripts/docs/RELEASING-MAC.md`. Open it alongside any repo-local release doc and reconcile differences before starting.
+> Must read: this master file lives at `~/Projects/shared/agent-scripts/docs/RELEASING-MAC.md`. Open it alongside any repo-local release doc and reconcile differences before starting.
 
 ## Scope & Assumptions
 - Swift/SwiftUI macOS app shipped outside the App Store, updated via Sparkle (stable + optional prerelease feed).
@@ -48,7 +48,7 @@ Reusable checklist distilled from recent VibeTunnel, Trimmy, and CodexBar releas
 git checkout main && git pull --rebase
 git status
 ```
-2) Open the repo’s release doc (if any) and this master file (`~/Projects/agent-scripts/docs/RELEASING-MAC.md`); resolve any conflicts in favor of the current project owner’s direction.
+2) Open the repo’s release doc (if any) and this master file (`~/Projects/shared/agent-scripts/docs/RELEASING-MAC.md`); resolve any conflicts in favor of the current project owner’s direction.
 3) Update version + changelog (changelog is the release-notes source).
 4) Run the project’s lint/typecheck/tests (e.g., `swiftformat .`, `swiftlint --strict`, `swift test`).
 5) Ensure Sparkle key file exists and do a quick test sign:
@@ -140,7 +140,7 @@ sign_update -f "$SPARKLE_PRIVATE_KEY_FILE" path/to/<App>-<ver>.dmg --account "${
   4) Create/repair the GitHub release and push appcast changes.
 
 ## One-Page Checklist
-- [ ] Opened repo-local release doc and this master guide (`~/Projects/agent-scripts/docs/RELEASING-MAC.md`); resolved any conflicts.
+- [ ] Opened repo-local release doc and this master guide (`~/Projects/shared/agent-scripts/docs/RELEASING-MAC.md`); resolved any conflicts.
 - [ ] Version + build number updated in the single source of truth (and synced to any sibling surfaces).
 - [ ] Changelog entry authored for this version.
 - [ ] Lint/typecheck/tests green.

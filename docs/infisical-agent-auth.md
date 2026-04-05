@@ -93,7 +93,7 @@ agent-env.sh -- gh repo list --limit 5
 
 ### `macmini`
 - Repeat same steps as beelink.
-- Confirm shell profile/path includes `~/Projects/agent-scripts/bin`.
+- Confirm shell profile/path includes `~/Projects/shared/agent-scripts/bin`.
 - If Homebrew is unavailable, install CLIs to `~/.local/bin`:
   - Infisical: extract `Infisical/cli` darwin arm64 release and install `infisical` binary.
   - GitHub CLI: extract `cli/cli` macOS arm64 release and install `gh` binary.

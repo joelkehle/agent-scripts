@@ -15,9 +15,9 @@ Additional skills (copied 2025-12-31) are from @Dimillian’s public `Dimillian/
 
 ## Pointer-Style AGENTS
 - Shared guardrail text now lives only inside this repo: `AGENTS.MD` (shared rules + tool list).
-- Every consuming repo’s `AGENTS.MD` is reduced to the pointer line `READ ~/Projects/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).` Place repo-specific rules **after** that line if they’re truly needed.
+- Every consuming repo’s `AGENTS.MD` is reduced to the pointer line `READ ~/Projects/shared/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing).` Place repo-specific rules **after** that line if they’re truly needed.
 - Do **not** copy the `[shared]` or `<tools>` blocks into other repos anymore. Instead, keep this repo updated and have downstream workspaces re-read `AGENTS.MD` when starting work.
-- When updating the shared instructions, edit `agent-scripts/AGENTS.MD`, mirror the change into `~/AGENTS.MD` (Codex global), and let downstream repos continue referencing the pointer.
+- When updating the shared instructions, edit `shared/agent-scripts/AGENTS.MD`, mirror the change into `~/AGENTS.MD` (Codex global), and let downstream repos continue referencing the pointer.
 
 ## Committer Helper (`scripts/committer`)
 - **What it is:** Bash helper that stages exactly the files you list, enforces non-empty commit messages, and creates the commit.
@@ -37,8 +37,8 @@ Additional skills (copied 2025-12-31) are from @Dimillian’s public `Dimillian/
 - When someone asks to “sync agent scripts,” update this repo, compare it against the active project, and reconcile differences in both directions before continuing.
 
 ## @steipete Agent Instructions (pointer workflow)
-- The only full copies of the guardrails are `agent-scripts/AGENTS.MD` and `~/AGENTS.MD`. Downstream repos should contain the pointer line plus any repo-local additions.
-- During a sync sweep: pull latest `agent-scripts`, ensure each target repo’s `AGENTS.MD` contains the pointer line at the top, append any repo-local notes beneath it, and update the helper scripts as needed.
+- The only full copies of the guardrails are `shared/agent-scripts/AGENTS.MD` and `~/AGENTS.MD`. Downstream repos should contain the pointer line plus any repo-local additions.
+- During a sync sweep: pull latest `shared/agent-scripts`, ensure each target repo’s `AGENTS.MD` contains the pointer line at the top, append any repo-local notes beneath it, and update the helper scripts as needed.
 - If a repo needs custom instructions, clearly separate them from the pointer so future sweeps don’t overwrite local content.
 - For submodules (Peekaboo/*), repeat the pointer check inside each subrepo, push those changes, then bump submodule SHAs in the parent repo.
 - Skip experimental repos (e.g., `poltergeist-pitui`) unless explicitly requested.

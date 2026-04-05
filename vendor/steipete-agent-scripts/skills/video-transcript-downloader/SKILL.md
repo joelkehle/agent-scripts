@@ -16,7 +16,7 @@ Transcript behavior:
 ## Setup
 
 ```bash
-cd ~/Projects/agent-scripts/skills/video-transcript-downloader && npm ci
+cd ~/Projects/shared/agent-scripts/skills/video-transcript-downloader && npm ci
 ```
 
 ## Transcript (default: clean paragraph)

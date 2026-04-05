@@ -12,7 +12,7 @@ Headless web search and content extraction using Brave Search. No browser requir
 Run once before first use:
 
 ```bash
-cd ~/Projects/agent-scripts/skills/brave-search
+cd ~/Projects/shared/agent-scripts/skills/brave-search
 npm ci
 ```
 

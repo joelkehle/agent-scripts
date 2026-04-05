@@ -32,7 +32,7 @@ This is a practical, minimal checklist to get a new macOS (SwiftPM) menubar app 
 - Add to `Scripts/`:
   - `package_app.sh` (build, write Info.plist with bundle id/version/Sparkle keys, codesign in debug or skip if not set).
   - `sign-and-notarize.sh` (release build, DevID sign, notarize, zip app + dSYM, enforce key cleanliness).
-  - `release.sh` sourcing `~/Projects/agent-scripts/release/sparkle_lib.sh` to: lint/test, sign+notarize, clear caches, verify appcast/enclosure, optional live-update test, create GH release, check assets, tag/push.
+  - `release.sh` sourcing `~/Projects/shared/agent-scripts/release/sparkle_lib.sh` to: lint/test, sign+notarize, clear caches, verify appcast/enclosure, optional live-update test, create GH release, check assets, tag/push.
   - `check-release-assets.sh` thin wrapper that calls `check_assets` from shared lib.
   - `test_live_update.sh` (optional manual update smoke test, gated by `RUN_SPARKLE_UPDATE_TEST=1`).
 - Keep `version.env` as the single source for `MARKETING_VERSION` and `BUILD_NUMBER`.
