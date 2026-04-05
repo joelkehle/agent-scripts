@@ -107,9 +107,12 @@ Telemetry PR checklist (required when telemetry-affecting):
 - Applies to all repos under `~/Projects`.
 - Canonical host-port inventory: `~/Projects/shared/manager/docs/services/port-allocations.md`.
 - Tailscale-facing subset: `~/Projects/shared/manager/docs/services/beelink-services.md`.
-- Current runtime bus on beelink: `localhost:8080`, owned by `~/Projects/shared/pinakes`.
-- Current state is accidental convergence: `ucla-tdg-bus` and `jk-bus` both resolve to `localhost:8080` today.
-- Treat `8080` as current state, not permanent architecture. Check `port-allocations.md` before assuming a bus URL or changing host ports.
+- Current beelink runtime split:
+  - `ucla-tdg-bus`: `localhost:8080`
+  - `jk-bus`: `localhost:8081`
+- `ucla-tdg-bus` is hosted by `~/Projects/ucla-tdg/ucla-tdg-ip-agents/deploy/docker-compose.yml`.
+- `jk-bus` is hosted by `~/Projects/jk/jk-email-agents/docker-compose.yml`.
+- Check `port-allocations.md` before assuming a bus URL or changing host ports.
 - Bus container runs in `~/Projects/ucla-tdg/ucla-tdg-ip-agents/deploy/docker-compose.yml` (will move to `~/Projects/shared/pinakes/deploy/` in a future fix).
 - Three agent stacks share one bus: `ucla-tdg-ip-agents`, `jk-email-agents`, `ucla-tdg-email-triage`. All connect to the same Docker network (`tta-agentnet`).
 - Agent allowlist: source of truth is `~/Projects/shared/manager/ops/config/allowlist.txt`. Bind-mounted into the bus container as `/etc/pinakes/allowlist.txt`. Bus hot-reloads on file change — no restart needed to add agents.
