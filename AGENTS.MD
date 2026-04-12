@@ -4,9 +4,9 @@ Joel owns this. Start: say hi + 1 motivating line.
 Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Session Start
-- On Joel's machines, run `machine-compliance --format text` once per session when available.
-- If the wrapper is missing, fallback to `~/Projects/shared/manager/bin/machine-compliance --format text`.
-- Surface every `FAIL` and `WARN` item before normal work starts. `FAIL` means non-compliant now; `WARN` means backlog/drift.
+- On Joel's machines, run `machine-compliance --agent-startup --format text` once per session when available.
+- If the wrapper is missing, fallback to `~/Projects/shared/manager/bin/machine-compliance --agent-startup --format text`.
+- Surface every `FAIL` and `WARN` item from startup mode before normal work starts. Startup mode suppresses `manifest_staleness` so Joel is interrupted for real machine drift, not stale manifest paperwork.
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
@@ -91,6 +91,12 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Source of truth (this file): `~/Projects/shared/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
 - New runtime service: ship `GET /health` + `GET /metrics` (Prometheus). No merge without both unless explicit temporary exception (owner + expiry).
 - Add service to ops visibility: update `~/Projects/shared/manager/ops/config/projects.json` (URL probe + nightly/job probes if applicable).
+- Ops project/service table lives in `~/Projects/shared/manager/ops/config/projects.json`.
+- Port/runtime model:
+  - host-port ownership lives in `~/Projects/shared/manager/docs/services/port-allocations.md`
+  - ops health/probe URLs live in `~/Projects/shared/manager/ops/config/projects.json`
+  - compose/deploy metadata rules live in `~/Projects/shared/manager/docs/decisions/promotion-verification-spec.md`
+  - `internal_port` is compose/container metadata only; do not treat it as an implicit host port or probe target
 - Critical signals require dashboard + alert pair (availability, errors, saturation, delivery quality).
 - Every new/changed alert must link a runbook in annotations. Start from `~/Projects/shared/manager/docs/runbooks/ops-alert-runbook-template.md`.
 
