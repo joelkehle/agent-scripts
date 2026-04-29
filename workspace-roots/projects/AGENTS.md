@@ -195,6 +195,7 @@ cd ~/Projects/jk/jk-email-agents && docker compose up -d
 | What | Where |
 |------|-------|
 | Agent protocol | `~/Projects/shared/agent-scripts/AGENTS.MD` |
+| Subagent guidance | `~/Projects/shared/agent-scripts/docs/subagent.md` |
 | Collaboration patterns | `~/Projects/shared/agent-scripts/collaboration.md` |
 | Tool catalog | `~/Projects/shared/agent-scripts/tools.md` |
 | Fleet/host docs | `~/Projects/shared/manager/docs/infra/` |
