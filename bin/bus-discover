@@ -1,0 +1,301 @@
+#!/usr/bin/env node
+
+const DEFAULT_BUSES = [
+  ["jk", "http://localhost:8081"],
+  ["ucla-tdg", "http://localhost:8080"],
+];
+
+const CAPABILITY_HINTS = new Map([
+  ["calendar-list", { safety: "observe", request: '{action:"calendar-list"}' }],
+  ["events-list", { safety: "observe", request: '{action:"events-list", query:{time_min,time_max,max_results}}' }],
+  ["calendar-agenda", { safety: "observe", request: '{action:"events-list", query:{time_min,time_max,max_results}}' }],
+  ["event-get", { safety: "observe", request: '{action:"event-get", calendar_id,event_id}' }],
+  ["event-insert", { safety: "mutate", request: '{action:"event-insert", calendar_id,event}' }],
+  ["event-patch", { safety: "mutate", request: '{action:"event-patch", calendar_id,event_id,patch}' }],
+  ["email-fetch", { safety: "observe", request: '{action:"email-fetch", query:{q,max_results}}' }],
+  ["email-thread-get", { safety: "observe", request: '{action:"email-thread-get", thread_id}' }],
+  ["email-send", { safety: "mutate", request: '{action:"email-send", message}' }],
+  ["email-archive", { safety: "mutate", request: '{action:"email-archive", thread_id|message_id}' }],
+  ["email-spam", { safety: "mutate", request: '{action:"email-spam", thread_id|message_id}' }],
+  ["contact-resolve", { safety: "observe", request: '{action:"contact-resolve", email|name|query}' }],
+  ["reply-draft", { safety: "recommend", request: '{action:"reply-draft", thread_id, instructions?}' }],
+  ["inbox-act", { safety: "mutate", request: '{action:"inbox-act", workflow_id|thread_id, operation}' }],
+  ["inbox-triage", { safety: "observe", request: '{action:"inbox-triage"}' }],
+  ["inbox-sync", { safety: "observe", request: '{action:"inbox-sync"}' }],
+  ["inbox-workflow-update", { safety: "mutate", request: '{action:"inbox-workflow-update", updates}' }],
+  ["thread-claim", { safety: "observe", request: '{action:"thread-claim", threads:[...]}' }],
+  ["operator-query", { safety: "observe", request: '{question:\"...\"}' }],
+]);
+
+const MUTATING_WORDS = [
+  "act",
+  "append",
+  "archive",
+  "close",
+  "insert",
+  "mutate",
+  "patch",
+  "record",
+  "send",
+  "spam",
+  "update",
+  "upsert",
+  "write",
+];
+
+function usage() {
+  console.log(`Usage: bus-discover [--format text|json] [--capability NAME] [--bus NAME=URL] [--timeout MS]
+
+Defaults:
+  jk       http://localhost:8081
+  ucla-tdg http://localhost:8080
+
+Environment:
+  BUS_DISCOVER_BUSES="jk=http://localhost:8081,ucla=http://localhost:8080"`);
+}
+
+function parseArgs(argv) {
+  const opts = {
+    format: "text",
+    capability: "",
+    timeoutMs: 1500,
+    buses: [],
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--help" || arg === "-h") {
+      opts.help = true;
+      continue;
+    }
+    if (arg === "--json") {
+      opts.format = "json";
+      continue;
+    }
+    if (arg === "--format") {
+      opts.format = requireValue(argv, ++i, arg);
+      continue;
+    }
+    if (arg === "--capability") {
+      opts.capability = requireValue(argv, ++i, arg);
+      continue;
+    }
+    if (arg === "--bus") {
+      opts.buses.push(parseBus(requireValue(argv, ++i, arg)));
+      continue;
+    }
+    if (arg === "--timeout") {
+      const value = Number(requireValue(argv, ++i, arg));
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error("--timeout must be a positive number of milliseconds");
+      }
+      opts.timeoutMs = value;
+      continue;
+    }
+    throw new Error(`unknown argument: ${arg}`);
+  }
+
+  if (!["text", "json"].includes(opts.format)) {
+    throw new Error("--format must be text or json");
+  }
+
+  if (opts.buses.length === 0) {
+    opts.buses = envBuses().length > 0 ? envBuses() : DEFAULT_BUSES;
+  }
+
+  return opts;
+}
+
+function requireValue(argv, index, flag) {
+  const value = argv[index];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${flag} requires a value`);
+  }
+  return value;
+}
+
+function envBuses() {
+  const raw = String(process.env.BUS_DISCOVER_BUSES || "").trim();
+  if (!raw) {
+    return [];
+  }
+  return raw.split(",").map((part) => parseBus(part.trim())).filter(Boolean);
+}
+
+function parseBus(value) {
+  const index = value.indexOf("=");
+  if (index <= 0 || index === value.length - 1) {
+    throw new Error(`invalid bus value ${value}; expected NAME=URL`);
+  }
+  return [value.slice(0, index), value.slice(index + 1).replace(/\/+$/, "")];
+}
+
+async function fetchJSON(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function inspectBus([name, baseURL], opts) {
+  const healthURL = `${baseURL}/v1/health`;
+  const agentsURL = `${baseURL}/v1/agents${opts.capability ? `?capability=${encodeURIComponent(opts.capability)}` : ""}`;
+
+  try {
+    const [health, agentsPayload] = await Promise.all([
+      fetchJSON(healthURL, opts.timeoutMs).catch((error) => ({ error: error.message })),
+      fetchJSON(agentsURL, opts.timeoutMs),
+    ]);
+    const agents = normalizeAgents(agentsPayload.agents || []);
+    return {
+      name,
+      url: baseURL,
+      ok: true,
+      health,
+      agent_count: agents.length,
+      agents: agents.map(enrichAgent),
+    };
+  } catch (error) {
+    return {
+      name,
+      url: baseURL,
+      ok: false,
+      error: error.message || String(error),
+      agent_count: 0,
+      agents: [],
+    };
+  }
+}
+
+function normalizeAgents(agents) {
+  return agents
+    .filter((agent) => agent && String(agent.agent_id || "").trim())
+    .sort((a, b) => String(a.agent_id).localeCompare(String(b.agent_id)));
+}
+
+function enrichAgent(agent) {
+  const capabilities = Array.isArray(agent.capabilities) ? agent.capabilities.filter(Boolean) : [];
+  const inferred = inferSafety(agent, capabilities);
+  return {
+    agent_id: agent.agent_id,
+    status: agent.status || "active",
+    mode: agent.mode || "",
+    class: agent.agent_class || "",
+    mutation_class: agent.mutation_class || inferred,
+    description: clean(agent.description || ""),
+    capabilities,
+    affordances: capabilities.map((capability) => capabilityHint(capability)),
+    version: agent.version || "",
+    meta: agent.meta || null,
+    expires_at: agent.expires_at || "",
+  };
+}
+
+function inferSafety(agent, capabilities) {
+  if (agent.mutation_class) {
+    return agent.mutation_class;
+  }
+  for (const capability of capabilities) {
+    const hint = CAPABILITY_HINTS.get(capability);
+    if (hint && hint.safety === "mutate") {
+      return "mutate";
+    }
+    const lower = capability.toLowerCase();
+    if (MUTATING_WORDS.some((word) => lower.includes(word))) {
+      return "mutate";
+    }
+  }
+  if (capabilities.some((capability) => (CAPABILITY_HINTS.get(capability) || {}).safety === "recommend")) {
+    return "recommend";
+  }
+  return "observe";
+}
+
+function capabilityHint(capability) {
+  const hint = CAPABILITY_HINTS.get(capability);
+  return {
+    capability,
+    safety: hint ? hint.safety : "",
+    request: hint ? hint.request : "",
+  };
+}
+
+function clean(value) {
+  return String(value).replace(/\s+/g, " ").trim();
+}
+
+function renderText(results, opts) {
+  const lines = [];
+  lines.push("Pinakes bus discovery");
+  if (opts.capability) {
+    lines.push(`Capability filter: ${opts.capability}`);
+  }
+  lines.push("Safety: observe reads; recommend drafts/proposes; mutate can change external state.");
+
+  for (const bus of results) {
+    lines.push("");
+    if (!bus.ok) {
+      lines.push(`${bus.name} ${bus.url}: unavailable (${bus.error})`);
+      continue;
+    }
+    lines.push(`${bus.name} ${bus.url}: ${bus.agent_count} agent(s)`);
+    for (const agent of bus.agents) {
+      const classText = [agent.class, agent.mutation_class, agent.mode].filter(Boolean).join("/");
+      lines.push(`- ${agent.agent_id}${classText ? ` [${classText}]` : ""}`);
+      if (agent.description) {
+        lines.push(`  ${agent.description}`);
+      }
+      if (agent.capabilities.length > 0) {
+        lines.push(`  caps: ${agent.capabilities.join(", ")}`);
+      }
+      const requests = agent.affordances
+        .filter((affordance) => affordance.request)
+        .slice(0, 4)
+        .map((affordance) => `${affordance.capability} ${affordance.request}`);
+      if (requests.length > 0) {
+        lines.push(`  use: ${requests.join("; ")}`);
+      }
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+async function main() {
+  let opts;
+  try {
+    opts = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(`bus-discover: ${error.message}`);
+    usage();
+    process.exit(2);
+  }
+
+  if (opts.help) {
+    usage();
+    return;
+  }
+
+  const results = await Promise.all(opts.buses.map((bus) => inspectBus(bus, opts)));
+  if (opts.format === "json") {
+    console.log(JSON.stringify({ buses: results }, null, 2));
+  } else {
+    process.stdout.write(renderText(results, opts));
+  }
+
+  if (!results.some((result) => result.ok)) {
+    process.exitCode = 1;
+  }
+}
+
+main().catch((error) => {
+  console.error(`bus-discover: ${error.stack || error.message || error}`);
+  process.exit(1);
+});

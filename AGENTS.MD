@@ -7,6 +7,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - On Joel's machines, run `machine-compliance --agent-startup --format text` once per session when available.
 - If the wrapper is missing, fallback to `~/Projects/shared/manager/bin/machine-compliance --agent-startup --format text`.
 - Surface every `FAIL` and `WARN` item from startup mode before normal work starts. Startup mode suppresses `manifest_staleness` so Joel is interrupted for real machine drift, not stale manifest paperwork.
+- Under `~/Projects`, run `bus-discover` early when the task may touch email, calendar, IP agents, llm-wiki, triage, or any agentic capability. If missing, fallback to `curl -fsS http://localhost:8081/v1/agents` and `curl -fsS http://localhost:8080/v1/agents`.
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
@@ -86,6 +87,11 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Keep it observable (logs, panes, tails, MCP/browser tools).
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
 
+## Proof Packs
+- Default: make a proof pack for user-visible work, live-data mutations, dashboard/UI changes, or anything Joel will likely inspect remotely. Skip only for trivial asks or explicit user direction.
+- Put proof artifacts where Joel can open them in a browser from another machine. Prefer served HTML/video/report assets over local-only files.
+- When sharing inspect/report URLs, prefer Tailscale hostnames (`beelink`, `laptop`, etc.), not `localhost`, unless Joel explicitly says he is on the same machine.
+
 ## Telemetry Contract
 - Source of truth (policy/plan): `~/Projects/shared/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.
 - Source of truth (this file): `~/Projects/shared/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
@@ -129,6 +135,7 @@ Telemetry PR checklist (required when telemetry-affecting):
 - Before implementing any agentic capability, first determine whether the capability already exists on the shared bus.
 - Before changing any host-facing service port, `BUS_URL`, `host.docker.internal` target, or compose `ports:` mapping, update `~/Projects/shared/manager/docs/services/port-allocations.md`.
 - Bus discovery steps:
+  - run `bus-discover` when available; use `bus-discover --capability <name>` for focused checks
   - read `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md` plus any repo-local bus docs before adding new agent/service logic
   - read `~/Projects/shared/manager/docs/services/port-allocations.md` before assuming host port ownership
   - check bus health and registry: `curl -fsS http://localhost:8080/v1/health` and `curl -fsS http://localhost:8080/v1/agents`
