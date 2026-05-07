@@ -8,6 +8,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - If the wrapper is missing, fallback to `~/Projects/shared/manager/bin/machine-compliance --agent-startup --format text`.
 - Surface every `FAIL` and `WARN` item from startup mode before normal work starts. Startup mode suppresses `manifest_staleness` so Joel is interrupted for real machine drift, not stale manifest paperwork.
 - Under `~/Projects`, run `bus-discover` early when the task may touch email, calendar, IP agents, llm-wiki, triage, or any agentic capability. If missing, fallback to `curl -fsS http://localhost:8081/v1/agents` and `curl -fsS http://localhost:8080/v1/agents`.
+- For email/calendar/agentic tasks, do not merely run discovery. Before recommending architecture or writing code, state the relevant discovered agent ids, capabilities, safety class, and whether each one is read-only or can mutate.
+- Calendar reminder: laptop Outlook calendar adapters are bus agents. `jk-outlook-calendar-agent` serves Joel's personal Outlook calendar on the JK bus; `ucla-tdg-outlook-calendar-agent` serves UCLA Outlook calendar context on the UCLA bus. Do not default to Google Calendar or a new calendar adapter without first accounting for these agents.
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
@@ -132,10 +134,13 @@ Telemetry PR checklist (required when telemetry-affecting):
 - Agent registration: agents heartbeat every 60s. If the bus restarts, agents re-register on next heartbeat. No manual intervention needed.
 - Bus protocol: HTTP + HMAC-SHA256 signatures. See `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md`.
 - Ops page: `techtransfer.agency/ops` shows all registered agents, bus health, and submission status.
-- Before implementing any agentic capability, first determine whether the capability already exists on the shared bus.
+- Before implementing any agentic capability, first determine whether the capability already exists on the shared bus, and explicitly name the discovered affordances in the thread.
 - Before changing any host-facing service port, `BUS_URL`, `host.docker.internal` target, or compose `ports:` mapping, update `~/Projects/shared/manager/docs/services/port-allocations.md`.
 - Bus discovery steps:
   - run `bus-discover` when available; use `bus-discover --capability <name>` for focused checks
+  - for calendar work, check both generic calendar capabilities and Outlook-specific affordances: `calendar-list`, `events-list`, `calendar-agenda`, `outlook-calendar`
+  - for email work, check both source and workflow affordances: `email-fetch`, `email-thread-get`, `inbox-sync`, `inbox-triage`, `query:inbox-status`, `inbox-act`
+  - summarize relevant discovered agents before choosing "new agent", "reuse existing agent", or "extend existing agent"
   - read `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md` plus any repo-local bus docs before adding new agent/service logic
   - read `~/Projects/shared/manager/docs/services/port-allocations.md` before assuming host port ownership
   - check bus health and registry: `curl -fsS http://localhost:8080/v1/health` and `curl -fsS http://localhost:8080/v1/agents`
