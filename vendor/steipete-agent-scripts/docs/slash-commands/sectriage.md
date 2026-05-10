@@ -23,7 +23,7 @@ Prefer minimal. If you only give `ghsa` (or URL), I will derive the rest from th
 - `affected`: human range line for text (example: `<= 2026.2.13`)
 - `vuln_range`: GitHub structured `vulnerable_version_range` (example: `<=2026.2.13`)
 - `patched_versions`: planned fixed version (normally the version you’re about to ship next; from changelog/release prep)
-- `package`: usually `openclaw` (npm)
+- `package`: affected npm package
 - `credits`: reporter handle (example: `@akhmittra`)
 - `fix_commits`: one or more full SHAs (required once a fix is merged)
 - `summary`: 1-liner summary (no GHSA id)
