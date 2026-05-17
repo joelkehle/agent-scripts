@@ -83,6 +83,15 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Use repo’s package manager/runtime; no swaps w/o approval.
 - Long jobs: Codex background, Claude Code Task tool, or tmux. tmux only when persistence/interaction needed (debugger/server).
 
+## WWI / Where Was I
+- Use `wwi` for continuity on non-trivial multi-step work.
+- At task start, run `wwi` when a prior active loop might exist.
+- Create a loop with `wwi new <slug>` when starting new work that may span interruptions.
+- Add breadcrumbs after meaningful progress, before interruption, when blocked, and before handoff: `wwi add <slug> "<state; next action; blocker if any>"`.
+- Use `wwi add "<note>"` only for inbox notes that are not tied to a loop.
+- Use `wwi park <slug>` for paused but still relevant work; use `wwi kill <slug>` for obsolete or completed loops.
+- Do not create loops for tiny one-shot answers.
+
 ## Build / Test
 - Before handoff: run full gate (lint/typecheck/tests/docs).
 - CI red: `gh run list/view`, rerun, fix, push, repeat til green.
