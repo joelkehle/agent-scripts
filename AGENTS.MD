@@ -264,3 +264,27 @@ Do:
 
 Avoid: purple-on-white clichés, generic component grids, predictable layouts.
 </frontend_aesthetics>
+
+## Session start: surface open loops via `wwi`
+
+At the start of every session — before responding to the user's first request, before running other tools — execute:
+
+    wwi
+
+`wwi` ("Where Was I?") prints active open loops with slug, project, title, last-touched time, next action, and recommendation. Each loop represents work in progress that the user may want to resume.
+
+Surface the output to the user. If there are active loops, show them and briefly note which is most recent. If there are none, briefly note that and proceed normally.
+
+If the user's first request relates to an existing loop — by topic, slug, or project — treat the loop's `Current state` and `Next action` sections as authoritative session context. If the match is ambiguous (multiple plausible loops), ask which one before proceeding. Example: "you have `brainfeed-rdap-fixes` touched 3h ago and `tdg-logitech-2023-266` touched 2d ago — which one?"
+
+After completing meaningful work on a loop, record a breadcrumb before the session ends:
+
+    wwi add <slug> "<one-line description of what was done or where work stopped>"
+
+If the user discovers new work that doesn't fit any existing loop, suggest:
+
+    wwi new <slug> --project <name>
+
+(or interactive-prompt form, depending on installed version)
+
+If `wwi` is not installed or `WWI_LOOPS_DIR` resolution fails, mention this once and proceed normally. Do not block the session on `wwi` being unavailable. The user can install via `go install github.com/<their-module>/cmd/wwi` from `~/Projects/shared/wwi/`.
