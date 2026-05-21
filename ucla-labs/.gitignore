@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Raw API dumps can be 100MB+ — regenerable, keep out of git unless preview/.
+data/raw/*.jsonl
+!data/raw/*_preview.jsonl
+
+# The compiled catalog DB rebuilds from raw data + embeddings.
+data/catalog.db
+
+# Keep merged catalog (small, useful for diffs).
+!data/catalog.jsonl
