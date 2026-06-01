@@ -6,34 +6,39 @@ const DEFAULT_BUSES = [
 ];
 
 const CAPABILITY_HINTS = new Map([
-  ["calendar-list", { safety: "observe", request: '{action:"calendar-list"}' }],
-  ["events-list", { safety: "observe", request: '{action:"events-list", query:{time_min,time_max,max_results}}' }],
-  ["calendar-agenda", { safety: "observe", request: '{action:"events-list", query:{time_min,time_max,max_results}}' }],
-  ["event-get", { safety: "observe", request: '{action:"event-get", calendar_id,event_id}' }],
-  ["event-insert", { safety: "mutate", request: '{action:"event-insert", calendar_id,event}' }],
-  ["event-patch", { safety: "mutate", request: '{action:"event-patch", calendar_id,event_id,patch}' }],
-  ["email-fetch", { safety: "observe", request: '{action:"email-fetch", query:{q,max_results}}' }],
-  ["email-thread-get", { safety: "observe", request: '{action:"email-thread-get", thread_id}' }],
-  ["email-send", { safety: "mutate", request: '{action:"email-send", message}' }],
-  ["email-archive", { safety: "mutate", request: '{action:"email-archive", thread_id|message_id}' }],
-  ["email-spam", { safety: "mutate", request: '{action:"email-spam", thread_id|message_id}' }],
-  ["contact-resolve", { safety: "observe", request: '{action:"contact-resolve", email|name|query}' }],
-  ["reply-draft", { safety: "recommend", request: '{action:"reply-draft", thread_id, instructions?}' }],
-  ["inbox-act", { safety: "mutate", request: '{action:"inbox-act", workflow_id|thread_id, operation}' }],
-  ["inbox-triage", { safety: "observe", request: '{action:"inbox-triage"}' }],
-  ["inbox-sync", { safety: "observe", request: '{action:"inbox-sync"}' }],
-  ["inbox-workflow-update", { safety: "mutate", request: '{action:"inbox-workflow-update", updates}' }],
-  ["thread-claim", { safety: "observe", request: '{action:"thread-claim", threads:[...]}' }],
-  ["operator-query", { safety: "observe", request: '{question:\"...\"}' }],
+  ["calendar-list", { safety: "read", request: '{action:"calendar-list"}' }],
+  ["events-list", { safety: "read", request: '{action:"events-list", query:{time_min,time_max,max_results}}' }],
+  ["calendar-agenda", { safety: "read", request: '{action:"events-list", query:{time_min,time_max,max_results}}' }],
+  ["event-get", { safety: "read", request: '{action:"event-get", calendar_id,event_id}' }],
+  ["event-insert", { safety: "write", request: '{action:"event-insert", calendar_id,event}' }],
+  ["event-patch", { safety: "write", request: '{action:"event-patch", calendar_id,event_id,patch}' }],
+  ["email-fetch", { safety: "read", request: '{action:"email-fetch", query:{q,max_results}}' }],
+  ["email-thread-get", { safety: "read", request: '{action:"email-thread-get", thread_id}' }],
+  ["email-send", { safety: "write", request: '{action:"email-send", message}' }],
+  ["email-archive", { safety: "write", request: '{action:"email-archive", thread_id|message_id}' }],
+  ["email-spam", { safety: "write", request: '{action:"email-spam", thread_id|message_id}' }],
+  ["contact-resolve", { safety: "read", request: '{action:"contact-resolve", email|name|query}' }],
+  ["reply-draft", { safety: "propose", request: '{action:"reply-draft", thread_id, instructions?}' }],
+  ["inbox-act", { safety: "write", request: '{action:"inbox-act", workflow_id|thread_id, operation}' }],
+  ["inbox-triage", { safety: "read", request: '{action:"inbox-triage"}' }],
+  ["inbox-sync", { safety: "read", request: '{action:"inbox-sync"}' }],
+  ["inbox-workflow-update", { safety: "write", request: '{action:"inbox-workflow-update", updates}' }],
+  ["thread-claim", { safety: "read", request: '{action:"thread-claim", threads:[...]}' }],
+  ["operator-query", { safety: "read", request: '{question:\"...\"}' }],
 ]);
 
-const MUTATING_WORDS = [
+const LEGACY_SAFETY_CLASS = new Map([
+  ["observe", "read"],
+  ["recommend", "propose"],
+  ["mutate", "write"],
+]);
+
+const WRITING_WORDS = [
   "act",
   "append",
   "archive",
   "close",
   "insert",
-  "mutate",
   "patch",
   "record",
   "send",
@@ -188,7 +193,7 @@ function enrichAgent(agent) {
     status: agent.status || "active",
     mode: agent.mode || "",
     class: agent.agent_class || "",
-    mutation_class: agent.mutation_class || inferred,
+    safety_class: inferred,
     description: clean(agent.description || ""),
     capabilities,
     affordances: capabilities.map((capability) => capabilityHint(capability)),
@@ -199,23 +204,35 @@ function enrichAgent(agent) {
 }
 
 function inferSafety(agent, capabilities) {
-  if (agent.mutation_class) {
-    return agent.mutation_class;
+  const declared = normalizeSafety(agent.safety_class || agent.mutation_class);
+  if (declared) {
+    return declared;
   }
   for (const capability of capabilities) {
     const hint = CAPABILITY_HINTS.get(capability);
-    if (hint && hint.safety === "mutate") {
-      return "mutate";
+    if (hint && hint.safety === "write") {
+      return "write";
     }
     const lower = capability.toLowerCase();
-    if (MUTATING_WORDS.some((word) => lower.includes(word))) {
-      return "mutate";
+    if (WRITING_WORDS.some((word) => lower.includes(word))) {
+      return "write";
     }
   }
-  if (capabilities.some((capability) => (CAPABILITY_HINTS.get(capability) || {}).safety === "recommend")) {
-    return "recommend";
+  if (capabilities.some((capability) => (CAPABILITY_HINTS.get(capability) || {}).safety === "propose")) {
+    return "propose";
   }
-  return "observe";
+  return "read";
+}
+
+function normalizeSafety(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) {
+    return "";
+  }
+  if (["read", "propose", "write"].includes(raw)) {
+    return raw;
+  }
+  return LEGACY_SAFETY_CLASS.get(raw) || "";
 }
 
 function capabilityHint(capability) {
@@ -237,7 +254,7 @@ function renderText(results, opts) {
   if (opts.capability) {
     lines.push(`Capability filter: ${opts.capability}`);
   }
-  lines.push("Safety: observe reads; recommend drafts/proposes; mutate can change external state.");
+  lines.push("Safety: read = read-only; propose = drafts/recommendations; write = can change external state.");
 
   for (const bus of results) {
     lines.push("");
@@ -247,7 +264,7 @@ function renderText(results, opts) {
     }
     lines.push(`${bus.name} ${bus.url}: ${bus.agent_count} agent(s)`);
     for (const agent of bus.agents) {
-      const classText = [agent.class, agent.mutation_class, agent.mode].filter(Boolean).join("/");
+      const classText = [agent.class, agent.safety_class, agent.mode].filter(Boolean).join("/");
       lines.push(`- ${agent.agent_id}${classText ? ` [${classText}]` : ""}`);
       if (agent.description) {
         lines.push(`  ${agent.description}`);

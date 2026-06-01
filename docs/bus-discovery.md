@@ -39,16 +39,18 @@ bus-discover --bus jk=http://localhost:8081 --bus ucla-tdg=http://localhost:8080
 It prints each live agent with:
 
 - `agent_id`
-- class / mutation class / mode when available
+- class / safety class / mode when available
 - description
 - capabilities
 - known request-shape hints for common capabilities
 
 Safety classes:
 
-- `observe` reads or summarizes only.
-- `recommend` drafts or proposes actions/artifacts.
-- `mutate` can change external state and requires explicit user intent.
+- `read` reads or summarizes only.
+- `propose` drafts or proposes actions/artifacts.
+- `write` can change external state and requires explicit user intent.
+
+Use `write`, `write-capable`, and `write action` in human-facing prose. Use `destructive write` when a write can send, delete, archive, label, patch, or otherwise make a risky external change. Older bus payloads may still expose legacy field names or values; display them as `read` / `propose` / `write`.
 
 The bus registry is live state, not the whole contract. For exact request/reply schemas and side effects, read the repo-local capability docs before implementing new producers.
 

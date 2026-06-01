@@ -3,12 +3,20 @@
 Joel owns this. Start: say hi + 1 motivating line.
 Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
+## Vocabulary
+- Write capability: say `write`, `write-capable`, or `write action`.
+- Read capability: say `read-only` or `read`.
+- Recommendation capability: say `propose`, `draft`, or `recommend`.
+- Bus safety classes in human-facing text: `read` / `propose` / `write`.
+- Use `destructive write` when the action can send, delete, archive, patch, label, or otherwise change external state in a risky way.
+- Avoid legacy mutation jargon except when quoting an existing API field, code symbol, or historical text.
+
 ## Session Start
 - On Joel's machines, run `machine-compliance --agent-startup --format text` once per session when available.
 - If the wrapper is missing, fallback to `~/Projects/shared/manager/bin/machine-compliance --agent-startup --format text`.
 - Surface every `FAIL` and `WARN` item from startup mode before normal work starts. Startup mode suppresses `manifest_staleness` so Joel is interrupted for real machine drift, not stale manifest paperwork.
 - Under `~/Projects`, run `bus-discover` early when the task may touch email, calendar, IP agents, llm-wiki, triage, or any agentic capability. If missing, fallback to `curl -fsS http://localhost:8081/v1/agents` and `curl -fsS http://localhost:8080/v1/agents`.
-- For email/calendar/agentic tasks, do not merely run discovery. Before recommending architecture or writing code, state the relevant discovered agent ids, capabilities, safety class, and whether each one is read-only or can mutate.
+- For email/calendar/agentic tasks, do not merely run discovery. Before recommending architecture or writing code, state the relevant discovered agent ids, capabilities, safety class, and whether each one is read-only or write-capable.
 - Calendar reminder: laptop Outlook calendar adapters are bus agents. `jk-outlook-calendar-agent` serves Joel's personal Outlook calendar on the JK bus; `ucla-tdg-outlook-calendar-agent` serves UCLA Outlook calendar context on the UCLA bus. Do not default to Google Calendar or a new calendar adapter without first accounting for these agents.
 
 ## Agent Protocol
@@ -99,7 +107,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
 
 ## Proof Packs
-- Default: make a proof pack for user-visible work, live-data mutations, dashboard/UI changes, or anything Joel will likely inspect remotely. Skip only for trivial asks or explicit user direction.
+- Default: make a proof pack for user-visible work, live-data writes, dashboard/UI changes, or anything Joel will likely inspect remotely. Skip only for trivial asks or explicit user direction.
 - Put proof artifacts where Joel can open them in a browser from another machine. Prefer served HTML/video/report assets over local-only files.
 - When sharing inspect/report URLs, prefer Tailscale hostnames (`beelink`, `laptop`, etc.), not `localhost`, unless Joel explicitly says he is on the same machine.
 
