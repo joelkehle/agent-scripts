@@ -124,3 +124,5 @@ Claude Code custom agents are repo-local tool config. If a repo does not have `.
 Tmux is for persistent/interactive long jobs, debuggers, servers, or manual external agents. It is not the default subagent mechanism.
 
 Pinakes bus agents are application/runtime services. Before adding agentic product capability, check existing bus agents and docs first; do not confuse bus service reuse with coding-task delegation.
+
+For cross-host Codex / Claude Code coordination between beelink and macmini, use the shared NAS coordination layer. Read `docs/shared-agent-coordination.md`, create claims before overlapping write work, and write handoffs before switching hosts or runtimes.

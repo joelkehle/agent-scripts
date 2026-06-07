@@ -91,6 +91,19 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Use repo’s package manager/runtime; no swaps w/o approval.
 - Long jobs: Codex background, Claude Code Task tool, or tmux. tmux only when persistence/interaction needed (debugger/server).
 
+## Shared Agent Coordination
+- Applies to Codex / Claude Code build agents on beelink and macmini. Pinakes bus agents are runtime services, not this layer.
+- Shared NAS root: `AgentCoord/` under Synology Share1.
+  - beelink: `/mnt/synology-share1/AgentCoord`
+  - macmini: `/Volumes/synology-share1/AgentCoord` when mounted; export is `192.168.88.2:/volume1/Share1`
+- Read `~/Projects/shared/agent-scripts/docs/shared-agent-coordination.md` before cross-host or multi-agent work.
+- Keep repo checkouts, `.git`, deps, and builds local. Use NAS for claims, handoffs, patches, proof packs, logs, and registry only.
+- Before overlapping write work, create a claim under `claims/<repo>/<slug>.<agent>.<host>.json` with scope, safety (`read`/`propose`/`write`), start time, next action, and expiry.
+- Before switching hosts/agents, write a handoff under `handoffs/<repo>/`.
+- Prefer Git/PRs as source of truth. Use NAS patch files only when branch/push state is blocked or intentionally local.
+- Do not store secrets, tokens, private keys, raw email bodies, or sensitive source data on the share unless Joel explicitly approves that location.
+- Use atomic create/rename or mkdir claims; do not rely on NFS file locking. Expire stale claims instead of blocking forever.
+
 ## WWI / Where Was I
 - Use `wwi` for continuity on non-trivial multi-step work.
 - At task start, run `wwi` when a prior active loop might exist.
@@ -110,6 +123,13 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Default: make a proof pack for user-visible work, live-data writes, dashboard/UI changes, or anything Joel will likely inspect remotely. Skip only for trivial asks or explicit user direction.
 - Put proof artifacts where Joel can open them in a browser from another machine. Prefer served HTML/video/report assets over local-only files.
 - When sharing inspect/report URLs, prefer Tailscale hostnames (`beelink`, `laptop`, etc.), not `localhost`, unless Joel explicitly says he is on the same machine.
+- Standard Codex review output viewer:
+  - filesystem root: `~/Projects/shared/dev-dashboard/codex-output/`
+  - Tailscale URL root: `http://beelink:8091/codex-output/`
+  - create a unique task subdirectory and write `index.html`; prefer HTML over Markdown/JSON for Joel review
+  - for repo-specific work, use `<repo-name>/<task-slug>-<YYYYMMDDThhmmssZ>/`
+  - multiple Codex sessions may write there concurrently, so never reuse a slug unless intentionally updating the same review packet
+  - treat this as Tailscale-facing only; do not expose email/sensitive artifacts through public Cloudflare hostnames without explicit approval
 
 ## Telemetry Contract
 - Source of truth (policy/plan): `~/Projects/shared/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.

@@ -58,6 +58,8 @@ The bus registry is live state, not the whole contract. For exact request/reply 
 
 When working under `~/Projects`, run `bus-discover` early if the task might touch email, calendar, IP agents, llm-wiki, triage, or any agentic capability. Prefer an existing bus agent before writing new local code.
 
+This is separate from Codex / Claude Code build-agent coordination. For cross-host coding claims, handoffs, patches, and proof packs on beelink/macmini, read `~/Projects/shared/agent-scripts/docs/shared-agent-coordination.md`.
+
 If `bus-discover` is missing, use the raw fallback:
 
 ```bash

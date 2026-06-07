@@ -25,6 +25,7 @@ When launched here, you have cross-project context. Use it for multi-repo ops, p
 | **operations** | Per-host notebooks plus intent/manifests/waivers/observations for machine state |
 | **workbench** (dir: `shared/workbench`) | Dev portal — launch/manage agent terminals per project (Go + SQLite + xterm.js) |
 | **brainstorm** | Roadmap, project scoring, tool inventory, planning docs |
+| **AgentCoord** | NAS-backed coordination layer for Codex / Claude Code claims, handoffs, patches, proof packs |
 
 ### TDG Variants (support surfaces around `ucla-tdg-assistant-db`)
 
@@ -196,6 +197,7 @@ cd ~/Projects/jk/jk-email-agents && docker compose up -d
 |------|-------|
 | Agent protocol | `~/Projects/shared/agent-scripts/AGENTS.MD` |
 | Subagent guidance | `~/Projects/shared/agent-scripts/docs/subagent.md` |
+| Shared agent coordination | `~/Projects/shared/agent-scripts/docs/shared-agent-coordination.md` |
 | Collaboration patterns | `~/Projects/shared/agent-scripts/collaboration.md` |
 | Tool catalog | `~/Projects/shared/agent-scripts/tools.md` |
 | Fleet/host docs | `~/Projects/shared/manager/docs/infra/` |
