@@ -93,6 +93,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Shared Agent Coordination
 - Applies to Codex / Claude Code build agents on beelink and macmini. Pinakes bus agents are runtime services, not this layer.
+- Preferred architecture: launch Codex / Claude Code from beelink. Treat macmini as a remote macOS execution target reached by SSH for mac-only repos, launchd jobs, GUI/TCC-adjacent checks, Photos/Voice Memos/Keychain workflows, and other Apple-specific runtime work.
+- Do not start an independent long-running Codex on macmini unless Joel explicitly asks or beelink cannot reach the needed macOS surface. When using macmini, run commands from beelink with `ssh macmini 'cd ~/Projects/<repo> && ...'` and commit in the repo where the work lives.
 - Shared NAS root: `/mnt/synology-share1/AgentCoord` on both beelink and macmini.
   - NAS export: `192.168.88.2:/volume1/Share1`
   - macmini implements `/mnt` via `/etc/synthetic.d/joelkehle-mnt`; use `/mnt/synology-share1`, not `/Volumes/...`.

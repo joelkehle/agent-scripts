@@ -12,6 +12,22 @@ This is the cross-host coordination layer for Codex and Claude Code build agents
 
 It is not the Pinakes bus. Pinakes agents are runtime/product services. This layer is for coding sessions coordinating claims, handoffs, patches, proof artifacts, and lightweight logs across beelink and macmini.
 
+## Control Plane Model
+
+Default architecture:
+
+```text
+Codex / Claude Code runs on beelink
+  -> edits and tests Linux/local projects on beelink
+  -> uses ssh macmini 'cd ~/Projects/<repo> && ...' for macOS-specific work
+  -> stores claims, handoffs, patches, and proof packs in AgentCoord
+  -> commits in the repo where the work actually lives
+```
+
+Prefer launching coding agents from beelink. Use macmini as a remote execution target for macOS-only repos and workflows: launchd, TCC/GUI-adjacent checks, Photos, Voice Memos, Keychain, Apple app automation, and hardware-local probes.
+
+Do not start an independent long-running Codex or Claude Code session on macmini unless Joel explicitly asks, beelink cannot reach the needed macOS surface, or the task truly requires interactive local macOS control. If a macmini-local session is used, it must create/update `AgentCoord` claims and handoffs so beelink remains the coordination point.
+
 ## Service Identity
 
 - Service name: `AgentCoord`
