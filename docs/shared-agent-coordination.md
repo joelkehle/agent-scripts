@@ -18,8 +18,8 @@ It is not the Pinakes bus. Pinakes agents are runtime/product services. This lay
 - Backing storage: Synology `Share1`
 - NAS export: `192.168.88.2:/volume1/Share1`
 - Shared directory: `AgentCoord/`
-- beelink path: `/mnt/synology-share1/AgentCoord`
-- macmini path: `/Volumes/synology-share1/AgentCoord` when mounted
+- Canonical path on beelink and macmini: `/mnt/synology-share1/AgentCoord`
+- macmini implements `/mnt` with `/etc/synthetic.d/joelkehle-mnt`; do not use `/Volumes/...` for this service.
 - Ops doc: `~/Projects/shared/manager/docs/services/agent-coordination-share.md`
 
 ## Use It For
@@ -164,7 +164,8 @@ macmini:
 
 ```bash
 showmount -e 192.168.88.2
-ls -la /Volumes/synology-share1/AgentCoord
+mount | grep '192.168.88.2:/volume1/Share1'
+ls -la /mnt/synology-share1/AgentCoord
 ```
 
 Network probes:

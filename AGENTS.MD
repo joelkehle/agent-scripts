@@ -93,9 +93,9 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Shared Agent Coordination
 - Applies to Codex / Claude Code build agents on beelink and macmini. Pinakes bus agents are runtime services, not this layer.
-- Shared NAS root: `AgentCoord/` under Synology Share1.
-  - beelink: `/mnt/synology-share1/AgentCoord`
-  - macmini: `/Volumes/synology-share1/AgentCoord` when mounted; export is `192.168.88.2:/volume1/Share1`
+- Shared NAS root: `/mnt/synology-share1/AgentCoord` on both beelink and macmini.
+  - NAS export: `192.168.88.2:/volume1/Share1`
+  - macmini implements `/mnt` via `/etc/synthetic.d/joelkehle-mnt`; use `/mnt/synology-share1`, not `/Volumes/...`.
 - Read `~/Projects/shared/agent-scripts/docs/shared-agent-coordination.md` before cross-host or multi-agent work.
 - Keep repo checkouts, `.git`, deps, and builds local. Use NAS for claims, handoffs, patches, proof packs, logs, and registry only.
 - Before overlapping write work, create a claim under `claims/<repo>/<slug>.<agent>.<host>.json` with scope, safety (`read`/`propose`/`write`), start time, next action, and expiry.
