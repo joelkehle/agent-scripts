@@ -14,6 +14,7 @@ Repair one failure at a time:
 5. Rerun only the failed command first.
 6. Repeat up to three focused attempts for the same failure.
 7. If the targeted check passes, rerun broader validation with `agent-check` when feasible.
+8. If the repair is committed before the receipt, use `loop-receipt --from-head` or `loop-receipt --commit <ref>` so receipt files come from the commit, not unrelated dirty state.
 
 Stop if the repair requires new scope, secrets, production config, schema migration, deployment, destructive write, or unclear product behavior.
 

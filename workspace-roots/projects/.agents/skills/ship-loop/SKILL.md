@@ -16,7 +16,7 @@ Follow this implementation loop:
 7. If validation fails, switch to `repair-loop`.
 8. Before handoff, run `agent-check` when feasible.
 9. Inspect the diff and remove accidental churn.
-10. Final receipt: files changed, behavior changed, checks run, failures repaired, risks, and proof-pack URL when applicable.
+10. Final receipt: files changed, behavior changed, checks run, failures repaired, risks, and proof-pack URL when applicable. If work was committed first, use `loop-receipt --from-head` or `loop-receipt --commit <ref>` so receipt files come from the commit, not unrelated dirty state.
 
 Stop and ask one direct question if the work needs a product decision, secrets, production config, schema migration, deployment, force-push, or destructive write not explicitly requested by Joel.
 
