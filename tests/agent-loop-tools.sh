@@ -150,3 +150,27 @@ mixed_files="$(node -e 'const fs = require("node:fs"); const receipt = JSON.pars
 assert_contains "$mixed_files" "current.txt"
 assert_contains "$mixed_files" "commit:HEAD"
 assert_not_contains "$mixed_files" "unrelated.txt"
+
+merge_repo="$workspace/merge-receipt-repo"
+mkdir -p "$merge_repo"
+git -C "$merge_repo" init -q
+git -C "$merge_repo" config user.email "agent-loop-test@example.com"
+git -C "$merge_repo" config user.name "Agent Loop Test"
+printf '{"scripts":{"test":"printf test-ok"}}\n' > "$merge_repo/package.json"
+git -C "$merge_repo" add package.json
+git -C "$merge_repo" commit -q -m "init"
+default_branch="$(git -C "$merge_repo" branch --show-current)"
+git -C "$merge_repo" checkout -q -b side
+printf 'side\n' > "$merge_repo/side.txt"
+git -C "$merge_repo" add side.txt
+git -C "$merge_repo" commit -q -m "add side file"
+git -C "$merge_repo" checkout -q "$default_branch"
+printf 'main\n' > "$merge_repo/main.txt"
+git -C "$merge_repo" add main.txt
+git -C "$merge_repo" commit -q -m "add main file"
+git -C "$merge_repo" merge -q --no-ff side -m "merge side"
+merge_receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$merge_repo" --goal "Merge receipt" --status pass --next-loop review-loop --from-head --print-path)"
+merge_files="$(node -e 'const fs = require("node:fs"); const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(receipt.files.join("\n")); console.log(receipt.files_source);' "$merge_receipt_path")"
+assert_contains "$merge_files" "main.txt"
+assert_contains "$merge_files" "side.txt"
+assert_contains "$merge_files" "commit:HEAD"

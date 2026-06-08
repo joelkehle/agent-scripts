@@ -173,11 +173,11 @@ function committedFiles(repoRoot, ref) {
   if (!resolved) {
     throw new Error(`commit not found: ${ref}`);
   }
-  return run("git", ["-C", repoRoot, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", resolved], repoRoot)
+  const files = run("git", ["-C", repoRoot, "diff-tree", "-m", "--root", "--no-commit-id", "--name-only", "-r", resolved], repoRoot)
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean)
-    .sort();
+    .filter(Boolean);
+  return [...new Set(files)].sort();
 }
 
 function changedFiles(repoRoot) {
