@@ -92,6 +92,25 @@ assert_contains "$audit_output" "OK $workspace/.agents/skills/hygiene-loop/SKILL
 assert_contains "$audit_output" "OK make-only -> make agent-check"
 assert_contains "$audit_output" "OK script-only -> scripts/agent-check.sh"
 
+dirty_repo="$workspace/dirty-repo"
+mkdir -p "$dirty_repo/proofs/run"
+git -C "$dirty_repo" init -q
+git -C "$dirty_repo" config user.email "agent-loop-test@example.com"
+git -C "$dirty_repo" config user.name "Agent Loop Test"
+printf '{"scripts":{"test":"printf test-ok"}}\n' > "$dirty_repo/package.json"
+printf 'initial\n' > "$dirty_repo/README.md"
+git -C "$dirty_repo" add package.json README.md
+git -C "$dirty_repo" commit -q -m "init"
+printf 'changed\n' >> "$dirty_repo/README.md"
+printf '<html>proof</html>\n' > "$dirty_repo/proofs/run/index.html"
+dirty_output="$(dirty-audit "$workspace")"
+assert_contains "$dirty_output" "dirty-repo"
+assert_contains "$dirty_output" "generated/proof: 1"
+assert_contains "$dirty_output" "split generated/proof artifacts"
+dirty_json="$(dirty-audit "$workspace" --json)"
+assert_contains "$dirty_json" '"repo": "dirty-repo"'
+assert_contains "$dirty_json" '"validation": "npm test"'
+
 receipt_repo="$workspace/receipt-repo"
 mkdir -p "$receipt_repo/src"
 cat > "$receipt_repo/package.json" <<'JSON'

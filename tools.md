@@ -36,6 +36,11 @@ Local tool catalog for this machine.
 - Location: ~/Projects/shared/agent-scripts/bin/loop-audit
 - Examples: `loop-audit`, `loop-audit ~/Projects`
 
+## dirty-audit
+- Purpose: read-only dirty repo inventory for hygiene loops: branch/ahead state, file counts, generated/proof hints, validation command, and suggested next action.
+- Location: ~/Projects/shared/agent-scripts/bin/dirty-audit
+- Examples: `dirty-audit`, `dirty-audit ~/Projects`, `dirty-audit ~/Projects --json`
+
 ## loop-receipt
 - Purpose: write structured evidence from a completed loop for the next turn.
 - Location: ~/Projects/shared/agent-scripts/bin/loop-receipt

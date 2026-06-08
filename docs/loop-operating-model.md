@@ -164,7 +164,7 @@ Prefer adding `read_when` docs over growing AGENTS files. AGENTS should point to
 
 ## Hygiene Loop
 
-Use when reducing dirty Git state across repos. Start read/propose: inventory dirty repos, classify each one, and process only 1-3 low-risk repos per pass.
+Use when reducing dirty Git state across repos. Start read/propose: run `dirty-audit ~/Projects`, classify each dirty repo, and process only 1-3 low-risk repos per pass.
 
 Cleanup classes:
 
@@ -204,6 +204,7 @@ Safe hook pilots:
 Safe automation pilots:
 
 - weekly AGENTS instruction-size audit
+- read-only `dirty-audit ~/Projects` report for hygiene-loop batch selection
 - daily stale WWI loop report
 - recurring CI failure triage in read/propose mode
 - nightly `loop-audit ~/Projects` inventory across active repos

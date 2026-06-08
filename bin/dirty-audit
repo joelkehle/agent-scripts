@@ -1,0 +1,236 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+const skipDirNames = new Set([
+  ".git",
+  ".next",
+  "node_modules",
+  "oss",
+  "tmp",
+  "vendor",
+  "worktrees",
+]);
+
+function usage() {
+  console.log(`Usage: dirty-audit [WORKSPACE] [--json]
+
+Read-only dirty workspace inventory for repo hygiene loops.
+`);
+}
+
+function parseArgs(argv) {
+  const args = { workspace: path.join(os.homedir(), "Projects"), json: false };
+  for (const arg of argv) {
+    if (arg === "-h" || arg === "--help") {
+      args.help = true;
+    } else if (arg === "--json") {
+      args.json = true;
+    } else if (!args.workspaceSet) {
+      args.workspace = arg;
+      args.workspaceSet = true;
+    } else {
+      throw new Error(`unknown argument: ${arg}`);
+    }
+  }
+  return args;
+}
+
+function run(command, args, cwd, options = {}) {
+  try {
+    return execFileSync(command, args, {
+      cwd,
+      encoding: options.encoding || "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return options.encoding === "buffer" ? Buffer.from("") : "";
+  }
+}
+
+function findRepos(workspace) {
+  const repos = [];
+  const root = path.resolve(workspace);
+  const stack = [{ dir: root, depth: 0 }];
+
+  while (stack.length > 0) {
+    const { dir, depth } = stack.pop();
+    if (depth > 6) continue;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    if (entries.some((entry) => entry.isDirectory() && entry.name === ".git")) {
+      repos.push(dir);
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || skipDirNames.has(entry.name)) continue;
+      stack.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+    }
+  }
+
+  return repos.sort();
+}
+
+function parsePorcelain(output) {
+  const records = output.split("\0").filter(Boolean);
+  const files = [];
+  for (let i = 0; i < records.length; i += 1) {
+    const record = records[i];
+    if (record.length < 4) continue;
+    const status = record.slice(0, 2);
+    const file = record.slice(3);
+    files.push({ status, file });
+    if (status[0] === "R" || status[0] === "C") {
+      i += 1;
+    }
+  }
+  return files;
+}
+
+function parseAheadBehind(branchLine) {
+  const out = { ahead: 0, behind: 0 };
+  const match = branchLine.match(/\[(.*?)\]/);
+  if (!match) return out;
+  for (const part of match[1].split(",")) {
+    const trimmed = part.trim();
+    let value = trimmed.match(/^ahead (\d+)$/);
+    if (value) out.ahead = Number(value[1]);
+    value = trimmed.match(/^behind (\d+)$/);
+    if (value) out.behind = Number(value[1]);
+  }
+  return out;
+}
+
+function fileAge(repoRoot, file) {
+  try {
+    return fs.statSync(path.join(repoRoot, file)).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function humanAge(ms) {
+  if (!ms) return "unknown";
+  const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  const days = Math.floor(seconds / 86400);
+  if (days > 0) return `${days}d`;
+  const hours = Math.floor(seconds / 3600);
+  if (hours > 0) return `${hours}h`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+function isGeneratedPath(file) {
+  return /(^|\/)(proofs?|codex-output|coverage|dist|build|tmp|\.next)(\/|$)/.test(file) ||
+    /(^|\/)cmd\/[^/]*proof[^/]*(\/|$)/.test(file) ||
+    /\.(log|tmp|sqlite|db)$/.test(file);
+}
+
+function validationCommand(repoRoot) {
+  const output = run("agent-check", ["--root", repoRoot, "--dry-run"], repoRoot);
+  return output.split("\n").find((line) => line.startsWith("agent-check: command="))?.replace("agent-check: command=", "") || "";
+}
+
+function suggest(repoRoot, summary) {
+  const rel = summary.repo;
+  if (rel.startsWith("archive/")) return "leave alone or park as WIP: archive checkout";
+  if (summary.file_count > 20 || summary.ahead > 20) return "park as WIP or review-loop: large/long-lived work";
+  if (summary.generated_count > 0 && summary.generated_count === summary.file_count) {
+    return "trash generated/proof junk or add .gitignore";
+  }
+  if (summary.generated_count > 0) return "split generated/proof artifacts, then finish + commit coherent work";
+  if (summary.file_count <= 10) return "hygiene-loop: inspect, run gate, finish + commit if coherent";
+  return "review-loop: classify before writing";
+}
+
+function summarizeRepo(workspace, repoRoot) {
+  const branchLine = run("git", ["-C", repoRoot, "status", "--short", "--branch"], repoRoot)
+    .split("\n")[0] || "";
+  const files = parsePorcelain(run("git", ["-C", repoRoot, "status", "--porcelain=v1", "--untracked-files=all", "-z"], repoRoot));
+  if (files.length === 0) return null;
+
+  const generated = files.filter((item) => isGeneratedPath(item.file));
+  const mtimes = files.map((item) => fileAge(repoRoot, item.file)).filter(Boolean);
+  const oldest = mtimes.length ? Math.min(...mtimes) : 0;
+  const newest = mtimes.length ? Math.max(...mtimes) : 0;
+  const counts = {
+    modified: files.filter((item) => item.status.includes("M")).length,
+    deleted: files.filter((item) => item.status.includes("D")).length,
+    added: files.filter((item) => item.status.includes("A")).length,
+    untracked: files.filter((item) => item.status === "??").length,
+  };
+  const aheadBehind = parseAheadBehind(branchLine);
+  const repo = path.relative(path.resolve(workspace), repoRoot) || ".";
+  const summary = {
+    repo,
+    branch: branchLine.replace(/^## /, ""),
+    ...aheadBehind,
+    file_count: files.length,
+    counts,
+    generated_count: generated.length,
+    generated_paths: generated.map((item) => item.file).slice(0, 8),
+    oldest_dirty_age: humanAge(oldest),
+    newest_dirty_age: humanAge(newest),
+    validation: validationCommand(repoRoot),
+    files: files.map((item) => `${item.status} ${item.file}`).slice(0, 40),
+  };
+  summary.suggestion = suggest(repoRoot, summary);
+  return summary;
+}
+
+function render(summaries) {
+  if (summaries.length === 0) return "dirty-audit: no dirty repos found\n";
+  const lines = [`dirty-audit: ${summaries.length} dirty repos`];
+  for (const summary of summaries) {
+    lines.push("");
+    lines.push(`${summary.repo}`);
+    lines.push(`  branch: ${summary.branch}`);
+    lines.push(`  files: ${summary.file_count} dirty (${summary.counts.modified} modified, ${summary.counts.untracked} untracked, ${summary.counts.deleted} deleted)`);
+    lines.push(`  age: oldest=${summary.oldest_dirty_age} newest=${summary.newest_dirty_age}`);
+    lines.push(`  gate: ${summary.validation || "none detected"}`);
+    if (summary.generated_count > 0) {
+      lines.push(`  generated/proof: ${summary.generated_count} (${summary.generated_paths.join(", ")})`);
+    }
+    lines.push(`  suggestion: ${summary.suggestion}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    return;
+  }
+  const workspace = path.resolve(args.workspace);
+  if (!fs.existsSync(workspace)) {
+    throw new Error(`workspace not found: ${args.workspace}`);
+  }
+  const summaries = findRepos(workspace)
+    .map((repoRoot) => summarizeRepo(workspace, repoRoot))
+    .filter(Boolean);
+
+  if (args.json) {
+    console.log(JSON.stringify(summaries, null, 2));
+  } else {
+    process.stdout.write(render(summaries));
+  }
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(`dirty-audit: ${error.message}`);
+  process.exit(2);
+}
