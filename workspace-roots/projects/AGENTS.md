@@ -5,7 +5,7 @@ READ ~/Projects/shared/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing)
 This is the root workspace. It contains all of Joel's projects and infrastructure.
 When launched here, you have cross-project context. Use it for multi-repo ops, planning, and infra work.
 
-Loop workflows are available from `~/Projects/.agents/skills/`: use `ship-loop`, `review-loop`, `repair-loop`, and `learn-loop`. Shared policy lives in `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
+Loop workflows are available from `~/Projects/.agents/skills/`: use `ship-loop`, `review-loop`, `repair-loop`, and `learn-loop`. Use `loop-receipt` to capture loop evidence and `loop-resume` to feed it into the next turn. Shared policy lives in `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
 
 ## Project Inventory
 

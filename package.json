@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "agent:check": "bash -n bin/agent-check && bash -n bin/loop-audit && node --check bin/docs-list && bash tests/agent-loop-tools.sh"
+    "agent:check": "bash -n bin/agent-check && bash -n bin/loop-audit && node --check bin/docs-list && node --check bin/loop-receipt && node --check bin/loop-resume && bash tests/agent-loop-tools.sh"
   },
   "dependencies": {
     "commander": "^14.0.2",

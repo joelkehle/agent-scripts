@@ -1,0 +1,278 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+function usage() {
+  console.log(`Usage: loop-receipt --goal TEXT [options]
+
+Writes a structured loop receipt for the current repo.
+
+Options:
+  --root DIR          Repo or package root to inspect
+  --goal TEXT         Human-readable task goal
+  --status VALUE      pass, fail, blocked, partial, or unknown
+  --next-loop VALUE   ship-loop, review-loop, repair-loop, learn-loop, or none
+  --check TEXT        Validation evidence, e.g. "agent-check=pass" (repeatable)
+  --file PATH         File changed or reviewed (repeatable; auto-detected if omitted)
+  --risk TEXT         Unresolved risk (repeatable)
+  --note TEXT         Short note for the next turn (repeatable)
+  --proof URL         Proof-pack or report URL
+  --print-path        Print only the JSON receipt path
+`);
+}
+
+function parseArgs(argv) {
+  const out = {
+    checks: [],
+    files: [],
+    risks: [],
+    notes: [],
+    root: process.cwd(),
+    status: "unknown",
+    nextLoop: "none",
+    proof: "",
+    printPath: false,
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const [rawKey, inlineValue] = arg.startsWith("--") ? arg.split(/=(.*)/s, 2) : [arg, undefined];
+    const key = rawKey.replace(/^--/, "");
+
+    if (arg === "-h" || arg === "--help") {
+      out.help = true;
+      continue;
+    }
+
+    if (key === "print-path") {
+      out.printPath = true;
+      continue;
+    }
+
+    const value = inlineValue !== undefined ? inlineValue : argv[++i];
+    if (value === undefined) {
+      throw new Error(`${arg} requires a value`);
+    }
+
+    switch (key) {
+      case "root":
+        out.root = value;
+        break;
+      case "goal":
+        out.goal = value;
+        break;
+      case "status":
+        out.status = value;
+        break;
+      case "next-loop":
+        out.nextLoop = value;
+        break;
+      case "check":
+        out.checks.push(parseCheck(value));
+        break;
+      case "file":
+        out.files.push(value);
+        break;
+      case "risk":
+        out.risks.push(value);
+        break;
+      case "note":
+        out.notes.push(value);
+        break;
+      case "proof":
+        out.proof = value;
+        break;
+      default:
+        throw new Error(`unknown argument: ${arg}`);
+    }
+  }
+
+  return out;
+}
+
+function run(command, args, cwd) {
+  try {
+    return execFileSync(command, args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function hasAgentCheckMakefile(dir) {
+  try {
+    return /^agent-check:/m.test(fs.readFileSync(path.join(dir, "Makefile"), "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+function hasProjectMarker(dir) {
+  return fs.existsSync(path.join(dir, "package.json")) ||
+    fs.existsSync(path.join(dir, "go.mod")) ||
+    fs.existsSync(path.join(dir, "pyproject.toml")) ||
+    hasAgentCheckMakefile(dir) ||
+    isExecutable(path.join(dir, "scripts", "agent-check.sh"));
+}
+
+function isExecutable(file) {
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveRoot(start) {
+  let dir = path.resolve(start);
+  if (!fs.existsSync(dir)) {
+    throw new Error(`root not found: ${start}`);
+  }
+  if (!fs.statSync(dir).isDirectory()) {
+    dir = path.dirname(dir);
+  }
+  const fallback = dir;
+
+  while (dir !== path.dirname(dir)) {
+    if (hasProjectMarker(dir)) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+
+  return run("git", ["-C", fallback, "rev-parse", "--show-toplevel"], fallback) || fallback;
+}
+
+function repoSlug(repoRoot) {
+  const projects = path.join(os.homedir(), "Projects");
+  const rel = path.relative(projects, repoRoot);
+  const value = !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : repoRoot;
+  return value.replace(/[^A-Za-z0-9._-]+/g, "__").replace(/^_+|_+$/g, "") || "repo";
+}
+
+function changedFiles(repoRoot) {
+  const files = new Set();
+  for (const line of run("git", ["-C", repoRoot, "diff", "--name-only"], repoRoot).split("\n")) {
+    if (line.trim()) files.add(line.trim());
+  }
+  for (const line of run("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard"], repoRoot).split("\n")) {
+    if (line.trim()) files.add(line.trim());
+  }
+  return [...files].sort();
+}
+
+function gitInfo(repoRoot) {
+  return {
+    branch: run("git", ["-C", repoRoot, "branch", "--show-current"], repoRoot),
+    head: run("git", ["-C", repoRoot, "rev-parse", "--short", "HEAD"], repoRoot),
+    status_short: run("git", ["-C", repoRoot, "status", "--short"], repoRoot).split("\n").filter(Boolean),
+  };
+}
+
+function parseCheck(value) {
+  const index = value.lastIndexOf("=");
+  if (index <= 0) {
+    return { command: value, status: "unknown" };
+  }
+  return {
+    command: value.slice(0, index).trim(),
+    status: value.slice(index + 1).trim() || "unknown",
+  };
+}
+
+function receiptMarkdown(receipt, jsonPath) {
+  const list = (values, empty = "- none") => values.length ? values.map((value) => `- ${value}`).join("\n") : empty;
+  const checks = receipt.checks.length
+    ? receipt.checks.map((check) => `- ${check.command}: ${check.status}`).join("\n")
+    : "- none recorded";
+  return `# Loop Receipt
+
+- id: ${receipt.id}
+- repo: ${receipt.repo}
+- goal: ${receipt.goal}
+- status: ${receipt.status}
+- next_loop: ${receipt.next_loop}
+- json: ${jsonPath}
+
+## Checks
+
+${checks}
+
+## Files
+
+${list(receipt.files)}
+
+## Risks
+
+${list(receipt.risks)}
+
+## Notes
+
+${list(receipt.notes)}
+`;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    return;
+  }
+  if (!args.goal) {
+    throw new Error("--goal is required");
+  }
+
+  const repoRoot = resolveRoot(args.root);
+  const stateRoot = process.env.AGENT_LOOP_STATE_DIR || path.join(os.homedir(), ".local", "share", "agent-loops");
+  const slug = repoSlug(repoRoot);
+  const now = new Date();
+  const id = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const dir = path.join(stateRoot, "receipts", slug);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const receipt = {
+    schema_version: "joel.agent-loop.receipt.v1",
+    id,
+    created_at: now.toISOString(),
+    repo: slug,
+    repo_root: repoRoot,
+    cwd: process.cwd(),
+    goal: args.goal,
+    status: args.status,
+    next_loop: args.nextLoop,
+    checks: args.checks,
+    files: args.files.length ? args.files : changedFiles(repoRoot),
+    risks: args.risks,
+    notes: args.notes,
+    proof_url: args.proof,
+    git: gitInfo(repoRoot),
+  };
+
+  const jsonPath = path.join(dir, `${id}.json`);
+  const mdPath = path.join(dir, `${id}.md`);
+  fs.writeFileSync(jsonPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  fs.writeFileSync(mdPath, receiptMarkdown(receipt, jsonPath));
+  fs.copyFileSync(jsonPath, path.join(dir, "latest.json"));
+  fs.copyFileSync(mdPath, path.join(dir, "latest.md"));
+
+  if (args.printPath) {
+    console.log(jsonPath);
+  } else {
+    console.log(`loop-receipt: wrote ${jsonPath}`);
+    console.log(`loop-receipt: next ${receipt.next_loop}`);
+  }
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(`loop-receipt: ${error.message}`);
+  process.exit(2);
+}

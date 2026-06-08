@@ -35,3 +35,15 @@ Local tool catalog for this machine.
 - Purpose: read/propose audit for loop rollout drift: skills availability, Codex instruction budget, AGENTS sizes, and validation entrypoint coverage.
 - Location: ~/Projects/shared/agent-scripts/bin/loop-audit
 - Examples: `loop-audit`, `loop-audit ~/Projects`
+
+## loop-receipt
+- Purpose: write structured evidence from a completed loop for the next turn.
+- Location: ~/Projects/shared/agent-scripts/bin/loop-receipt
+- Default state: `~/.local/share/agent-loops/receipts/` (override with `AGENT_LOOP_STATE_DIR`).
+- Examples: `loop-receipt --goal "Fix issue 42" --status pass --next-loop review-loop --check "agent-check=pass"`
+
+## loop-resume
+- Purpose: print the latest loop receipt plus current git status and a suggested next loop prompt.
+- Location: ~/Projects/shared/agent-scripts/bin/loop-resume
+- Default state: `~/.local/share/agent-loops/receipts/` (override with `AGENT_LOOP_STATE_DIR`).
+- Examples: `loop-resume`, `loop-resume --root ~/Projects/shared/pinakes`

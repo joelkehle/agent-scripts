@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+function usage() {
+  console.log(`Usage: loop-resume [--root DIR] [--receipt FILE] [--json]
+
+Reads the latest loop receipt for the current repo and prints next-turn context.
+`);
+}
+
+function parseArgs(argv) {
+  const out = { root: process.cwd(), receipt: "", json: false };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const [rawKey, inlineValue] = arg.startsWith("--") ? arg.split(/=(.*)/s, 2) : [arg, undefined];
+    const key = rawKey.replace(/^--/, "");
+
+    if (arg === "-h" || arg === "--help") {
+      out.help = true;
+      continue;
+    }
+    if (key === "json") {
+      out.json = true;
+      continue;
+    }
+    const value = inlineValue !== undefined ? inlineValue : argv[++i];
+    if (value === undefined) {
+      throw new Error(`${arg} requires a value`);
+    }
+    if (key === "root") out.root = value;
+    else if (key === "receipt") out.receipt = value;
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  return out;
+}
+
+function run(command, args, cwd) {
+  try {
+    return execFileSync(command, args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function hasAgentCheckMakefile(dir) {
+  try {
+    return /^agent-check:/m.test(fs.readFileSync(path.join(dir, "Makefile"), "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+function isExecutable(file) {
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasProjectMarker(dir) {
+  return fs.existsSync(path.join(dir, "package.json")) ||
+    fs.existsSync(path.join(dir, "go.mod")) ||
+    fs.existsSync(path.join(dir, "pyproject.toml")) ||
+    hasAgentCheckMakefile(dir) ||
+    isExecutable(path.join(dir, "scripts", "agent-check.sh"));
+}
+
+function resolveRoot(start) {
+  let dir = path.resolve(start);
+  if (!fs.existsSync(dir)) {
+    throw new Error(`root not found: ${start}`);
+  }
+  if (!fs.statSync(dir).isDirectory()) {
+    dir = path.dirname(dir);
+  }
+  const fallback = dir;
+
+  while (dir !== path.dirname(dir)) {
+    if (hasProjectMarker(dir)) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+
+  return run("git", ["-C", fallback, "rev-parse", "--show-toplevel"], fallback) || fallback;
+}
+
+function repoSlug(repoRoot) {
+  const projects = path.join(os.homedir(), "Projects");
+  const rel = path.relative(projects, repoRoot);
+  const value = !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : repoRoot;
+  return value.replace(/[^A-Za-z0-9._-]+/g, "__").replace(/^_+|_+$/g, "") || "repo";
+}
+
+function latestReceiptPath(repoRoot) {
+  const stateRoot = process.env.AGENT_LOOP_STATE_DIR || path.join(os.homedir(), ".local", "share", "agent-loops");
+  return path.join(stateRoot, "receipts", repoSlug(repoRoot), "latest.json");
+}
+
+function readReceipt(file) {
+  if (!fs.existsSync(file)) {
+    throw new Error(`receipt not found: ${file}`);
+  }
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function currentStatus(repoRoot) {
+  return run("git", ["-C", repoRoot, "status", "--short"], repoRoot).split("\n").filter(Boolean);
+}
+
+function list(values, format) {
+  if (!values || values.length === 0) return "- none";
+  return values.map(format).join("\n");
+}
+
+function recommendedPrompt(receipt) {
+  if (!receipt.next_loop || receipt.next_loop === "none") {
+    return "No next loop recorded.";
+  }
+  return `$${receipt.next_loop} continue from loop receipt ${receipt.id}`;
+}
+
+function render(receipt, file, repoRoot) {
+  const checks = list(receipt.checks, (check) => `- ${check.command}: ${check.status}`);
+  const files = list(receipt.files, (value) => `- ${value}`);
+  const risks = list(receipt.risks, (value) => `- ${value}`);
+  const notes = list(receipt.notes, (value) => `- ${value}`);
+  const status = currentStatus(repoRoot);
+  const warning = status.length && (!receipt.checks || receipt.checks.length === 0)
+    ? "\nWarning: current worktree has changes and the latest receipt recorded no validation checks.\n"
+    : "";
+
+  return `Loop Resume
+
+Receipt: ${file}
+Repo: ${receipt.repo_root}
+Goal: ${receipt.goal}
+Status: ${receipt.status}
+Next loop: ${receipt.next_loop}
+Created: ${receipt.created_at}
+${warning}
+Checks:
+${checks}
+
+Files:
+${files}
+
+Risks:
+${risks}
+
+Notes:
+${notes}
+
+Current git status:
+${list(status, (value) => `- ${value}`)}
+
+Suggested next turn:
+${recommendedPrompt(receipt)}
+`;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    return;
+  }
+  const repoRoot = resolveRoot(args.root);
+  const file = args.receipt ? path.resolve(args.receipt) : latestReceiptPath(repoRoot);
+  const receipt = readReceipt(file);
+
+  if (args.json) {
+    console.log(JSON.stringify(receipt, null, 2));
+  } else {
+    console.log(render(receipt, file, repoRoot));
+  }
+}
+
+try {
+  main();
+} catch (error) {
+  console.error(`loop-resume: ${error.message}`);
+  process.exit(2);
+}

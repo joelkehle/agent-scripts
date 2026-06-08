@@ -51,6 +51,27 @@ Every loop must define:
 - Stop rule: validation passes, scope expands, risky system change is required, product behavior is unclear, or the repair limit is hit.
 - Receipt: changed files, checks run, failures repaired, unresolved risks, and proof-pack URL when needed.
 
+## Receipts And Resume
+
+Use `loop-receipt` to turn the end of a loop into structured next-turn context. Receipts are written outside the repo by default under `~/.local/share/agent-loops/receipts/`, so they do not dirty working trees.
+
+```bash
+loop-receipt \
+  --goal "Fix issue 42" \
+  --status pass \
+  --next-loop review-loop \
+  --check "agent-check=pass" \
+  --note "Ready for review"
+```
+
+Use `loop-resume` at the next turn to print the latest receipt plus current git status and a suggested next loop prompt.
+
+```bash
+loop-resume
+```
+
+This is the first automation layer: it feeds evidence from one loop into the next loop without granting unattended write capability.
+
 ## Validation Entry Point
 
 Each repo should expose one obvious agent validation command. Preferred order:

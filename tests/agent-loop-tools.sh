@@ -79,3 +79,22 @@ assert_contains "$audit_output" "OK $home/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK $workspace/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK make-only -> make agent-check"
 assert_contains "$audit_output" "OK script-only -> scripts/agent-check.sh"
+
+receipt_repo="$workspace/receipt-repo"
+mkdir -p "$receipt_repo/src"
+cat > "$receipt_repo/package.json" <<'JSON'
+{
+  "scripts": {
+    "test": "printf test-ok"
+  }
+}
+JSON
+printf 'hello\n' > "$receipt_repo/src/app.txt"
+state_dir="$tmp/loop-state"
+receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$receipt_repo" --goal "Ship loop receipts" --status pass --next-loop review-loop --check "agent-check=pass" --file src/app.txt --note "ready for review" --print-path)"
+[ -f "$receipt_path" ] || fail "receipt path not written: $receipt_path"
+resume_output="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-resume --root "$receipt_repo")"
+assert_contains "$resume_output" "Goal: Ship loop receipts"
+assert_contains "$resume_output" "Next loop: review-loop"
+assert_contains "$resume_output" "agent-check: pass"
+assert_contains "$resume_output" '$review-loop continue from loop receipt'
