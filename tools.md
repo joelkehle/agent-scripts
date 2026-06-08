@@ -40,7 +40,7 @@ Local tool catalog for this machine.
 - Purpose: write structured evidence from a completed loop for the next turn.
 - Location: ~/Projects/shared/agent-scripts/bin/loop-receipt
 - Default state: `~/.local/share/agent-loops/receipts/` (override with `AGENT_LOOP_STATE_DIR`).
-- Examples: `loop-receipt --goal "Fix issue 42" --status pass --next-loop review-loop --check "agent-check=pass"`
+- Examples: `loop-receipt --goal "Fix issue 42" --status pass --next-loop review-loop --check "agent-check=pass"`, `loop-receipt --goal "Fix issue 42" --status pass --next-loop review-loop --from-head`
 
 ## loop-resume
 - Purpose: print the latest loop receipt plus current git status and a suggested next loop prompt.

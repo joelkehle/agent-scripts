@@ -23,6 +23,16 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local haystack="$1"
+  local needle="$2"
+
+  if printf '%s\n' "$haystack" | grep -Fq "$needle"; then
+    printf 'output:\n%s\n' "$haystack" >&2
+    fail "unexpected text: $needle"
+  fi
+}
+
 empty="$tmp/empty"
 mkdir -p "$empty"
 set +e
@@ -102,6 +112,12 @@ assert_contains "$resume_output" "Next loop: review-loop"
 assert_contains "$resume_output" "agent-check: pass"
 assert_contains "$resume_output" '$review-loop continue from loop receipt'
 
+non_git_repo="$workspace/non-git-receipt-repo"
+mkdir -p "$non_git_repo"
+printf '{"scripts":{"test":"printf test-ok"}}\n' > "$non_git_repo/package.json"
+non_git_receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$non_git_repo" --goal "Non-git receipt" --status pass --next-loop none --print-path)"
+[ -f "$non_git_receipt_path" ] || fail "non-git receipt path not written: $non_git_receipt_path"
+
 committed_repo="$workspace/committed-receipt-repo"
 mkdir -p "$committed_repo"
 git -C "$committed_repo" init -q
@@ -116,3 +132,21 @@ git -C "$committed_repo" commit -q -m "add committed file"
 committed_receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$committed_repo" --goal "Post-commit receipt" --status pass --next-loop review-loop --print-path)"
 committed_files="$(node -e 'const fs = require("node:fs"); const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(receipt.files.join("\n"));' "$committed_receipt_path")"
 assert_contains "$committed_files" "committed.txt"
+
+mixed_repo="$workspace/mixed-receipt-repo"
+mkdir -p "$mixed_repo"
+git -C "$mixed_repo" init -q
+git -C "$mixed_repo" config user.email "agent-loop-test@example.com"
+git -C "$mixed_repo" config user.name "Agent Loop Test"
+printf '{"scripts":{"test":"printf test-ok"}}\n' > "$mixed_repo/package.json"
+git -C "$mixed_repo" add package.json
+git -C "$mixed_repo" commit -q -m "init"
+printf 'unrelated\n' > "$mixed_repo/unrelated.txt"
+printf 'current\n' > "$mixed_repo/current.txt"
+git -C "$mixed_repo" add current.txt
+git -C "$mixed_repo" commit -q -m "add current file"
+mixed_receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$mixed_repo" --goal "Mixed post-commit receipt" --status pass --next-loop review-loop --from-head --print-path)"
+mixed_files="$(node -e 'const fs = require("node:fs"); const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(receipt.files.join("\n")); console.log(receipt.files_source);' "$mixed_receipt_path")"
+assert_contains "$mixed_files" "current.txt"
+assert_contains "$mixed_files" "commit:HEAD"
+assert_not_contains "$mixed_files" "unrelated.txt"

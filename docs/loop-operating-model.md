@@ -64,6 +64,16 @@ loop-receipt \
   --note "Ready for review"
 ```
 
+After committing a loop, prefer `--from-head` or `--commit <ref>` so the receipt records the committed files instead of unrelated dirty worktree state.
+
+```bash
+loop-receipt \
+  --goal "Fix issue 42" \
+  --status pass \
+  --next-loop review-loop \
+  --commit HEAD
+```
+
 Use `loop-resume` at the next turn to print the latest receipt plus current git status and a suggested next loop prompt.
 
 ```bash

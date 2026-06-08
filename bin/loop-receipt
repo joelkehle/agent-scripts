@@ -21,6 +21,8 @@ Options:
   --risk TEXT         Unresolved risk (repeatable)
   --note TEXT         Short note for the next turn (repeatable)
   --proof URL         Proof-pack or report URL
+  --commit REF        Record files changed by a commit/ref instead of dirty state
+  --from-head         Shorthand for --commit HEAD
   --print-path        Print only the JSON receipt path
 `);
 }
@@ -35,6 +37,7 @@ function parseArgs(argv) {
     status: "unknown",
     nextLoop: "none",
     proof: "",
+    commit: "",
     printPath: false,
   };
 
@@ -50,6 +53,10 @@ function parseArgs(argv) {
 
     if (key === "print-path") {
       out.printPath = true;
+      continue;
+    }
+    if (key === "from-head") {
+      out.commit = "HEAD";
       continue;
     }
 
@@ -85,6 +92,9 @@ function parseArgs(argv) {
         break;
       case "proof":
         out.proof = value;
+        break;
+      case "commit":
+        out.commit = value;
         break;
       default:
         throw new Error(`unknown argument: ${arg}`);
@@ -158,6 +168,18 @@ function repoSlug(repoRoot) {
   return value.replace(/[^A-Za-z0-9._-]+/g, "__").replace(/^_+|_+$/g, "") || "repo";
 }
 
+function committedFiles(repoRoot, ref) {
+  const resolved = run("git", ["-C", repoRoot, "rev-parse", "--verify", `${ref}^{commit}`], repoRoot);
+  if (!resolved) {
+    throw new Error(`commit not found: ${ref}`);
+  }
+  return run("git", ["-C", repoRoot, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", resolved], repoRoot)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort();
+}
+
 function changedFiles(repoRoot) {
   const files = new Set();
 
@@ -172,7 +194,13 @@ function changedFiles(repoRoot) {
   addLines(run("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard"], repoRoot));
 
   if (files.size === 0) {
-    addLines(run("git", ["-C", repoRoot, "show", "--name-only", "--format=", "HEAD"], repoRoot));
+    try {
+      for (const file of committedFiles(repoRoot, "HEAD")) {
+        files.add(file);
+      }
+    } catch {
+      // Non-git roots can still write receipts; they just have no auto file list.
+    }
   }
 
   return [...files].sort();
@@ -263,7 +291,8 @@ function main() {
     status: args.status,
     next_loop: args.nextLoop,
     checks: args.checks,
-    files: args.files.length ? args.files : changedFiles(repoRoot),
+    files: args.files.length ? args.files : (args.commit ? committedFiles(repoRoot, args.commit) : changedFiles(repoRoot)),
+    files_source: args.files.length ? "args" : (args.commit ? `commit:${args.commit}` : "auto"),
     risks: args.risks,
     notes: args.notes,
     proof_url: args.proof,
