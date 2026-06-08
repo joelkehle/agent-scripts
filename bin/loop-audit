@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+workspace="${1:-$HOME/Projects}"
+issues=0
+expected_skills=(ship-loop review-loop repair-loop learn-loop)
+
+if [ ! -d "$workspace" ]; then
+  printf 'loop-audit: workspace not found: %s\n' "$workspace" >&2
+  exit 2
+fi
+
+skip_path() {
+  local rel="$1"
+  rel="${rel#$workspace/}"
+
+  case "$rel" in
+    .git/*|.next/*|archive/*|node_modules/*|oss/*|tmp/*|vendor/*|worktrees/*|*/.git/*|*/.next/*|*/node_modules/*|*/vendor/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+print_header() {
+  printf '\n== %s ==\n' "$1"
+}
+
+display_path() {
+  case "$1" in
+    "$workspace")
+      printf '.'
+      ;;
+    "$workspace"/*)
+      printf '%s' "${1#$workspace/}"
+      ;;
+    *)
+      printf '%s' "$1"
+      ;;
+  esac
+}
+
+audit_skill_dir() {
+  local dir="$1"
+  local skill file
+
+  if [ ! -d "$dir" ]; then
+    printf 'MISSING %s\n' "$dir"
+    issues=1
+    return
+  fi
+
+  for skill in "${expected_skills[@]}"; do
+    file="$dir/$skill/SKILL.md"
+    if [ -f "$file" ]; then
+      printf 'OK %s\n' "$file"
+    else
+      printf 'MISSING %s\n' "$file"
+      issues=1
+    fi
+  done
+}
+
+repo_candidates() {
+  find "$workspace" -maxdepth 5 \
+    \( -path "$workspace/.git" -o -path "$workspace/.next" -o -path "$workspace/archive" -o -path "$workspace/node_modules" -o -path "$workspace/oss" -o -path "$workspace/tmp" -o -path "$workspace/vendor" -o -path "$workspace/worktrees" \) -prune \
+    -o -type f \( -name package.json -o -name go.mod -o -name pyproject.toml -o -name Makefile -o -path '*/scripts/agent-check.sh' \) -print |
+    while IFS= read -r marker; do
+      if skip_path "$marker"; then
+        continue
+      fi
+
+      case "$marker" in
+        */Makefile)
+          grep -Eq '^agent-check:' "$marker" || continue
+          dirname "$marker"
+          ;;
+        */scripts/agent-check.sh)
+          dirname "$(dirname "$marker")"
+          ;;
+        *)
+          dirname "$marker"
+          ;;
+      esac
+    done |
+    sort -u
+}
+
+print_header "loop skills"
+audit_skill_dir "$HOME/.agents/skills"
+audit_skill_dir "$workspace/.agents/skills"
+
+print_header "codex project-doc budget"
+budget="$(awk -F= '/^[[:space:]]*project_doc_max_bytes[[:space:]]*=/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' "$HOME/.codex/config.toml" 2>/dev/null || true)"
+if [ -n "$budget" ] && [ "$budget" -ge 65536 ] 2>/dev/null; then
+  printf 'OK %s project_doc_max_bytes=%s\n' "$HOME/.codex/config.toml" "$budget"
+elif [ -n "$budget" ]; then
+  printf 'WARN %s project_doc_max_bytes=%s below 65536\n' "$HOME/.codex/config.toml" "$budget"
+else
+  printf 'WARN %s missing project_doc_max_bytes>=65536\n' "$HOME/.codex/config.toml"
+fi
+
+print_header "instruction sizes"
+while IFS= read -r file; do
+  if skip_path "$file"; then
+    continue
+  fi
+
+  bytes="$(wc -c < "$file" | tr -d ' ')"
+  status="OK"
+
+  if [ "$bytes" -gt 65536 ]; then
+    status="FAIL"
+  elif [ "$bytes" -gt 30000 ]; then
+    status="WARN"
+  fi
+
+  printf '%s %7s %s\n' "$status" "$bytes" "${file#$workspace/}"
+done < <(find "$workspace" -maxdepth 5 -type f \( -name AGENTS.md -o -name AGENTS.MD \) | sort)
+
+print_header "validation entrypoints"
+while IFS= read -r repo; do
+  rel="$(display_path "$repo")"
+  set +e
+  output="$(agent-check --root "$repo" --dry-run 2>&1)"
+  status=$?
+  set -e
+
+  if [ "$status" -ne 0 ] && printf '%s\n' "$output" | grep -q '^agent-check: no validation command found'; then
+    printf 'MISSING %s\n' "$rel"
+    issues=1
+    continue
+  fi
+
+  if [ "$status" -ne 0 ]; then
+    printf 'FAIL %s -> %s\n' "$rel" "$(printf '%s\n' "$output" | head -n 1)"
+    issues=1
+    continue
+  fi
+
+  selected_root="$(printf '%s\n' "$output" | sed -n 's/^agent-check: root=//p' | head -n 1)"
+  command="$(printf '%s\n' "$output" | sed -n 's/^agent-check: command=//p' | head -n 1)"
+
+  if [ -z "$command" ]; then
+    printf 'FAIL %s -> malformed agent-check output\n' "$rel"
+    issues=1
+    continue
+  fi
+
+  printf 'OK %s -> %s (root=%s)\n' "$rel" "$command" "$(display_path "$selected_root")"
+done < <(repo_candidates)
+
+exit "$issues"

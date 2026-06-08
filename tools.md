@@ -22,3 +22,16 @@ Local tool catalog for this machine.
 - Location: ~/Projects/shared/agent-scripts/bin/bus-discover
 - Defaults: JK bus on `localhost:8081`, UCLA TDG bus on `localhost:8080`
 - Examples: `bus-discover`, `bus-discover --capability events-list`, `bus-discover --format json`
+
+## agent-check
+- Purpose: run the best available validation command for the current repo.
+- Location: ~/Projects/shared/agent-scripts/bin/agent-check
+- Resolution order: `npm run agent:check`, `scripts/agent-check.sh`, `make agent-check`, `npm run gate`, `npm run fix:verify`, `npm run check`, `npm test`, `go test ./...`, then `pytest`.
+- Output: prints `agent-check: root=...` and `agent-check: command=...` before running.
+- Guardrail: do not define `npm run agent:check` as `agent-check`; point it at the repo's real gate.
+- Examples: `agent-check`, `agent-check --dry-run`, `agent-check --root ~/Projects/shared/pinakes --dry-run`
+
+## loop-audit
+- Purpose: read/propose audit for loop rollout drift: skills availability, Codex instruction budget, AGENTS sizes, and validation entrypoint coverage.
+- Location: ~/Projects/shared/agent-scripts/bin/loop-audit
+- Examples: `loop-audit`, `loop-audit ~/Projects`

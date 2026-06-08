@@ -81,6 +81,13 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Model note (2025-11-23): no `gpt-5.1-pro` / `grok-4.1` on Joel’s keys yet.
 - Model preference: latest only. OK: Anthropic Opus 4.5 / Sonnet 4.5 (Sonnet 3.5 = old; avoid), OpenAI GPT-5.2, xAI Grok-4.1 Fast, Google Gemini 3 Flash.
 
+## Coding Loops
+- Shared loop model: `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
+- Prefer durable skills over long repeated prompts. Skills are linked at `~/.agents/skills/` and `~/Projects/.agents/skills/`; tracked source lives under `workspace-roots/projects/.agents/skills/`.
+- Use `ship-loop` for bounded implementation, `review-loop` for read/propose review, `repair-loop` for focused validation failures, and `learn-loop` for durable repo lessons.
+- Each repo should expose one validation entrypoint. Prefer `agent-check`; add `npm run agent:check` or `scripts/agent-check.sh` when a repo needs a custom gate. Do not define `npm run agent:check` as `agent-check`; point it at the repo's real gate.
+- Keep AGENTS files as routers. Move long examples, templates, historical notes, and domain playbooks into docs with `read_when` hints.
+
 ## PR Feedback
 - Active PR: `gh pr view --json number,title,url --jq '"PR #\\(.number): \\(.title)\\n\\(.url)"'`.
 - PR comments: `gh pr view …` + `gh api …/comments --paginate`.
@@ -116,7 +123,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Do not create loops for tiny one-shot answers.
 
 ## Build / Test
-- Before handoff: run full gate (lint/typecheck/tests/docs).
+- Before handoff: run `agent-check` or the repo's documented full gate (lint/typecheck/tests/docs).
 - CI red: `gh run list/view`, rerun, fix, push, repeat til green.
 - Keep it observable (logs, panes, tails, MCP/browser tools).
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
@@ -254,6 +261,14 @@ Read `~/Projects/shared/agent-scripts/tools.md` for the full tool catalog if it 
 ### docs-list / bin/docs-list / scripts/docs-list.ts
 - Shared helper on PATH: `~/Projects/shared/agent-scripts/bin/docs-list`. Defaults to `./docs` in the current repo, or accepts a repo root / docs dir argument.
 - Repo-local `bin/docs-list` or `docs:list` script also fine when present.
+
+### agent-check
+- Validation helper: `~/Projects/shared/agent-scripts/bin/agent-check`.
+- Runs the best available repo gate; use `agent-check --dry-run` to see what it would run.
+
+### loop-audit
+- Read/propose audit helper: `~/Projects/shared/agent-scripts/bin/loop-audit`.
+- Checks loop skill links, Codex instruction budget, AGENTS sizes, and `agent-check --dry-run` coverage.
 
 ### bin/browser-tools / scripts/browser-tools.ts
 - Chrome DevTools helper. Cmds: `start`, `nav`, `eval`, `screenshot`, `pick`, `cookies`, `inspect`, `kill`.

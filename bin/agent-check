@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dry_run=0
+start_dir="$PWD"
+active="${AGENT_CHECK_ACTIVE:-0}"
+
+usage() {
+  cat <<'USAGE'
+Usage: agent-check [--dry-run] [--root DIR]
+
+Runs the best available validation command for the current repo.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    --root)
+      if [ "$#" -lt 2 ]; then
+        printf 'agent-check: --root requires a directory\n' >&2
+        exit 2
+      fi
+      start_dir="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'agent-check: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+has_project_marker() {
+  local dir="$1"
+  [ -f "$dir/package.json" ] ||
+    [ -f "$dir/go.mod" ] ||
+    [ -f "$dir/pyproject.toml" ] ||
+    { [ -f "$dir/Makefile" ] && grep -Eq '^agent-check:' "$dir/Makefile"; } ||
+    [ -x "$dir/scripts/agent-check.sh" ]
+}
+
+find_repo_root() {
+  local dir fallback_dir
+  dir="$(cd "$1" && pwd)"
+  fallback_dir="$dir"
+
+  while [ "$dir" != "/" ]; do
+    if has_project_marker "$dir"; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+
+    dir="$(dirname "$dir")"
+  done
+
+  git -C "$fallback_dir" rev-parse --show-toplevel 2>/dev/null || printf '%s\n' "$fallback_dir"
+}
+
+repo_root="$(find_repo_root "$start_dir")"
+cd "$repo_root"
+
+command_text() {
+  local first=1
+
+  for arg in "$@"; do
+    if [ "$first" -eq 1 ]; then
+      printf '%s' "$arg"
+      first=0
+    else
+      printf ' %s' "$arg"
+    fi
+  done
+}
+
+run_cmd() {
+  printf 'agent-check: root=%s\n' "$repo_root"
+  printf 'agent-check: command=%s\n' "$(command_text "$@")"
+  if [ "$dry_run" -eq 0 ]; then
+    AGENT_CHECK_ACTIVE=1 "$@"
+  fi
+}
+
+has_npm_script() {
+  local script="$1"
+  [ -f package.json ] || return 1
+  node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts[process.argv[1]] ? 0 : 1)" "$script"
+}
+
+if [ "$active" != "1" ] && has_npm_script "agent:check"; then
+  run_cmd npm run agent:check
+  exit 0
+fi
+
+if [ -x scripts/agent-check.sh ]; then
+  run_cmd scripts/agent-check.sh
+  exit 0
+fi
+
+if [ -f Makefile ] && grep -Eq '^agent-check:' Makefile; then
+  run_cmd make agent-check
+  exit 0
+fi
+
+if has_npm_script gate; then
+  run_cmd npm run gate
+  exit 0
+fi
+
+if has_npm_script "fix:verify"; then
+  run_cmd npm run fix:verify
+  exit 0
+fi
+
+if has_npm_script check; then
+  run_cmd npm run check
+  exit 0
+fi
+
+if has_npm_script test; then
+  run_cmd npm test
+  exit 0
+fi
+
+if [ -f go.mod ]; then
+  run_cmd go test ./...
+  exit 0
+fi
+
+if [ -f pyproject.toml ]; then
+  if command -v pytest >/dev/null 2>&1; then
+    run_cmd pytest
+    exit 0
+  fi
+fi
+
+printf 'agent-check: no validation command found in %s\n' "$repo_root" >&2
+printf 'Add npm script agent:check, scripts/agent-check.sh, make agent-check, or document a gate.\n' >&2
+exit 1

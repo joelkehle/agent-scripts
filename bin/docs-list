@@ -1,9 +1,20 @@
 #!/usr/bin/env node
 
-const { readdirSync, readFileSync, statSync } = require("node:fs");
+const { readdirSync, readFileSync, realpathSync, statSync } = require("node:fs");
 const { basename, isAbsolute, join, relative, resolve } = require("node:path");
 
-const EXCLUDED_DIRS = new Set(["archive", "research"]);
+const EXCLUDED_DIRS = new Set([
+  "archive",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "oss",
+  "research",
+  "tmp",
+  "vendor",
+  "worktrees",
+]);
 
 function isDirectory(pathname) {
   try {
@@ -51,7 +62,21 @@ function resolveDocsDir(input) {
   return candidate;
 }
 
-function walkMarkdownFiles(dir, base = dir) {
+function walkMarkdownFiles(dir, base = dir, seen = new Set(), maxDepth = Infinity, depth = 0) {
+  let realDir;
+
+  try {
+    realDir = realpathSync(dir);
+  } catch {
+    return [];
+  }
+
+  if (seen.has(realDir)) {
+    return [];
+  }
+
+  seen.add(realDir);
+
   const entries = readdirSync(dir, { withFileTypes: true });
   const files = [];
 
@@ -63,11 +88,15 @@ function walkMarkdownFiles(dir, base = dir) {
     const fullPath = join(dir, entry.name);
 
     if (entry.isDirectory()) {
+      if (depth >= maxDepth) {
+        continue;
+      }
+
       if (EXCLUDED_DIRS.has(entry.name)) {
         continue;
       }
 
-      files.push(...walkMarkdownFiles(fullPath, base));
+      files.push(...walkMarkdownFiles(fullPath, base, seen, maxDepth, depth + 1));
       continue;
     }
 
@@ -172,7 +201,8 @@ function main() {
 
   console.log(`Listing markdown files in ${docsDir}:`);
 
-  const markdownFiles = walkMarkdownFiles(docsDir);
+  const maxDepth = basename(docsDir) === "docs" ? Infinity : 0;
+  const markdownFiles = walkMarkdownFiles(docsDir, docsDir, new Set(), maxDepth);
 
   for (const relativePath of markdownFiles) {
     const fullPath = join(docsDir, relativePath);

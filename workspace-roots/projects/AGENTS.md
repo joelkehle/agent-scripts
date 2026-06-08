@@ -5,6 +5,8 @@ READ ~/Projects/shared/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing)
 This is the root workspace. It contains all of Joel's projects and infrastructure.
 When launched here, you have cross-project context. Use it for multi-repo ops, planning, and infra work.
 
+Loop workflows are available from `~/Projects/.agents/skills/`: use `ship-loop`, `review-loop`, `repair-loop`, and `learn-loop`. Shared policy lives in `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
+
 ## Project Inventory
 
 ### Core Platform
@@ -147,6 +149,7 @@ docker compose logs -f          # tail logs
 
 ### Testing (`ucla-tdg-assistant-db`)
 
+- General validation entrypoint: run `agent-check` from the owning repo when a repo-specific gate is not already named below.
 - Smoke: `npm run test:smoke` (vitest) / `npm run pw:smoke` (playwright)
 - Unit: `npm run test:unit`
 - E2E mock: `PW_SCOPE=e2e:mock npx playwright test --project=e2e:mock`
