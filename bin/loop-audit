@@ -3,7 +3,7 @@ set -euo pipefail
 
 workspace="${1:-$HOME/Projects}"
 issues=0
-expected_skills=(ship-loop review-loop repair-loop learn-loop)
+expected_skills=(ship-loop review-loop repair-loop learn-loop hygiene-loop)
 
 if [ ! -d "$workspace" ]; then
   printf 'loop-audit: workspace not found: %s\n' "$workspace" >&2

@@ -62,7 +62,7 @@ mkdir -p "$home/.codex" "$workspace"
 printf 'project_doc_max_bytes = 70000\n' > "$home/.codex/config.toml"
 
 for install in "$home/.agents/skills" "$workspace/.agents/skills"; do
-  for skill in ship-loop review-loop repair-loop learn-loop; do
+  for skill in ship-loop review-loop repair-loop learn-loop hygiene-loop; do
     mkdir -p "$install/$skill"
     printf -- '---\nname: %s\n---\n' "$skill" > "$install/$skill/SKILL.md"
   done
@@ -87,6 +87,8 @@ chmod +x "$script_repo/scripts/agent-check.sh"
 audit_output="$(HOME="$home" loop-audit "$workspace")"
 assert_contains "$audit_output" "OK $home/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK $workspace/.agents/skills/ship-loop/SKILL.md"
+assert_contains "$audit_output" "OK $home/.agents/skills/hygiene-loop/SKILL.md"
+assert_contains "$audit_output" "OK $workspace/.agents/skills/hygiene-loop/SKILL.md"
 assert_contains "$audit_output" "OK make-only -> make agent-check"
 assert_contains "$audit_output" "OK script-only -> scripts/agent-check.sh"
 

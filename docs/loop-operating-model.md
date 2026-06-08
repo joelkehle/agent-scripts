@@ -14,12 +14,13 @@ The goal is to move repeated prompt detail into durable loops. A loop is a workf
 
 ## Core Loops
 
-Use four reusable loops:
+Use five reusable loops:
 
 - `ship-loop`: implement a bounded code/docs change.
 - `review-loop`: inspect a diff or PR in read/propose mode.
 - `repair-loop`: fix failing validation with focused repair attempts.
 - `learn-loop`: capture durable repo-specific lessons after work finishes.
+- `hygiene-loop`: reduce dirty workspace state through inventory, classification, and small safe cleanup batches.
 
 Loops can compose. Normal implementation flow is:
 
@@ -160,6 +161,20 @@ Only propose or write a lesson when it is:
 - short enough to stay instruction-budget friendly
 
 Prefer adding `read_when` docs over growing AGENTS files. AGENTS should point to the durable doc, not absorb long domain playbooks.
+
+## Hygiene Loop
+
+Use when reducing dirty Git state across repos. Start read/propose: inventory dirty repos, classify each one, and process only 1-3 low-risk repos per pass.
+
+Cleanup classes:
+
+- finish + commit
+- park as WIP
+- trash generated/proof junk
+- ignore via `.gitignore`
+- leave alone
+
+Before touching a repo, read its `AGENTS.md`, check WWI for overlapping work, inspect diffs/untracked files, and decide whether the cleanup is coherent. Commit only completed work with the repo gate when available. Use `trash` for generated proof junk and do not commit raw email bodies, secrets, tokens, private keys, or sensitive source data.
 
 ## Instruction Budget
 

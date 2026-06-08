@@ -84,7 +84,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Coding Loops
 - Shared loop model: `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
 - Prefer durable skills over long repeated prompts. Skills are linked at `~/.agents/skills/` and `~/Projects/.agents/skills/`; tracked source lives under `workspace-roots/projects/.agents/skills/`.
-- Use `ship-loop` for bounded implementation, `review-loop` for read/propose review, `repair-loop` for focused validation failures, and `learn-loop` for durable repo lessons.
+- Use `ship-loop` for bounded implementation, `review-loop` for read/propose review, `repair-loop` for focused validation failures, `learn-loop` for durable repo lessons, and `hygiene-loop` for reducing dirty repo state in small safe batches.
 - Use `loop-receipt` at the end of non-trivial loops to capture goal, checks, risks, files, and next-loop recommendation; use `loop-resume` at the next turn to feed that evidence back into context.
 - Each repo should expose one validation entrypoint. Prefer `agent-check`; add `npm run agent:check` or `scripts/agent-check.sh` when a repo needs a custom gate. Do not define `npm run agent:check` as `agent-check`; point it at the repo's real gate.
 - Keep AGENTS files as routers. Move long examples, templates, historical notes, and domain playbooks into docs with `read_when` hints.
