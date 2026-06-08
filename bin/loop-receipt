@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { randomBytes } = require("node:crypto");
 
 function usage() {
   console.log(`Usage: loop-receipt --goal TEXT [options]
@@ -159,13 +160,27 @@ function repoSlug(repoRoot) {
 
 function changedFiles(repoRoot) {
   const files = new Set();
-  for (const line of run("git", ["-C", repoRoot, "diff", "--name-only"], repoRoot).split("\n")) {
-    if (line.trim()) files.add(line.trim());
+
+  function addLines(value) {
+    for (const line of value.split("\n")) {
+      if (line.trim()) files.add(line.trim());
+    }
   }
-  for (const line of run("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard"], repoRoot).split("\n")) {
-    if (line.trim()) files.add(line.trim());
+
+  addLines(run("git", ["-C", repoRoot, "diff", "--name-only"], repoRoot));
+  addLines(run("git", ["-C", repoRoot, "diff", "--cached", "--name-only"], repoRoot));
+  addLines(run("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard"], repoRoot));
+
+  if (files.size === 0) {
+    addLines(run("git", ["-C", repoRoot, "show", "--name-only", "--format=", "HEAD"], repoRoot));
   }
+
   return [...files].sort();
+}
+
+function receiptId(now) {
+  const timestamp = now.toISOString().replace(/[-:.]/g, "");
+  return `${timestamp}-${randomBytes(3).toString("hex")}`;
 }
 
 function gitInfo(repoRoot) {
@@ -233,7 +248,7 @@ function main() {
   const stateRoot = process.env.AGENT_LOOP_STATE_DIR || path.join(os.homedir(), ".local", "share", "agent-loops");
   const slug = repoSlug(repoRoot);
   const now = new Date();
-  const id = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const id = receiptId(now);
   const dir = path.join(stateRoot, "receipts", slug);
   fs.mkdirSync(dir, { recursive: true });
 

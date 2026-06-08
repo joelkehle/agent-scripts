@@ -93,8 +93,26 @@ printf 'hello\n' > "$receipt_repo/src/app.txt"
 state_dir="$tmp/loop-state"
 receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$receipt_repo" --goal "Ship loop receipts" --status pass --next-loop review-loop --check "agent-check=pass" --file src/app.txt --note "ready for review" --print-path)"
 [ -f "$receipt_path" ] || fail "receipt path not written: $receipt_path"
+second_receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$receipt_repo" --goal "Second receipt" --status pass --next-loop review-loop --check "agent-check=pass" --file src/app.txt --print-path)"
+[ -f "$second_receipt_path" ] || fail "second receipt path not written: $second_receipt_path"
+[ "$receipt_path" != "$second_receipt_path" ] || fail "back-to-back receipts reused the same path"
 resume_output="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-resume --root "$receipt_repo")"
-assert_contains "$resume_output" "Goal: Ship loop receipts"
+assert_contains "$resume_output" "Goal: Second receipt"
 assert_contains "$resume_output" "Next loop: review-loop"
 assert_contains "$resume_output" "agent-check: pass"
 assert_contains "$resume_output" '$review-loop continue from loop receipt'
+
+committed_repo="$workspace/committed-receipt-repo"
+mkdir -p "$committed_repo"
+git -C "$committed_repo" init -q
+git -C "$committed_repo" config user.email "agent-loop-test@example.com"
+git -C "$committed_repo" config user.name "Agent Loop Test"
+printf '{"scripts":{"test":"printf test-ok"}}\n' > "$committed_repo/package.json"
+git -C "$committed_repo" add package.json
+git -C "$committed_repo" commit -q -m "init"
+printf 'committed\n' > "$committed_repo/committed.txt"
+git -C "$committed_repo" add committed.txt
+git -C "$committed_repo" commit -q -m "add committed file"
+committed_receipt_path="$(AGENT_LOOP_STATE_DIR="$state_dir" loop-receipt --root "$committed_repo" --goal "Post-commit receipt" --status pass --next-loop review-loop --print-path)"
+committed_files="$(node -e 'const fs = require("node:fs"); const receipt = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(receipt.files.join("\n"));' "$committed_receipt_path")"
+assert_contains "$committed_files" "committed.txt"
