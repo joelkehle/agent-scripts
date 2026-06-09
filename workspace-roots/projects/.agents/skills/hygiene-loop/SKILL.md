@@ -18,7 +18,7 @@ Process:
    - leave alone
 3. Prefer 1-3 low-risk repos per pass.
 4. Before touching a repo, read its nearest `AGENTS.md`, check WWI for overlapping loops, and inspect the diff/untracked files.
-5. Commit only coherent completed work. Do not bundle unrelated files just to make the tree clean.
+5. Commit coherent completed cleanup after validation. Do not bundle unrelated files just to make the tree clean.
 6. For generated proof artifacts, do not commit raw email bodies, secrets, tokens, private keys, or sensitive source data. Use `trash` for discarded files.
 7. Run `agent-check` when a repo has a gate; for docs-only repos without a gate, run `docs-list` and `git diff --check`.
 8. After commit, write `loop-receipt --from-head` so receipt files come from the committed work.

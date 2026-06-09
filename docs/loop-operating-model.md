@@ -52,6 +52,29 @@ Every loop must define:
 - Stop rule: validation passes, scope expands, risky system change is required, product behavior is unclear, or the repair limit is hit.
 - Receipt: changed files, checks run, failures repaired, unresolved risks, and proof-pack URL when needed.
 
+## Commit Defaults
+
+For local `write` loops, green coherent work should usually be committed before
+handoff. "Green" means the targeted check and the repo gate pass, or an explicit
+reason is recorded for any skipped gate.
+
+Default behavior:
+
+- `ship-loop`: commit the completed slice when validation is green unless Joel
+  asked not to commit.
+- `hygiene-loop`: commit coherent cleanup slices after validation; do not bundle
+  unrelated files just to make the tree clean.
+- `repair-loop`: commit a focused repair when it belongs to an active write task
+  and validation is green.
+- `review-loop`: do not commit; stay read/propose unless Joel switches the task
+  into a write loop.
+- `learn-loop`: propose by default; write and commit only when Joel asked for a
+  durable doc/instruction update.
+
+Stop and ask before committing if the change needs a product decision, secrets,
+production config, schema migration, deployment, destructive write, force-push,
+branch change, or if ownership of the dirty files is ambiguous.
+
 ## Receipts And Resume
 
 Use `loop-receipt` to turn the end of a loop into structured next-turn context. Receipts are written outside the repo by default under `~/.local/share/agent-loops/receipts/`, so they do not dirty working trees.
@@ -117,7 +140,8 @@ Steps:
 6. If a check fails, enter `repair-loop`.
 7. Run `agent-check` or the documented full gate before handoff when feasible.
 8. Inspect diff and remove accidental churn.
-9. Produce receipt.
+9. Commit the green coherent slice unless Joel asked not to commit or a stop rule applies.
+10. Produce receipt; use `--from-head` after committing.
 
 ## Review Loop
 
@@ -148,6 +172,8 @@ Rules:
 6. Stop if the likely fix needs new scope, schema changes, secrets, deployment changes, destructive write, or unclear product behavior.
 
 Do not convert a repair loop into a broad refactor unless the user asks.
+When the repair belongs to an active write task, commit the focused green fix
+before handoff unless Joel asked not to commit.
 
 ## Learn Loop
 
