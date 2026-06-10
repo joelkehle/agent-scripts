@@ -29,7 +29,7 @@ projection.
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
 | Source evidence | Gmail, Krisp, Synology NAS media (`/mnt/synology-share1`) | the immutable record, referenced by stable `source_ref` (thread_id, message_id, NAS path) | never copied as truth |
 | Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
-| Transport | pinakes bus (UCLA :8080, JK :8081) | nothing durable, ever (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
+| Transport | pinakes bus (UCLA :8080, JK :8081) | agent registration secrets for HMAC identity; no durable workflow facts (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
 
 ## Rules
 
