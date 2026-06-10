@@ -49,6 +49,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Style: telegraph. Drop filler/grammar. Min tokens (global AGENTS + replies).
 
 ## State And Compliance
+- State ownership doctrine: `~/Projects/shared/agent-scripts/docs/STATE_ARCHITECTURE.md`. Read before creating/choosing any state store or deciding where a fact lives (noun DB vs PM vs wiki vs source vs repo `data/`). Changes that move state ownership must update that doc in the same commit.
 - Canonical host identity comes from `/etc/manager-host-id` on Linux/macOS/WSL when present.
 - Human working checkout: `~/Projects/shared/operations`.
 - Agent state clone: `~/.local/share/ops-state`.
@@ -198,6 +199,7 @@ Telemetry PR checklist (required when telemetry-affecting):
   1. call an existing bus agent
   2. reuse an existing shared package / sibling-repo implementation
   3. write new local code only if 1 and 2 are not viable
+- New persistent store (table/schema/file family): conform to `docs/STATE_ARCHITECTURE.md` first; new stores require a same-commit doc update there.
 - Do not rebuild an existing bus-backed service/agent locally without explicit user approval.
 - If bus reuse is not viable, say why before implementing new agent/service logic.
 - When adding a new agent to any stack: add the agent ID to the allowlist file, add the agent to the stack's docker-compose.yml, and ensure it connects to the `tta-agentnet` network.
