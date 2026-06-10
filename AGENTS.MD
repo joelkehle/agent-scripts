@@ -147,6 +147,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Source of truth (policy/plan): `~/Projects/shared/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.
 - Source of truth (this file): `~/Projects/shared/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
 - New runtime service: ship `GET /health` + `GET /metrics` (Prometheus). No merge without both unless explicit temporary exception (owner + expiry).
+- Endpoint auth bar (decided 2026-06-10, `manager/docs/decisions/endpoint-auth-policy-2026-06.md`): any Tailscale-reachable endpoint that writes/mutates, triggers LLM spend, or returns sensitive data (email, PHI, contacts) requires at least a static bearer token from env. Fail closed when the token is unset. Open endpoints are allowed only for read-only, non-sensitive metadata (`/health`, `/metrics`, registries). No merge for violations.
 - Add service to ops visibility: update `~/Projects/shared/manager/ops/config/projects.json` (URL probe + nightly/job probes if applicable).
 - Ops project/service table lives in `~/Projects/shared/manager/ops/config/projects.json`.
 - Port/runtime model:
