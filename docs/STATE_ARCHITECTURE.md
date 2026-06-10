@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.0 (2026-06-09)
+Version: 1.1 (2026-06-10)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -58,6 +58,13 @@ projection.
 - **Inteum / Ironclad:** external systems of record for final operational
   agreement/case state where they exist. Our stores hold working state plus
   pointers, until a sync is explicitly engineered.
+- **email-triage document clerk (`data/documents/`, added 2026-06-10, branch
+  document-clerk):** content-addressed projection cache of Gmail attachments
+  (blobs + meta + extracted text/facts, keyed by sha256). Agent-working-state
+  tier: every meta record carries thread/message `source_ref`s into Gmail;
+  safe to delete and rebuild by re-capture + re-processing. It never coins
+  identity nouns — agreement entities stay assistant-db, operational agreement
+  state stays Ironclad/Inteum; the clerk only stages actions toward them.
 
 ## Known Violations (to retire)
 
@@ -73,5 +80,7 @@ projection.
 
 ## Changelog
 
+- 1.1 (2026-06-10): register email-triage `data/documents/` document-clerk
+  projection cache (ruling under Ownership Rulings).
 - 1.0 (2026-06-09): initial doctrine. Tier table, projection rule, bus-discovery
   rule, assistant-db/PM ownership ruling, contactstore retirement note.
