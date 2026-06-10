@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.3 (2026-06-10)
+Version: 1.4 (2026-06-10)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -66,6 +66,14 @@ projection.
   identity nouns — agreement entities stay assistant-db, operational agreement
   state stays Ironclad/Inteum; the clerk only stages actions toward them.
 
+- **hall-monitor `data/hall-monitor.db` (added 2026-06-10, M1 build):**
+  disposable SQLite working state for the read/propose-only fleet supervisor: finding
+  dedup status, first/last-seen timestamps, scan log, fingerprints, and source
+  pointers. Agent-working-state tier; safe to delete and rebuild from Prometheus,
+  wwi loop files, and Pinakes read endpoints. It never owns service truth, work
+  nouns, or bus registry facts; it only remembers what hall-monitor has already
+  reported.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -87,7 +95,8 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
-
+- 1.4 (2026-06-10): register hall-monitor `data/hall-monitor.db` as disposable
+  agent working state for finding dedup, scan log, and digest rendering.
 - 1.3 (2026-06-10): identity-noun hosting cutover — beelink Postgres+PostgREST
   (:8239) is live with the full Supabase export (14 tables, counts verified);
   cloud Supabase frozen as legacy copy; Vercel/Supabase teardown backlogged
