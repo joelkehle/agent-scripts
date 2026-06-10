@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.2 (2026-06-10)
+Version: 1.3 (2026-06-10)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -23,7 +23,7 @@ projection.
 
 | Tier | Authoritative store | Owns | Everything else is |
 |---|---|---|---|
-| Identity nouns | `ucla-tdg-assistant-db` (Supabase Postgres) | people, organizations, agreements, their IDs and relationships (`people`, `organizations`, `agreement_people`, rolodex) | a cache with a pointer back |
+| Identity nouns | `ucla-tdg-assistant-db` — hosted on beelink Postgres + PostgREST `127.0.0.1:8239` since 2026-06-10 (cloud Supabase is a frozen legacy copy pending teardown; do NOT write to it) | people, organizations, agreements, their IDs and relationships (`people`, `organizations`, `agreement_people`, rolodex) | a cache with a pointer back |
 | Work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds | a proposal *into* it |
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
@@ -88,6 +88,11 @@ projection.
 
 ## Changelog
 
+- 1.3 (2026-06-10): identity-noun hosting cutover — beelink Postgres+PostgREST
+  (:8239) is live with the full Supabase export (14 tables, counts verified);
+  cloud Supabase frozen as legacy copy; Vercel/Supabase teardown backlogged
+  (decision points in assistant-db deploy/local/README.md + docs/LOCAL_IDENTITY_STORE_SPEC.md).
+  Nightly pg_dump to NAS via beelink crontab.
 - 1.2 (2026-06-10): retire both v1.0 known violations (contact-resolver built +
   contactstore demoted to labeled cache, 81e49c5; relay narrative archived,
   97fd634; PM manual/ tracker writes removed, 0c32bed).
