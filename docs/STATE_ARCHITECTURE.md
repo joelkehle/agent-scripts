@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.1 (2026-06-10)
+Version: 1.2 (2026-06-10)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -68,18 +68,29 @@ projection.
 
 ## Known Violations (to retire)
 
-- `ucla-tdg-email-triage` `internal/contactstore` (local contacts SQLite, added
-  2026-06-05): competes with assistant-db rolodex. Target: read capability
-  `ucla-tdg-contact-resolver` (`contact-resolve { email|name|query }`) on the UCLA
-  bus backed by assistant-db. Until that exists, treat the local SQLite strictly as
-  a read-through cache — do not record new authoritative contact/org facts there,
-  and do not grow its schema.
-- `ucla-tdg-email-triage` repo-root handoff/RECONCILED narrative files: durable
-  knowledge parked in a code repo. New durable narrative goes to the wiki or PM
-  notes; repo docs are for repo behavior.
+(none open)
+
+## Retired Violations
+
+- `ucla-tdg-email-triage` `internal/contactstore`: RETIRED 2026-06-10
+  (email-triage 81e49c5). `ucla-tdg-contact-resolver` (read-only
+  `contact-resolve { email|name|query }`, port 8238, backed by assistant-db
+  PostgREST) now exists; contactstore is a 24h-TTL read-through cache whose rows
+  require an assistant-db `person_id` + `source_of_truth` back-pointer — local
+  identity minting is blocked in code. Workbench org briefing notes remain local
+  working context by design. Pending ops item: resolver runs degraded until
+  `CONTACT_RESOLVER_SUPABASE_URL/KEY` are provisioned (Joel).
+- `ucla-tdg-email-triage` repo-root handoff/RECONCILED narrative files:
+  RETIRED 2026-06-09 (email-triage 97fd634). Dated relay narrative moved to
+  `docs/archive/relay/`; AGENT_HANDOFF_PROTOCOL.md pins future relay files there.
+  Related: disposition mutations no longer write PM-owned `manual/` trackers
+  (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
 
+- 1.2 (2026-06-10): retire both v1.0 known violations (contact-resolver built +
+  contactstore demoted to labeled cache, 81e49c5; relay narrative archived,
+  97fd634; PM manual/ tracker writes removed, 0c32bed).
 - 1.1 (2026-06-10): register email-triage `data/documents/` document-clerk
   projection cache (ruling under Ownership Rulings).
 - 1.0 (2026-06-09): initial doctrine. Tier table, projection rule, bus-discovery
