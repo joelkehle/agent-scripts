@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.4 (2026-06-10)
+Version: 1.5 (2026-06-11)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -74,6 +74,17 @@ projection.
   nouns, or bus registry facts; it only remembers what hall-monitor has already
   reported.
 
+- **jk-fitness-telemetry `data/fitness.db` (added 2026-06-11, v1 spec):** fleet-side
+  archive of Apple Health *fitness* telemetry. The iPhone Health database remains
+  the upstream source of truth but is not fleet-queryable, so `raw_payloads`
+  (allowlist-filtered Health Auto Export pushes + baseline import batches) is the
+  fleet's authoritative evidence copy — append-only, never edited. The
+  `metrics`/`workouts`/`sleep` tables are projections derived from `raw_payloads`
+  (each row carries `payload_id` as source_ref) and are safe to drop and rebuild.
+  Clinical data is excluded at ingest by allowlist (repo AGENTS.md hard boundary;
+  ruling memory `feedback-fitness-telemetry-inbounds` 2026-06-11). Spec:
+  `jk-fitness-telemetry/docs/FITNESS_TELEMETRY_SPEC.md`.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -95,6 +106,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.5 (2026-06-11): register jk-fitness-telemetry `data/fitness.db` — raw_payloads
+  as fleet-authoritative fitness evidence copy, metric tables as rebuildable
+  projections; clinical excluded at ingest by allowlist.
 - 1.4 (2026-06-10): register hall-monitor `data/hall-monitor.db` as disposable
   agent working state for finding dedup, scan log, and digest rendering.
 - 1.3 (2026-06-10): identity-noun hosting cutover — beelink Postgres+PostgREST
