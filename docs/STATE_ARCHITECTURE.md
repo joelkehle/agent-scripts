@@ -80,7 +80,8 @@ projection.
   (allowlist-filtered Health Auto Export pushes + baseline import batches) is the
   fleet's authoritative evidence copy — append-only, never edited. The
   `metrics`/`workouts`/`sleep` tables are projections derived from `raw_payloads`
-  (each row carries `payload_id` as source_ref) and are safe to drop and rebuild.
+  (each row carries `payload_id` as source_ref) and are safe to drop and rebuild
+  from `raw_payloads` (dedicated rebuild command deferred to v2).
   Clinical data is excluded at ingest by allowlist (repo AGENTS.md hard boundary;
   ruling memory `feedback-fitness-telemetry-inbounds` 2026-06-11). Spec:
   `jk-fitness-telemetry/docs/FITNESS_TELEMETRY_SPEC.md`.
