@@ -25,6 +25,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Under `~/Projects`, run `bus-discover` early when the task may touch email, calendar, IP agents, llm-wiki, triage, or any agentic capability. If missing, fallback to `curl -fsS http://localhost:8081/v1/agents` and `curl -fsS http://localhost:8080/v1/agents`.
 - For email/calendar/agentic tasks, do not merely run discovery. Before recommending architecture or writing code, state the relevant discovered agent ids, capabilities, safety class, and whether each one is read-only or write-capable.
 - Calendar reminder: live calendar agents — `ucla-tdg-outlook-calendar-agent` (read-only UCLA Outlook, UCLA bus), `ucla-tdg-outlook-calendar-write-agent` (write, guard blocks only, UCLA bus), `jk-calendar-guard-agent` (dual-bus policy agent, LIVE since 2026-06-10 — creates guard blocks), `jk-gcal-ingest` (personal Google calendar, JK bus, read+write). `jk-outlook-calendar-agent` (personal Outlook, JK bus) is DOWN pending a laptop reinstall — see jk-email-agents `docs/OUTLOOK_CALENDAR_AGENT.md`. Do not default to Google Calendar or a new calendar adapter without first accounting for these agents.
+- Chief of Staff concept in development: before building or recommending any agent, operator, dashboard, briefing, or workflow that answers "what should Joel do today?", read `~/Projects/shared/brainstorm/chief-of-staff-agent.md`. That concept is a cross-domain attention allocator over email urgency, deals, IP Agency, project-manager state, calendar constraints, and engineering recovery. Do not duplicate it as a new daily-briefing, inbox-only, deal-only, or IP-only agent without first explaining why the Chief of Staff boundary is not the right home.
 
 ## Agent Protocol
 - Contact: Joel Kehle (@joelkehle, joel@kehle.com).
@@ -75,6 +76,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Important Locations
 - Blog repo: `~/Projects/joelkehle.me`
+- Chief of Staff concept/spec: `~/Projects/shared/brainstorm/chief-of-staff-agent.md`
 - Fleet policy/docs: `~/Projects/shared/manager/docs/`
 - Host notes/runbooks: `~/Projects/shared/operations/machines/`
 - LLM limits tracking: `~/Documents/joelkehle/codex limits.md`

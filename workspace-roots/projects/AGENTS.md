@@ -7,6 +7,11 @@ When launched here, you have cross-project context. Use it for multi-repo ops, p
 
 Loop workflows are available from `~/Projects/.agents/skills/`: use `ship-loop`, `review-loop`, `repair-loop`, `learn-loop`, and `hygiene-loop`. Use `loop-receipt` to capture loop evidence and `loop-resume` to feed it into the next turn. Shared policy lives in `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
 
+Chief of Staff concept in development: `~/Projects/shared/brainstorm/chief-of-staff-agent.md`.
+Read it before planning or building anything that answers "what should Joel do today",
+combines email/deals/IP Agency/PM/calendar priorities, or risks duplicating the daily
+command-brief role.
+
 ## Project Inventory
 
 ### Core Platform
@@ -209,6 +214,7 @@ cd ~/Projects/jk/jk-email-agents && docker compose up -d
 | TDG operations | `~/Projects/ucla-tdg/ucla-tdg-assistant-db/docs/04-operations/` |
 | Bus contract | `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md` |
 | Email agents | `~/Projects/jk/jk-email-agents/README.md` |
+| Chief of Staff concept | `~/Projects/shared/brainstorm/chief-of-staff-agent.md` |
 | Legacy agency archive | `~/Projects/archive/techtransfer-agency/` |
 | Roadmap | `~/Projects/shared/brainstorm/roadmap.md` |
 | Private ops/DNS | `~/Projects/shared/manager/docs/` |
