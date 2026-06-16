@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.6 (2026-06-16)
+Version: 1.7 (2026-06-16)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -27,7 +27,8 @@ projection.
 | Work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds | a proposal *into* it |
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
-| Source evidence | Gmail, Krisp, Synology NAS media (`/mnt/synology-share1`) | the immutable record, referenced by stable `source_ref` (thread_id, message_id, NAS path) | never copied as truth |
+| Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; Phase-3 personal store for `scope=personal` | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
+| Source evidence | NAS `/mnt/synology-share1/evidence/<channel>/<id>/` canonical owned copies; Gmail, Krisp, Apple, and other vendor clouds are capture devices and convenience caches | the immutable record: media, transcript, message/export bytes, manifest, hashes, and stable `source_ref` / `evidence_ref` | never copied as truth |
 | Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
 | Agent org governance | `shared/manager/ops/config/agent-org.json` | Joel Inc agent titles, reporting lines, trust level, safety class, and escalation policy | a projection into bus passports, dashboards, docs, or wiki pages |
 | Transport | pinakes bus (UCLA :8080, JK :8081) | agent registration secrets for HMAC identity; no durable workflow facts (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
@@ -59,6 +60,15 @@ projection.
 - **Inteum / Ironclad:** external systems of record for final operational
   agreement/case state where they exist. Our stores hold working state plus
   pointers, until a sync is explicitly engineered.
+- **interaction ledger (`interactions`, added 2026-06-16, branch
+  interaction-ledger):** project-manager owns UCLA-scope interaction projections
+  because meeting/email outputs become PM proposals there. Each interaction row
+  carries `source_ref` and is rebuildable from owned evidence; deleting the table
+  must not destroy the source record. Commitments point to PM proposals/tasks
+  rather than owning their state. Decisions and knowledge are queued as
+  propose-only wiki distillation items; the wiki remains narrative truth after
+  human approval. Personal-scope rows wait for the Phase-3 personal store and
+  must not be written into UCLA systems.
 - **email-triage document clerk (`data/documents/`, added 2026-06-10, branch
   document-clerk):** content-addressed projection cache of Gmail attachments
   (blobs + meta + extracted text/facts, keyed by sha256). Agent-working-state
@@ -116,6 +126,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.7 (2026-06-16): add the Interactions tier for communication-event
+  provenance and invert Source evidence to NAS-owned canonical evidence, with
+  vendor clouds demoted to capture devices/caches.
 - 1.6 (2026-06-16): register Manager-owned Joel Inc agent org chart for titles,
   reporting lines, trust/probation, safety class, and escalation policy.
 - 1.5 (2026-06-11): register jk-fitness-telemetry `data/fitness.db` — raw_payloads
