@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.5 (2026-06-11)
+Version: 1.6 (2026-06-16)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -29,6 +29,7 @@ projection.
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
 | Source evidence | Gmail, Krisp, Synology NAS media (`/mnt/synology-share1`) | the immutable record, referenced by stable `source_ref` (thread_id, message_id, NAS path) | never copied as truth |
 | Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
+| Agent org governance | `shared/manager/ops/config/agent-org.json` | Joel Inc agent titles, reporting lines, trust level, safety class, and escalation policy | a projection into bus passports, dashboards, docs, or wiki pages |
 | Transport | pinakes bus (UCLA :8080, JK :8081) | agent registration secrets for HMAC identity; no durable workflow facts (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
 
 ## Rules
@@ -86,6 +87,14 @@ projection.
   ruling memory `feedback-fitness-telemetry-inbounds` 2026-06-11). Spec:
   `jk-fitness-telemetry/docs/FITNESS_TELEMETRY_SPEC.md`.
 
+- **Joel Inc agent org chart (added 2026-06-16):**
+  `shared/manager/ops/config/agent-org.json` owns agent titles, reporting lines,
+  trust/probation status, safety class, and escalation policy. Manager owns this
+  because it already owns allowlist, promotion, verification, fleet compliance,
+  dashboards, and alerts. Pinakes may project capability/passport metadata, and
+  wikis or dashboards may mirror the org chart, but they must cite this file.
+  Individual agent repos must not become authoritative for their own manager.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -107,6 +116,8 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.6 (2026-06-16): register Manager-owned Joel Inc agent org chart for titles,
+  reporting lines, trust/probation, safety class, and escalation policy.
 - 1.5 (2026-06-11): register jk-fitness-telemetry `data/fitness.db` — raw_payloads
   as fleet-authoritative fitness evidence copy, metric tables as rebuildable
   projections; clinical excluded at ingest by allowlist.
