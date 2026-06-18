@@ -248,10 +248,6 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 Read `~/Projects/shared/agent-scripts/tools.md` for the full tool catalog if it exists.
 
-### bird
-- X CLI: `~/Projects/bird/bird`. Cmds: `tweet`, `reply`, `read`, `thread`, `search`, `mentions`, `whoami`.
-- Uses Firefox cookies by default (`--firefox-profile` to switch).
-
 ### sonoscli
 - Sonos CLI: `~/Projects/sonoscli/bin/sonos`. Cmds: `discover`, `status`, `play/pause/stop`, `volume set`, `group`.
 - SSDP can fail: use `--ip <speaker-ip>`.
