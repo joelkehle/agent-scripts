@@ -23,6 +23,13 @@ Local tool catalog for this machine.
 - Defaults: JK bus on `localhost:8081`, UCLA TDG bus on `localhost:8080`
 - Examples: `bus-discover`, `bus-discover --capability events-list`, `bus-discover --format json`
 
+## codex-bg
+- Purpose: durable background runner for long Codex-adjacent jobs; captures logs, writes resume metadata, and can send completion email through `jk-gmail-ingest`.
+- Location: ~/Projects/shared/agent-scripts/bin/codex-bg
+- Default state: `~/.local/share/codex-bg/runs/`
+- Email path: registers short-lived `codex-bg-notifier` and sends through the JK bus at `localhost:8081`.
+- Examples: `codex-bg start --name long-check --timeout 2h -- ./scripts/check`, `codex-bg status <run-id>`, `codex-bg current-session-id`
+
 ## agent-check
 - Purpose: run the best available validation command for the current repo.
 - Location: ~/Projects/shared/agent-scripts/bin/agent-check
