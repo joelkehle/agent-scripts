@@ -68,7 +68,14 @@ Requirements:
 - JK bus is reachable at `http://localhost:8081` or set `CODEX_BG_BUS_URL`.
 - HMAC secret lives at `~/.config/codex-bg/secret`; the runner creates it with `0600` permissions when missing.
 
-The email body includes status, run id, duration, exit code, local summary path, optional proof URL, log directory, and the Codex resume command.
+The email body starts with a plain-English section, then status, run id, duration, local summary path, optional proof URL, log directory, and the Codex resume command.
+
+For useful completion emails, have the job write a short human result to `CODEX_BG_EMAIL_FILE`. Keep it to complete sentences: what ran, whether it passed, the important comparison numbers, what changed, and what Joel should do next.
+
+```bash
+codex-bg start --name model-bakeoff --email joel@kehle.com -- \
+  bash -lc 'printf "Both models passed. GLM was faster on this exam; see artifacts for details.\n" > "$CODEX_BG_EMAIL_FILE"'
+```
 
 ## Launcher Choice
 

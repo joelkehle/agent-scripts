@@ -34,7 +34,34 @@ assert_not_contains() {
 }
 
 node <<'NODE'
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { _test } = require("./lib/codex-bg-email");
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-bg-email-"));
+const emailSummary = path.join(dir, "email-summary.md");
+const jobSummary = path.join(dir, "job-summary.md");
+fs.writeFileSync(emailSummary, "All tests passed. GLM was faster than Gemma on this exam.\n");
+fs.writeFileSync(jobSummary, '{"technical":true}\n');
+const email = _test.emailBody({
+  name: "model-bakeoff",
+  status: "pass",
+  run_id: "run-1",
+  duration_ms: 1234,
+  exit_code: 0,
+  summary_file: "/tmp/summary.md",
+  run_dir: "/tmp/run",
+  cwd: "/tmp/project",
+  resume_command: "codex resume session-1",
+  email_summary_file: emailSummary,
+  job_summary_file: jobSummary,
+});
+if (!email.includes("Plain English") || !email.includes("All tests passed. GLM was faster")) {
+  throw new Error(`missing plain English section: ${email}`);
+}
+if (!email.includes("Details") || !email.includes("Technical Summary")) {
+  throw new Error(`missing details sections: ${email}`);
+}
 const record = { gmail_agent: "jk-gmail-ingest", notifier_agent: "codex-bg-notifier" };
 const response = _test.parseObserve([
   "id: 1",
@@ -76,7 +103,7 @@ bg_state="$tmp/codex-bg-runs"
 bg_output="$(
   CODEX_BG_STATE_DIR="$bg_state" CODEX_HOME="$codex_home" \
     codex-bg start --name smoke --launcher foreground --session-id "$session_uuid" --cwd "$tmp" -- \
-      bash -lc 'printf "hello stdout\n"; printf "hello stderr\n" >&2; printf "summary $CODEX_SESSION_ID hf_abcdefghijk sk-abcdefghijk Authorization: Bearer secret-token\n" > "$CODEX_BG_SUMMARY_FILE"'
+      bash -lc 'printf "hello stdout\n"; printf "hello stderr\n" >&2; printf "plain $CODEX_SESSION_ID\n" > "$CODEX_BG_EMAIL_FILE"; printf "summary $CODEX_SESSION_ID hf_abcdefghijk sk-abcdefghijk Authorization: Bearer secret-token\n" > "$CODEX_BG_SUMMARY_FILE"'
 )"
 assert_contains "$bg_output" "codex-bg: run_id="
 bg_run_id="$(printf '%s\n' "$bg_output" | sed -n 's/^codex-bg: run_id=//p')"
