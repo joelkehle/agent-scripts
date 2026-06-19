@@ -219,6 +219,7 @@ Telemetry PR checklist (required when telemetry-affecting):
 
 ## Git
 - Safe by default: `git status/diff/log`. Push only when user asks.
+- Definition of done always includes merged to `main` and pushed to `origin/main`, unless Joel explicitly waives it.
 - `git checkout` ok for PR review / explicit request.
 - Branch changes require user consent.
 - Destructive ops forbidden unless explicit (`reset --hard`, `clean`, `restore`, `rm`, …).
@@ -247,10 +248,6 @@ Telemetry PR checklist (required when telemetry-affecting):
 ## Tools
 
 Read `~/Projects/shared/agent-scripts/tools.md` for the full tool catalog if it exists.
-
-### bird
-- X CLI: `~/Projects/bird/bird`. Cmds: `tweet`, `reply`, `read`, `thread`, `search`, `mentions`, `whoami`.
-- Uses Firefox cookies by default (`--firefox-profile` to switch).
 
 ### sonoscli
 - Sonos CLI: `~/Projects/sonoscli/bin/sonos`. Cmds: `discover`, `status`, `play/pause/stop`, `volume set`, `group`.

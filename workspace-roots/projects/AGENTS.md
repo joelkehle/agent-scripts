@@ -149,6 +149,7 @@ docker compose logs -f          # tail logs
 - Conventional Commits: `feat|fix|refactor|build|ci|chore|docs|style|perf|test`
 - Commit helper: `committer` (on PATH) — stages only listed paths
 - Remotes: prefer HTTPS under ~/Projects
+- Definition of done always includes merged to `main` and pushed to `origin/main`, unless Joel explicitly waives it
 - Trunk-based: feat/* → staging (force-push) → main (after validation)
 - Never push main/staging without Joel's approval
 

@@ -1,0 +1,433 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const crypto = require("node:crypto");
+const { spawn, spawnSync } = require("node:child_process");
+const { sendEmail } = require("../lib/codex-bg-email");
+
+const DEFAULT_BUS_URL = process.env.CODEX_BG_BUS_URL || process.env.BUS_URL || "http://localhost:8081";
+const DEFAULT_GMAIL_AGENT = "jk-gmail-ingest";
+const DEFAULT_NOTIFIER_AGENT = "codex-bg-notifier";
+
+function usage() {
+  console.log(`Usage:
+  codex-bg start [options] -- COMMAND [ARGS...]
+  codex-bg run RUN_DIR
+  codex-bg status RUN_ID|RUN_DIR
+  codex-bg tail RUN_ID|RUN_DIR [--stderr]
+  codex-bg list
+  codex-bg current-session-id
+
+Start options:
+  --name NAME                 Job name
+  --timeout DURATION          Kill job after duration, e.g. 30s, 10m, 2h
+  --email ADDRESS             Send completion email through jk-gmail-ingest
+  --session-id UUID           Codex session UUID for resume instructions
+  --cwd DIR                   Working directory for the command
+  --proof-url URL             Proof/report URL to include in summary/email
+  --launcher auto|systemd|nohup|foreground
+  --bus-url URL               JK bus URL for email notification
+  --gmail-agent AGENT_ID      Target Gmail agent
+  --notifier-agent AGENT_ID   Short-lived sender agent id
+  --secret-file PATH          HMAC secret for notifier agent
+`);
+}
+
+async function main(argv) {
+  const command = argv[2] || "help";
+  try {
+    if (command === "help" || command === "--help" || command === "-h") {
+      usage();
+      return 0;
+    }
+    if (command === "start") return await start(argv.slice(3));
+    if (command === "run") return await run(argv[3]);
+    if (command === "status") return status(argv.slice(3));
+    if (command === "tail") return tail(argv.slice(3));
+    if (command === "list") return listRuns();
+    if (command === "current-session-id") {
+      console.log(currentSessionID() || "");
+      return currentSessionID() ? 0 : 1;
+    }
+    throw new Error(`unknown command: ${command}`);
+  } catch (error) {
+    console.error(`codex-bg: ${error.message || error}`);
+    return 1;
+  }
+}
+
+function parseStart(argv) {
+  const opts = {
+    name: "codex-bg",
+    cwd: process.cwd(),
+    timeoutMs: 0,
+    email: "",
+    sessionId: "",
+    proofUrl: "",
+    launcher: "auto",
+    busUrl: DEFAULT_BUS_URL,
+    gmailAgent: DEFAULT_GMAIL_AGENT,
+    notifierAgent: DEFAULT_NOTIFIER_AGENT,
+    secretFile: path.join(os.homedir(), ".config", "codex-bg", "secret"),
+    command: [],
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--") {
+      opts.command = argv.slice(i + 1);
+      break;
+    }
+    if (arg === "-h" || arg === "--help") {
+      opts.help = true;
+      break;
+    }
+    const value = argv[++i];
+    if (value === undefined) throw new Error(`${arg} requires a value`);
+    switch (arg) {
+      case "--name": opts.name = value; break;
+      case "--cwd": opts.cwd = path.resolve(value); break;
+      case "--timeout": opts.timeoutMs = parseDuration(value); break;
+      case "--email": opts.email = value; break;
+      case "--session-id": opts.sessionId = value; break;
+      case "--proof-url": opts.proofUrl = value; break;
+      case "--launcher": opts.launcher = value; break;
+      case "--bus-url": opts.busUrl = value.replace(/\/+$/, ""); break;
+      case "--gmail-agent": opts.gmailAgent = value; break;
+      case "--notifier-agent": opts.notifierAgent = value; break;
+      case "--secret-file": opts.secretFile = path.resolve(value); break;
+      default: throw new Error(`unknown start option: ${arg}`);
+    }
+  }
+  if (opts.help) return opts;
+  if (!["auto", "systemd", "nohup", "foreground"].includes(opts.launcher)) {
+    throw new Error("--launcher must be auto, systemd, nohup, or foreground");
+  }
+  if (opts.command.length === 0) throw new Error("start requires -- COMMAND [ARGS...]");
+  if (!fs.existsSync(opts.cwd) || !fs.statSync(opts.cwd).isDirectory()) {
+    throw new Error(`cwd is not a directory: ${opts.cwd}`);
+  }
+  opts.sessionId = opts.sessionId || currentSessionID() || "";
+  return opts;
+}
+
+async function start(argv) {
+  const opts = parseStart(argv);
+  if (opts.help) {
+    usage();
+    return 0;
+  }
+  const runID = `${slug(opts.name)}-${timestamp()}-${crypto.randomBytes(3).toString("hex")}`;
+  const runDir = path.join(stateDir(), runID);
+  fs.mkdirSync(runDir, { recursive: true, mode: 0o700 });
+  const record = {
+    run_id: runID,
+    name: opts.name,
+    status: "queued",
+    created_at: new Date().toISOString(),
+    cwd: opts.cwd,
+    command: opts.command,
+    timeout_ms: opts.timeoutMs,
+    email_to: opts.email,
+    proof_url: opts.proofUrl,
+    session_id: opts.sessionId,
+    resume_command: resumeCommand(opts.sessionId),
+    bus_url: opts.busUrl,
+    gmail_agent: opts.gmailAgent,
+    notifier_agent: opts.notifierAgent,
+    secret_file: opts.secretFile,
+    launcher: opts.launcher,
+    stdout_log: path.join(runDir, "stdout.log"),
+    stderr_log: path.join(runDir, "stderr.log"),
+    supervisor_log: path.join(runDir, "supervisor.log"),
+    job_summary_file: path.join(runDir, "job-summary.md"),
+    summary_file: path.join(runDir, "summary.md"),
+    run_dir: runDir,
+  };
+  writeJSON(path.join(runDir, "run.json"), record);
+
+  if (opts.launcher === "foreground") {
+    const code = await run(runDir);
+    console.log(`codex-bg: run_id=${runID}`);
+    console.log(`codex-bg: run_dir=${runDir}`);
+    return code;
+  }
+
+  const launched = launch(record);
+  record.launcher = launched.launcher;
+  record.launcher_pid = launched.pid || 0;
+  record.systemd_unit = launched.unit || "";
+  writeJSON(path.join(runDir, "run.json"), record);
+  console.log(`codex-bg: started ${runID}`);
+  console.log(`codex-bg: run_dir=${runDir}`);
+  console.log(`codex-bg: status: codex-bg status ${runID}`);
+  return 0;
+}
+
+function launch(record) {
+  if ((record.launcher === "auto" || record.launcher === "systemd") && hasCommand("systemd-run")) {
+    const unit = `codex-bg-${record.run_id}`.slice(0, 63).replace(/[^A-Za-z0-9_.@-]/g, "-");
+    const result = spawnSync("systemd-run", [
+      "--user",
+      "--unit", unit,
+      "--collect",
+      process.execPath,
+      __filename,
+      "run",
+      record.run_dir,
+    ], { encoding: "utf8" });
+    if (result.status === 0) return { launcher: "systemd", unit };
+    if (record.launcher === "systemd") throw new Error(`systemd-run failed: ${result.stderr || result.stdout}`);
+  }
+  const out = fs.openSync(record.supervisor_log, "a");
+  const child = spawn(process.execPath, [__filename, "run", record.run_dir], {
+    detached: true,
+    stdio: ["ignore", out, out],
+    env: process.env,
+  });
+  child.unref();
+  return { launcher: "nohup", pid: child.pid };
+}
+
+async function run(runDir) {
+  if (!runDir) throw new Error("run requires RUN_DIR");
+  const runPath = path.join(runDir, "run.json");
+  const record = readJSON(runPath);
+  record.status = "running";
+  record.started_at = new Date().toISOString();
+  writeJSON(runPath, record);
+
+  const env = {
+    ...process.env,
+    CODEX_BG_RUN_ID: record.run_id,
+    CODEX_BG_RUN_DIR: record.run_dir,
+    CODEX_BG_SUMMARY_FILE: record.job_summary_file,
+    CODEX_BG_PROOF_URL: record.proof_url || "",
+    CODEX_SESSION_ID: record.session_id || "",
+  };
+  const stdout = fs.openSync(record.stdout_log, "a");
+  const stderr = fs.openSync(record.stderr_log, "a");
+  const child = spawn(record.command[0], record.command.slice(1), {
+    cwd: record.cwd,
+    env,
+    detached: true,
+    stdio: ["ignore", stdout, stderr],
+  });
+
+  let timedOut = false;
+  let timer = null;
+  if (record.timeout_ms > 0) {
+    timer = setTimeout(() => {
+      timedOut = true;
+      try { process.kill(-child.pid, "SIGTERM"); } catch {}
+      setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch {} }, 5000).unref();
+    }, record.timeout_ms);
+  }
+
+  const exitCode = await new Promise((resolve) => {
+    child.on("error", (error) => {
+      fs.appendFileSync(record.stderr_log, `codex-bg spawn error: ${error.message}\n`);
+      resolve(127);
+    });
+    child.on("close", (code, signal) => resolve(code === null ? signalExitCode(signal) : code));
+  });
+  if (timer) clearTimeout(timer);
+  fs.closeSync(stdout);
+  fs.closeSync(stderr);
+
+  record.finished_at = new Date().toISOString();
+  record.duration_ms = new Date(record.finished_at).getTime() - new Date(record.started_at).getTime();
+  record.exit_code = timedOut ? 124 : exitCode;
+  record.timed_out = timedOut;
+  record.status = record.exit_code === 0 ? "pass" : "fail";
+  writeJSON(runPath, record);
+
+  writeSummary(record);
+  if (record.email_to) {
+    try {
+      const notify = await sendEmail(record);
+      record.notify_status = "sent";
+      record.notify = notify;
+    } catch (error) {
+      record.notify_status = "failed";
+      record.notify_error = String(error.message || error);
+    }
+    writeJSON(runPath, record);
+    writeSummary(record);
+  }
+  return record.exit_code;
+}
+
+function status(argv) {
+  const runDir = resolveRun(argv[0]);
+  const record = readJSON(path.join(runDir, "run.json"));
+  console.log(`${record.run_id} ${record.status}`);
+  console.log(`cwd: ${record.cwd}`);
+  console.log(`command: ${redact(record.command.join(" "))}`);
+  console.log(`resume: ${record.resume_command}`);
+  console.log(`summary: ${record.summary_file}`);
+  if (record.proof_url) console.log(`proof: ${record.proof_url}`);
+  if (record.notify_status) console.log(`notify: ${record.notify_status}`);
+  return record.status === "fail" ? 1 : 0;
+}
+
+function tail(argv) {
+  let stream = "stdout";
+  const args = [];
+  for (const arg of argv) {
+    if (arg === "--stderr") stream = "stderr";
+    else args.push(arg);
+  }
+  const runDir = resolveRun(args[0]);
+  const record = readJSON(path.join(runDir, "run.json"));
+  const file = stream === "stderr" ? record.stderr_log : record.stdout_log;
+  process.stdout.write(lastLines(file, 80));
+  return 0;
+}
+
+function listRuns() {
+  const root = stateDir();
+  if (!fs.existsSync(root)) return 0;
+  const rows = fs.readdirSync(root)
+    .map((name) => path.join(root, name))
+    .filter((file) => fs.existsSync(path.join(file, "run.json")))
+    .map((file) => readJSON(path.join(file, "run.json")))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .slice(0, 20);
+  for (const row of rows) console.log(`${row.run_id}\t${row.status}\t${row.name}`);
+  return 0;
+}
+
+function writeSummary(record) {
+  const lines = [
+    `# ${record.name}`,
+    "",
+    `Status: ${record.status}`,
+    `Run id: ${record.run_id}`,
+    `Started: ${record.started_at || ""}`,
+    `Finished: ${record.finished_at || ""}`,
+    `Duration: ${formatDuration(record.duration_ms || 0)}`,
+    `Exit code: ${record.exit_code ?? ""}`,
+    `Timed out: ${record.timed_out ? "yes" : "no"}`,
+    "",
+    `CWD: ${record.cwd}`,
+    `Command: ${redact(record.command.join(" "))}`,
+    `Stdout: ${record.stdout_log}`,
+    `Stderr: ${record.stderr_log}`,
+    record.proof_url ? `Proof: ${record.proof_url}` : "",
+    "",
+    "## Resume",
+    "",
+    "```bash",
+    `cd ${record.cwd}`,
+    record.resume_command,
+    "```",
+    "",
+    "## Job Summary",
+    "",
+    jobSummary(record) || "(none)",
+    "",
+    record.notify_status ? `Notify: ${record.notify_status}` : "",
+    record.notify_error ? `Notify error: ${record.notify_error}` : "",
+  ].filter((line) => line !== "").join("\n");
+  fs.writeFileSync(record.summary_file, lines + "\n", { mode: 0o600 });
+}
+
+function jobSummary(record) {
+  if (!record.job_summary_file || !fs.existsSync(record.job_summary_file)) return "";
+  return redact(fs.readFileSync(record.job_summary_file, "utf8")).slice(0, 8000);
+}
+
+function currentSessionID() {
+  const root = path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "sessions");
+  const files = walk(root).filter((file) => file.endsWith(".jsonl"));
+  files.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  for (const file of files) {
+    const match = path.basename(file).match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    if (match) return match[0];
+  }
+  return "";
+}
+
+function stateDir() {
+  return process.env.CODEX_BG_STATE_DIR || path.join(os.homedir(), ".local", "share", "codex-bg", "runs");
+}
+
+function resolveRun(value) {
+  if (!value) throw new Error("run id or run dir required");
+  const direct = path.resolve(value);
+  if (fs.existsSync(path.join(direct, "run.json"))) return direct;
+  const byID = path.join(stateDir(), value);
+  if (fs.existsSync(path.join(byID, "run.json"))) return byID;
+  throw new Error(`run not found: ${value}`);
+}
+
+function readJSON(file) {
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function writeJSON(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
+  fs.renameSync(tmp, file);
+}
+
+function parseDuration(value) {
+  const match = String(value).trim().match(/^(\d+)(ms|s|m|h)?$/);
+  if (!match) throw new Error(`invalid duration: ${value}`);
+  const n = Number(match[1]);
+  const unit = match[2] || "s";
+  return n * ({ ms: 1, s: 1000, m: 60000, h: 3600000 }[unit]);
+}
+
+function timestamp() {
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function slug(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "job";
+}
+
+function resumeCommand(sessionID) {
+  return sessionID ? `codex resume ${sessionID}` : "codex resume --last --all";
+}
+
+function formatDuration(ms) {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function signalExitCode(signal) {
+  return signal === "SIGTERM" ? 143 : signal === "SIGKILL" ? 137 : 1;
+}
+
+function redact(value) {
+  return String(value)
+    .replace(/hf_[A-Za-z0-9_=-]{8,}/g, "hf_[REDACTED]")
+    .replace(/sk-[A-Za-z0-9_=-]{8,}/g, "sk-[REDACTED]")
+    .replace(/(Authorization:\s*Bearer\s+)[^\s]+/gi, "$1[REDACTED]");
+}
+
+function lastLines(file, count) {
+  if (!fs.existsSync(file)) return "";
+  return fs.readFileSync(file, "utf8").split("\n").slice(-count).join("\n");
+}
+
+function hasCommand(command) {
+  return spawnSync("bash", ["-lc", `command -v ${command} >/dev/null 2>&1`]).status === 0;
+}
+
+function walk(root) {
+  if (!fs.existsSync(root)) return [];
+  const out = [];
+  for (const name of fs.readdirSync(root)) {
+    const file = path.join(root, name);
+    const stat = fs.statSync(file);
+    if (stat.isDirectory()) out.push(...walk(file));
+    else out.push(file);
+  }
+  return out;
+}
+
+main(process.argv).then((code) => process.exit(code));

@@ -33,6 +33,84 @@ assert_not_contains() {
   fi
 }
 
+node <<'NODE'
+const { _test } = require("./lib/codex-bg-email");
+const record = { gmail_agent: "jk-gmail-ingest", notifier_agent: "codex-bg-notifier" };
+const response = _test.parseObserve([
+  "id: 1",
+  "event: message",
+  'data: {"message_id":"m-response","type":"response","from":"jk-gmail-ingest","to":"codex-bg-notifier","body":"{\\"message_id\\":\\"gmail-123\\"}"}',
+  "",
+].join("\n"), "m-request", record);
+if (!response.includes("gmail-123")) {
+  throw new Error(`response parse failed: ${response}`);
+}
+let failed = false;
+try {
+  _test.parseObserve([
+    "id: 2",
+    "event: message",
+    'data: {"message_id":"m-response","type":"response","from":"jk-gmail-ingest","to":"codex-bg-notifier","body":"{\\"error\\":\\"send failed\\"}"}',
+    "",
+  ].join("\n"), "m-request", record);
+} catch (error) {
+  failed = error.message === "send failed";
+}
+if (!failed) {
+  throw new Error("response error parse failed");
+}
+NODE
+
+session_uuid="11111111-2222-3333-4444-555555555555"
+codex_home="$tmp/codex-home"
+mkdir -p "$codex_home/sessions/2026/06/19"
+printf '{}\n' > "$codex_home/sessions/2026/06/19/session-$session_uuid.jsonl"
+detected_session="$(CODEX_HOME="$codex_home" codex-bg current-session-id)"
+[ "$detected_session" = "$session_uuid" ] || fail "current-session-id = $detected_session, want $session_uuid"
+
+bg_state="$tmp/codex-bg-runs"
+bg_output="$(
+  CODEX_BG_STATE_DIR="$bg_state" CODEX_HOME="$codex_home" \
+    codex-bg start --name smoke --launcher foreground --session-id "$session_uuid" --cwd "$tmp" -- \
+      bash -lc 'printf "hello stdout\n"; printf "hello stderr\n" >&2; printf "summary $CODEX_SESSION_ID hf_abcdefghijk sk-abcdefghijk Authorization: Bearer secret-token\n" > "$CODEX_BG_SUMMARY_FILE"'
+)"
+assert_contains "$bg_output" "codex-bg: run_id="
+bg_run_id="$(printf '%s\n' "$bg_output" | sed -n 's/^codex-bg: run_id=//p')"
+[ -n "$bg_run_id" ] || fail "codex-bg run id not found"
+bg_status="$(CODEX_BG_STATE_DIR="$bg_state" codex-bg status "$bg_run_id")"
+assert_contains "$bg_status" "$bg_run_id pass"
+assert_contains "$bg_status" "codex resume $session_uuid"
+bg_stdout="$(CODEX_BG_STATE_DIR="$bg_state" codex-bg tail "$bg_run_id")"
+bg_stderr="$(CODEX_BG_STATE_DIR="$bg_state" codex-bg tail "$bg_run_id" --stderr)"
+assert_contains "$bg_stdout" "hello stdout"
+assert_contains "$bg_stderr" "hello stderr"
+bg_summary="$(cat "$bg_state/$bg_run_id/summary.md")"
+assert_contains "$bg_summary" "codex resume $session_uuid"
+assert_contains "$bg_summary" "summary $session_uuid"
+assert_contains "$bg_summary" "hf_[REDACTED]"
+assert_contains "$bg_summary" "sk-[REDACTED]"
+assert_contains "$bg_summary" "Authorization: Bearer [REDACTED]"
+assert_not_contains "$bg_summary" "hf_abcdefghijk"
+assert_not_contains "$bg_summary" "secret-token"
+
+set +e
+bg_fail_output="$(
+  CODEX_BG_STATE_DIR="$bg_state" CODEX_HOME="$codex_home" \
+    codex-bg start --name fail --launcher foreground --session-id "$session_uuid" --cwd "$tmp" -- \
+      bash -lc 'exit 7' 2>&1
+)"
+bg_fail_status=$?
+set -e
+[ "$bg_fail_status" -eq 7 ] || fail "codex-bg failure status = $bg_fail_status, want 7"
+bg_fail_run_id="$(printf '%s\n' "$bg_fail_output" | sed -n 's/^codex-bg: run_id=//p')"
+[ -n "$bg_fail_run_id" ] || fail "codex-bg failed run id not found"
+set +e
+bg_failed_status="$(CODEX_BG_STATE_DIR="$bg_state" codex-bg status "$bg_fail_run_id" 2>&1)"
+bg_failed_status_code=$?
+set -e
+[ "$bg_failed_status_code" -eq 1 ] || fail "codex-bg status failed exit = $bg_failed_status_code, want 1"
+assert_contains "$bg_failed_status" "$bg_fail_run_id fail"
+
 empty="$tmp/empty"
 mkdir -p "$empty"
 set +e
