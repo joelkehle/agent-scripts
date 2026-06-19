@@ -72,7 +72,7 @@ bg_state="$tmp/codex-bg-runs"
 bg_output="$(
   CODEX_BG_STATE_DIR="$bg_state" CODEX_HOME="$codex_home" \
     codex-bg start --name smoke --launcher foreground --session-id "$session_uuid" --cwd "$tmp" -- \
-      bash -lc 'printf "hello stdout\n"; printf "hello stderr\n" >&2; printf "summary hf_abcdefghijk sk-abcdefghijk Authorization: Bearer secret-token\n" > "$CODEX_BG_SUMMARY_FILE"'
+      bash -lc 'printf "hello stdout\n"; printf "hello stderr\n" >&2; printf "summary $CODEX_SESSION_ID hf_abcdefghijk sk-abcdefghijk Authorization: Bearer secret-token\n" > "$CODEX_BG_SUMMARY_FILE"'
 )"
 assert_contains "$bg_output" "codex-bg: run_id="
 bg_run_id="$(printf '%s\n' "$bg_output" | sed -n 's/^codex-bg: run_id=//p')"
@@ -86,6 +86,7 @@ assert_contains "$bg_stdout" "hello stdout"
 assert_contains "$bg_stderr" "hello stderr"
 bg_summary="$(cat "$bg_state/$bg_run_id/summary.md")"
 assert_contains "$bg_summary" "codex resume $session_uuid"
+assert_contains "$bg_summary" "summary $session_uuid"
 assert_contains "$bg_summary" "hf_[REDACTED]"
 assert_contains "$bg_summary" "sk-[REDACTED]"
 assert_contains "$bg_summary" "Authorization: Bearer [REDACTED]"

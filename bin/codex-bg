@@ -204,6 +204,7 @@ async function run(runDir) {
     CODEX_BG_RUN_DIR: record.run_dir,
     CODEX_BG_SUMMARY_FILE: record.job_summary_file,
     CODEX_BG_PROOF_URL: record.proof_url || "",
+    CODEX_SESSION_ID: record.session_id || "",
   };
   const stdout = fs.openSync(record.stdout_log, "a");
   const stderr = fs.openSync(record.stderr_log, "a");
