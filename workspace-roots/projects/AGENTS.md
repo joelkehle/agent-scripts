@@ -7,6 +7,19 @@ When launched here, you have cross-project context. Use it for multi-repo ops, p
 
 Loop workflows are available from `~/Projects/.agents/skills/`: use `ship-loop`, `review-loop`, `repair-loop`, `learn-loop`, and `hygiene-loop`. Use `loop-receipt` to capture loop evidence and `loop-resume` to feed it into the next turn. Shared policy lives in `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
 
+## Directory Ownership
+
+- `~/Projects/jk`: Joel Kehle personal context.
+- `~/Projects/ucla-tdg`: Joel Kehle professional context.
+- `~/Projects/shared`: capabilities, infrastructure, docs, and services used by
+  both personal and professional contexts.
+
+Do not infer ownership from a current bus URL, deploy host, adapter, or
+historical agent ID prefix. A shared capability may register on the JK bus, the
+UCLA bus, or both. Example: Joel's Outlook calendar plus scheduling/travel-time
+blocks are shared capabilities even though today's code and IDs still include
+`jk` and `ucla-tdg` names from their implementation history.
+
 Chief of Staff concept in development: `~/Projects/shared/brainstorm/chief-of-staff-agent.md`.
 Read it before planning or building anything that answers "what should Joel do today",
 combines email/deals/IP Agency/PM/calendar priorities, or risks duplicating the daily
