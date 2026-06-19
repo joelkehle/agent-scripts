@@ -38,6 +38,10 @@ const { _test } = require("./lib/codex-bg-email");
 const record = { gmail_agent: "jk-gmail-ingest", notifier_agent: "codex-bg-notifier" };
 const response = _test.parseObserve([
   "id: 1",
+  "event: state_change",
+  'data: {"message_id":"m-request","from_state":"waiting","to_state":"error","error":"ack timeout"}',
+  "",
+  "id: 2",
   "event: message",
   'data: {"message_id":"m-response","type":"response","from":"jk-gmail-ingest","to":"codex-bg-notifier","body":"{\\"message_id\\":\\"gmail-123\\"}"}',
   "",
