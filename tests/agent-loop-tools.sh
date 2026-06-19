@@ -33,6 +33,34 @@ assert_not_contains() {
   fi
 }
 
+node <<'NODE'
+const { _test } = require("./lib/codex-bg-email");
+const record = { gmail_agent: "jk-gmail-ingest", notifier_agent: "codex-bg-notifier" };
+const response = _test.parseObserve([
+  "id: 1",
+  "event: message",
+  'data: {"message_id":"m-response","type":"response","from":"jk-gmail-ingest","to":"codex-bg-notifier","body":"{\\"message_id\\":\\"gmail-123\\"}"}',
+  "",
+].join("\n"), "m-request", record);
+if (!response.includes("gmail-123")) {
+  throw new Error(`response parse failed: ${response}`);
+}
+let failed = false;
+try {
+  _test.parseObserve([
+    "id: 2",
+    "event: message",
+    'data: {"message_id":"m-response","type":"response","from":"jk-gmail-ingest","to":"codex-bg-notifier","body":"{\\"error\\":\\"send failed\\"}"}',
+    "",
+  ].join("\n"), "m-request", record);
+} catch (error) {
+  failed = error.message === "send failed";
+}
+if (!failed) {
+  throw new Error("response error parse failed");
+}
+NODE
+
 session_uuid="11111111-2222-3333-4444-555555555555"
 codex_home="$tmp/codex-home"
 mkdir -p "$codex_home/sessions/2026/06/19"
