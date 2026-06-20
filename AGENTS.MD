@@ -5,8 +5,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Off-Limits (hard boundary — read first)
 - `~/MedProjects/` is OFF-LIMITS. Never read, write, `cd`, grep, glob, or open a terminal there. Never follow a pointer into it.
-- Medical / PHI / personal-health projects are off-limits even if a pointer appears inside `~/Projects`. Known: `rapamycin-kb`, `kidney-radar`, `patient-care-dashboard` (the last two live in `~/MedProjects`).
-- Never route PHI or personal-health content through any agent or LLM (no Codex, no Oracle, no MCP). These repos have their own HIPAA/BAA posture managed by Joel directly.
+- Explicitly off-limits repos remain off-limits even if a pointer appears inside `~/Projects`. Known: `rapamycin-kb`, `kidney-radar`, `patient-care-dashboard` (the last two live in `~/MedProjects`).
+- Do not infer an off-limits boundary from ordinary calendar, email, contact, or logistics work. If Joel asks for calendar/email handling involving a person, meeting, address, or appointment, treat it as normal workspace work unless it requires opening an explicitly off-limits path/repo.
 - Fleet infra (`manager`) may name such a service as an opaque endpoint (host/port/health-probe) so the fleet runs — but never read its repo, data, source docs, or contents. Existence is OK; content is not.
 - If a task appears to require any of the above: STOP and tell Joel. Do not improvise, do not "just fix it."
 
@@ -157,7 +157,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Source of truth (policy/plan): `~/Projects/shared/manager/docs/decisions/telemetry-strategy-rollout-plan-2026-03.md`.
 - Source of truth (this file): `~/Projects/shared/agent-scripts/AGENTS.MD`. Keep `~/AGENTS.MD` mirrored.
 - New runtime service: ship `GET /health` + `GET /metrics` (Prometheus). No merge without both unless explicit temporary exception (owner + expiry).
-- Endpoint auth bar (decided 2026-06-10, `manager/docs/decisions/endpoint-auth-policy-2026-06.md`): any Tailscale-reachable endpoint that writes/mutates, triggers LLM spend, or returns sensitive data (email, PHI, contacts) requires at least a static bearer token from env. Fail closed when the token is unset. Open endpoints are allowed only for read-only, non-sensitive metadata (`/health`, `/metrics`, registries). No merge for violations.
+- Endpoint auth bar (decided 2026-06-10, `manager/docs/decisions/endpoint-auth-policy-2026-06.md`): any Tailscale-reachable endpoint that writes/mutates, triggers LLM spend, or returns sensitive data (email, contacts, private records) requires at least a static bearer token from env. Fail closed when the token is unset. Open endpoints are allowed only for read-only, non-sensitive metadata (`/health`, `/metrics`, registries). No merge for violations.
 - HTTP ingress safety bar (added 2026-06-10 after the ip-agents operator LFI, fleet audit 2026-06-09): any handler accepting external input must (a) never pass a caller-supplied filesystem path to file or exec operations — server-managed paths only, with Clean/Abs/EvalSymlinks containment under a configured root when a path is unavoidable; (b) bound request body size explicitly before reading; (c) pin upstream Content-Type in proxy/relay routes rather than forwarding the caller's; (d) never echo attempted paths or internal errors in responses. No merge for violations. When reviewing LLM-built handlers, check these four explicitly — they are the recurring failure mode.
 - Add service to ops visibility: update `~/Projects/shared/manager/ops/config/projects.json` (URL probe + nightly/job probes if applicable).
 - Ops project/service table lives in `~/Projects/shared/manager/ops/config/projects.json`.
