@@ -41,7 +41,7 @@ command-brief role.
 | Project | Purpose |
 |---------|---------|
 | **agent-scripts** | Master AGENTS.MD, tools (committer, trash), collaboration patterns |
-| **calendar-agents** | Shared calendar contracts and future shared calendar runtimes for personal + professional workflows |
+| **calendar-agents** | Shared Outlook calendar read/write, scheduler/travel runtime, and contracts for personal + professional workflows |
 | **manager** | Fleet control plane: host provisioning, compliance, monitoring, DNS/service inventory |
 | **operations** | Per-host notebooks plus intent/manifests/waivers/observations for machine state |
 | **workbench** (dir: `shared/workbench`) | Dev portal — launch/manage agent terminals per project (Go + SQLite + xterm.js) |
