@@ -108,6 +108,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Flow & Runtime
 - Use repo’s package manager/runtime; no swaps w/o approval.
+- Leverage software needs a launch path. When creating an app, agent, dashboard, workflow, or recurring checker, define how it wakes/starts: systemd/cron/launchd/compose, runbook command, slash/skill, or agent-discoverable CLI. If no auto-launch or agent-launch path exists, call it unfinished; manual-only is smoke/debug, not the operating model.
 - Long jobs: Codex background, Claude Code Task tool, or tmux. tmux only when persistence/interaction needed (debugger/server).
 
 ## Shared Agent Coordination
