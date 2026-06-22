@@ -230,6 +230,7 @@ cd ~/Projects/jk/jk-email-agents && docker compose up -d
 | Bus contract | `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md` |
 | Email agents | `~/Projects/jk/jk-email-agents/README.md` |
 | Chief of Staff concept | `~/Projects/shared/brainstorm/chief-of-staff-agent.md` |
+| Project capability index | `~/Projects/shared/brainstorm/project-capability-index.md` |
 | Legacy agency archive | `~/Projects/archive/techtransfer-agency/` |
 | Roadmap | `~/Projects/shared/brainstorm/roadmap.md` |
 | Private ops/DNS | `~/Projects/shared/manager/docs/` |
