@@ -25,6 +25,12 @@ Read it before planning or building anything that answers "what should Joel do t
 combines email/deals/IP Agency/PM/calendar priorities, or risks duplicating the daily
 command-brief role.
 
+Joel Inc collective-intelligence north star:
+`~/Projects/shared/brainstorm/collective-intelligence-north-star.md`. Read it before
+designing intake, routing, content-buffer, subconscious-processing, or cross-agent
+prioritization workflows. The system goal is converting environmental signal into
+better collective action using the optimal processor under bounded resources.
+
 ## Project Inventory
 
 ### Core Platform
