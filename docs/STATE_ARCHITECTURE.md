@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.7 (2026-06-16)
+Version: 1.8 (2026-06-26)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -105,6 +105,15 @@ projection.
   wikis or dashboards may mirror the org chart, but they must cite this file.
   Individual agent repos must not become authoritative for their own manager.
 
+- **ucla-tdg-ip-agents intern-manager GitHub sweep cursor
+  (`data/intern-manager/github-sweep-cursor.json`, added 2026-06-26):**
+  disposable agent working state for deduping 15-minute intern GitHub sweeps and
+  retrying PR-review dispatch. GitHub remains the source for issues, comments,
+  PRs, and head SHAs; project-manager remains the owner of work nouns once a
+  proposal is accepted. The cursor only records what the intern-manager has
+  observed or already handed to the GitHub review agent. It is safe to delete and
+  rebuild from GitHub plus bus/project-manager receipts.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -126,6 +135,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.8 (2026-06-26): register the ucla-tdg-ip-agents intern-manager GitHub sweep
+  cursor as disposable agent working state for sweep dedup and review dispatch
+  retry.
 - 1.7 (2026-06-16): add the Interactions tier for communication-event
   provenance and invert Source evidence to NAS-owned canonical evidence, with
   vendor clouds demoted to capture devices/caches.
