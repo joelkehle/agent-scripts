@@ -218,8 +218,7 @@ cd ~/Projects/jk/jk-email-agents && docker compose up -d
 - All GitHub repos: local validation only while UCLA Enterprise GitHub is in use.
 - Default check: `agent-check` from the owning repo, or the repo's documented local
   full gate.
-- Do not inspect, rely on, create, rerun, or repair GitHub Actions unless Joel
-  explicitly overrides this for the current task.
+- Do not inspect, rely on, create, rerun, or repair GitHub Actions.
 - Missing GitHub Actions are expected, not a blocker.
 
 ### Key Docs Paths

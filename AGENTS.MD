@@ -52,8 +52,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - GitHub Actions are not the standard CI surface while UCLA Enterprise GitHub is
   in use. Treat all GitHub-hosted repos the same: validate locally with
   `agent-check` or the repo's documented local full gate. Do not inspect, rely
-  on, create, rerun, or repair Actions unless Joel explicitly overrides this
-  for the current task. Missing Actions are expected, not a blocker.
+  on, create, rerun, or repair Actions. Missing Actions are expected, not a
+  blocker. If Joel later changes this policy, update this document first.
 - Prefer end-to-end verify; if blocked, say what’s missing.
 - New deps: quick health check (recent releases/commits, adoption).
 - Slash cmds: `~/.codex/prompts/` (Codex), `~/.claude/commands/` (Claude Code).
