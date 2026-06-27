@@ -49,7 +49,11 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Commits: Conventional Commits (`feat|fix|refactor|build|ci|chore|docs|style|perf|test`).
 - Subagents: read `docs/subagent.md` before delegating.
 - Editor: `code <path>`.
-- CI: `gh run list/view` (rerun/fix til green).
+- GitHub Actions are not the standard CI surface while UCLA Enterprise GitHub is
+  in use. Treat all GitHub-hosted repos the same: validate locally with
+  `agent-check` or the repo's documented local full gate. Do not inspect, rely
+  on, create, rerun, or repair Actions unless Joel explicitly overrides this
+  for the current task. Missing Actions are expected, not a blocker.
 - Prefer end-to-end verify; if blocked, say what’s missing.
 - New deps: quick health check (recent releases/commits, adoption).
 - Slash cmds: `~/.codex/prompts/` (Codex), `~/.claude/commands/` (Claude Code).
@@ -138,7 +142,8 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Build / Test
 - Before handoff: run `agent-check` or the repo's documented full gate (lint/typecheck/tests/docs).
-- CI red: `gh run list/view`, rerun, fix, push, repeat til green.
+- Do not use GitHub Actions as CI by default. Local validation is the required
+  gate across all GitHub repos.
 - Keep it observable (logs, panes, tails, MCP/browser tools).
 - Release: read `docs/RELEASING.md` (or find best checklist if missing).
 

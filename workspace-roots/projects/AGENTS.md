@@ -213,12 +213,14 @@ cd ~/Projects/jk/jk-email-agents && docker compose up -d
 # Creds in .env (gitignored). Gmail OAuth for joel@kehle.com.
 ```
 
-### CI/CD
+### Validation
 
-- All repos: GitHub Actions
-- Check: `gh run list/view` — rerun/fix til green
-- ucla-tdg-assistant-db: 20+ workflows (ci, preflight, security nightly, docs lint, metrics)
-- pinakes: Go tests + GH Actions
+- All GitHub repos: local validation only while UCLA Enterprise GitHub is in use.
+- Default check: `agent-check` from the owning repo, or the repo's documented local
+  full gate.
+- Do not inspect, rely on, create, rerun, or repair GitHub Actions unless Joel
+  explicitly overrides this for the current task.
+- Missing GitHub Actions are expected, not a blocker.
 
 ### Key Docs Paths
 
