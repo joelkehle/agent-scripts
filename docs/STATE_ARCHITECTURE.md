@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.8 (2026-06-26)
+Version: 1.9 (2026-06-27)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -114,6 +114,17 @@ projection.
   observed or already handed to the GitHub review agent. It is safe to delete and
   rebuild from GitHub plus bus/project-manager receipts.
 
+- **ucla-tdg-email-triage Gmail History attention-event ledger
+  (`data/attention-events/`, added 2026-06-27):** disposable agent working state
+  and interaction projection for Gmail History label transitions observed by the
+  watcher. Gmail History / owned evidence copies remain source evidence; the
+  project-manager `interactions` table remains the owner of any promoted UCLA
+  communication-event facts. The ledger may store watcher cursor state,
+  idempotent event IDs, thread/message refs, label deltas, attribution guesses,
+  and learning/report provenance, but it must never own tasks, policy, identity
+  nouns, or narrative truth. Rows must carry source refs and be safe to delete
+  and rebuild from upstream evidence plus watcher reprocessing.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -135,6 +146,8 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.9 (2026-06-27): register email-triage `data/attention-events/` as
+  disposable Gmail History watcher working state / interaction projection.
 - 1.8 (2026-06-26): register the ucla-tdg-ip-agents intern-manager GitHub sweep
   cursor as disposable agent working state for sweep dedup and review dispatch
   retry.
