@@ -151,6 +151,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Proof Packs
 - Default: make a proof pack for user-visible work, live-data writes, dashboard/UI changes, or anything Joel will likely inspect remotely. Skip only for trivial asks or explicit user direction.
+- Joel is almost never on beelink. Do not hand off Beelink-local paths as the primary answer. Put the important substance directly in chat, or create a browser-viewable page and give Joel the reachable URL.
 - Put proof artifacts where Joel can open them in a browser from another machine. Prefer served HTML/video/report assets over local-only files.
 - When sharing inspect/report URLs, prefer Tailscale hostnames (`beelink`, `laptop`, etc.), not `localhost`, unless Joel explicitly says he is on the same machine.
 - Standard Codex review output viewer:
