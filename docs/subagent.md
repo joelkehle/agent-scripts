@@ -22,11 +22,11 @@ This is the center of gravity for subagent guidance under `~/Projects`.
 
 ## Default
 
-Stay single-agent by default.
+Use Codex native subagents when available for non-trivial work that benefits from parallel read, disjoint write, or independent verification.
 
-Split only when parallel read work, disjoint write sets, or independent verification will materially reduce time or risk. The lead keeps moving and does not delegate the immediate blocker.
+Stay single-agent only for small, obvious, single-threaded work. When a task is broad, context-heavy, risky to verify in one thread, or likely to generate noisy logs/search output, split early so the lead thread stays focused on requirements, decisions, integration, and user comms.
 
-Follow the active runtime's delegation rules. If a runtime requires explicit user permission before spawning subagents, get it first.
+The lead keeps moving and does not delegate the immediate blocker. Follow the active runtime's delegation rules. If a runtime requires explicit user permission before spawning subagents and the current task does not already authorize delegation, get it first.
 
 ## When To Use Subagents
 
@@ -36,6 +36,7 @@ Use `explorer` for:
 - bug isolation where the fault could be in multiple layers
 - diff/risk review
 - repo-specific discovery before larger edits
+- large log, search, or docs scans that would pollute the lead context
 
 Use `worker` for:
 
@@ -51,6 +52,7 @@ Use `verify` for:
 - cross-file behavior changes
 - user-visible workflows without a strong local verification path
 - any change where confirmation bias is a meaningful risk
+- validating a worker's result before the lead integrates or hands off
 
 Use `oracle` when:
 
@@ -118,6 +120,11 @@ Do not reference `.claude/agents/*.md`, `@test-writer`, `@architect`, or similar
 ## Tool-Specific Notes
 
 Codex native subagents are preferred for current coding delegation when available.
+
+In Codex, explicit user requests such as "use subagents", "delegate this",
+"parallel agents", "split this up", "use one agent per area", or "keep the main
+context clean" should trigger native subagent use when the task is non-trivial.
+Use `/agent` in the CLI to inspect or steer active subagent threads.
 
 Claude Code custom agents are repo-local tool config. If a repo does not have `.claude/agents/*.md`, treat references to those agents as stale or historical.
 

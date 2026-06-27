@@ -13,7 +13,8 @@ This file is retained as the stable "collaboration patterns" pointer for older r
 
 Current defaults:
 
-- stay single-agent unless parallelism or independent verification materially helps
+- use Codex native subagents for non-trivial work when parallelism, context control, or independent verification materially helps
+- stay single-agent for small, obvious, single-threaded work
 - lead owns plan, file ownership, integration, user comms, and final call
 - use `explorer` for read-only discovery
 - use `worker` for bounded execution with disjoint write ownership

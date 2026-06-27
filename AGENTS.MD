@@ -47,7 +47,9 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 - Bugs: add regression test when it fits.
 - Keep files <~500 LOC; split/refactor as needed.
 - Commits: Conventional Commits (`feat|fix|refactor|build|ci|chore|docs|style|perf|test`).
-- Subagents: read `docs/subagent.md` before delegating.
+- Subagents: Codex native subagents are authorized for non-trivial work that
+  benefits from parallel read, disjoint write, or independent verify; read
+  `docs/subagent.md` before delegating.
 - Editor: `code <path>`.
 - GitHub Actions are not the standard CI surface while UCLA Enterprise GitHub is
   in use. Treat all GitHub-hosted repos the same: validate locally with
