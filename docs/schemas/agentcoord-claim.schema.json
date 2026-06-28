@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://joelkehle.com/schemas/agentcoord-claim.schema.json",
+  "title": "AgentCoord claim",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "repo",
+    "slug",
+    "agent",
+    "host",
+    "safety",
+    "scope",
+    "started_at",
+    "expires_at",
+    "next_action"
+  ],
+  "properties": {
+    "repo": { "type": "string", "minLength": 1 },
+    "slug": { "type": "string", "minLength": 1 },
+    "agent": { "type": "string", "minLength": 1 },
+    "host": { "type": "string", "minLength": 1 },
+    "safety": { "type": "string", "enum": ["read", "propose", "write"] },
+    "scope": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "released_at": { "type": "string", "format": "date-time" },
+    "next_action": { "type": "string", "minLength": 1 },
+    "contact": { "type": "string" }
+  }
+}

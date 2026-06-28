@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+prefix="/usr/local/bin"
+dry_run=0
+use_sudo=0
+
+usage() {
+  cat <<'USAGE'
+Usage: agent-env-install [--prefix DIR] [--sudo] [--dry-run]
+
+Installs stable command shims for Joel's coding-agent control plane.
+
+Default target is /usr/local/bin so noninteractive SSH commands can find the
+same tools that interactive shells get from ~/Projects/shared/agent-scripts/bin.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prefix)
+      [ "$#" -ge 2 ] || { printf 'agent-env-install: --prefix requires a directory\n' >&2; exit 2; }
+      prefix="$2"
+      shift 2
+      ;;
+    --sudo)
+      use_sudo=1
+      shift
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'agent-env-install: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
+run() {
+  printf 'agent-env-install: %s\n' "$*"
+  if [ "$dry_run" -eq 0 ]; then
+    "$@"
+  fi
+}
+
+run_privileged() {
+  if [ "$use_sudo" -eq 1 ]; then
+    run sudo -n "$@"
+  else
+    run "$@"
+  fi
+}
+
+ensure_dir() {
+  [ -d "$prefix" ] || run_privileged mkdir -p "$prefix"
+}
+
+link_file() {
+  local source="$1"
+  local name="$2"
+  if [ ! -e "$source" ]; then
+    printf 'agent-env-install: skip %s, missing source %s\n' "$name" "$source" >&2
+    return
+  fi
+  run_privileged ln -sfn "$source" "$prefix/$name"
+}
+
+ensure_dir
+
+for tool in \
+  agent-check \
+  agent-env-install \
+  agent-start \
+  agentcoord \
+  bus-discover \
+  codex-bg \
+  committer \
+  dirty-audit \
+  docs-list \
+  loop-audit \
+  loop-receipt \
+  loop-resume \
+  machine-compliance \
+  trash
+do
+  link_file "$script_dir/$tool" "$tool"
+done
+
+for external in claude codex wwi anchor; do
+  candidate=""
+  for candidate_path in \
+    "$HOME/.local/bin/$external" \
+    "$HOME/go/bin/$external" \
+    "$HOME/.npm-global/bin/$external" \
+    "/usr/local/bin/$external" \
+    "/usr/bin/$external" \
+    "/opt/homebrew/bin/$external"
+  do
+    if [ -x "$candidate_path" ]; then
+      candidate="$candidate_path"
+      break
+    fi
+  done
+  if [ -n "$candidate" ]; then
+    if [ "$candidate" = "$prefix/$external" ]; then
+      printf 'agent-env-install: keep %s already at %s\n' "$external" "$candidate"
+    else
+      link_file "$candidate" "$external"
+    fi
+  else
+    printf 'agent-env-install: skip %s, no known executable found\n' "$external" >&2
+  fi
+done
+
+cat <<VERIFY
+
+agent-env-install: installed shims into $prefix
+agent-env-install: verify with:
+  ssh beelink 'command -v agent-start agentcoord machine-compliance committer docs-list bus-discover wwi claude codex'
+VERIFY
+
+if [ "$dry_run" -eq 0 ]; then
+  printf 'agent-env-install: repo=%s\n' "$repo_root" >/dev/null
+fi

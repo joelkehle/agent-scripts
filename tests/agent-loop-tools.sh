@@ -124,6 +124,43 @@ assert_contains "$bg_summary" "Authorization: Bearer [REDACTED]"
 assert_not_contains "$bg_summary" "hf_abcdefghijk"
 assert_not_contains "$bg_summary" "secret-token"
 
+coord_root="$tmp/AgentCoord"
+mkdir -p "$coord_root/claims"
+claim_output="$(AGENTCOORD_ROOT="$coord_root" agentcoord claim --repo shared/agent-scripts --slug launch-ritual --agent codex-test --host beelink --safety write --scope bin/agent-start --next-action "test claim" --ttl-hours 1)"
+assert_contains "$claim_output" "agentcoord: claimed"
+coord_list="$(AGENTCOORD_ROOT="$coord_root" agentcoord list)"
+assert_contains "$coord_list" "active shared/agent-scripts launch-ritual codex-test beelink write"
+coord_json="$(AGENTCOORD_ROOT="$coord_root" agentcoord list --json)"
+assert_contains "$coord_json" '"active": 1'
+coord_check="$(AGENTCOORD_ROOT="$coord_root" agentcoord check)"
+assert_contains "$coord_check" "active=1"
+AGENTCOORD_ROOT="$coord_root" agentcoord renew --repo shared/agent-scripts --slug launch-ritual --agent codex-test --host beelink --ttl-hours 2 --next-action "renewed" >/dev/null
+coord_renewed="$(AGENTCOORD_ROOT="$coord_root" agentcoord list)"
+assert_contains "$coord_renewed" "next=renewed"
+AGENTCOORD_ROOT="$coord_root" agentcoord release --repo shared/agent-scripts --slug launch-ritual --agent codex-test --host beelink >/dev/null
+coord_released="$(AGENTCOORD_ROOT="$coord_root" agentcoord list --all)"
+assert_contains "$coord_released" "released shared/agent-scripts launch-ritual"
+
+mkdir -p "$coord_root/claims/bad"
+printf '%s\n' '{' \
+  '  "repo": "bad",' \
+  '  "slug": "bad",' \
+  '  "agent": "codex",' \
+  '  "host": "beelink",' \
+  '  "safety": "write",' \
+  '  "scope": ["bad"],' \
+  '  "started_at": "2026-06-28T00-06-41Z",' \
+  '  "expires_at": "not a date",' \
+  '  "next_action": "bad"' \
+  '}' > "$coord_root/claims/bad/bad.codex.beelink.json"
+set +e
+coord_invalid="$(AGENTCOORD_ROOT="$coord_root" agentcoord check 2>&1)"
+coord_invalid_status=$?
+set -e
+[ "$coord_invalid_status" -eq 1 ] || fail "agentcoord invalid status = $coord_invalid_status, want 1"
+assert_contains "$coord_invalid" "invalid=1"
+assert_contains "$coord_invalid" "invalid expires_at"
+
 set +e
 bg_fail_output="$(
   CODEX_BG_STATE_DIR="$bg_state" CODEX_HOME="$codex_home" \
@@ -202,6 +239,17 @@ assert_contains "$audit_output" "OK make-only -> make agent-check"
 assert_contains "$audit_output" "OK script-only -> scripts/agent-check.sh"
 
 dirty_repo="$workspace/dirty-repo"
+agent_start_card="$tmp/agent-start/card.json"
+agent_start_output="$(AGENTCOORD_ROOT="$coord_root" agent-start --root "$make_repo" --no-bus --card "$agent_start_card")"
+assert_contains "$agent_start_output" "Agent Start"
+assert_contains "$agent_start_output" "== Tool Visibility =="
+assert_contains "$agent_start_output" "== AgentCoord Active Claims =="
+[ -f "$agent_start_card" ] || fail "agent-start card missing"
+agent_start_json="$(cat "$agent_start_card")"
+assert_contains "$agent_start_json" '"label": "Coding-agent startup brief"'
+assert_contains "$agent_start_json" '"safetyClass": "read"'
+assert_contains "$agent_start_json" '"results"'
+
 mkdir -p "$dirty_repo/proofs/run"
 git -C "$dirty_repo" init -q
 git -C "$dirty_repo" config user.email "agent-loop-test@example.com"

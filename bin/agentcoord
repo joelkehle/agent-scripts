@@ -1,0 +1,374 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const DEFAULT_ROOT = "/mnt/synology-share1/AgentCoord";
+const SAFETY = new Set(["read", "propose", "write"]);
+
+function usage() {
+  console.log(`Usage:
+  agentcoord list [--root DIR] [--all|--active|--stale|--invalid|--released] [--repo REPO] [--json]
+  agentcoord validate [--root DIR] [--json]
+  agentcoord claim --repo REPO --slug SLUG [options]
+  agentcoord renew --repo REPO --slug SLUG [options]
+  agentcoord release --repo REPO --slug SLUG [options]
+  agentcoord sweep [--root DIR] [--apply] [--json]
+  agentcoord handoff --repo REPO --slug SLUG --goal TEXT --state TEXT --next-action TEXT [options]
+
+Options:
+  --root DIR              AgentCoord root (default: $AGENTCOORD_ROOT or ${DEFAULT_ROOT})
+  --agent NAME            Agent name (default: $AGENT_NAME or codex)
+  --host NAME             Host name (default: local hostname)
+  --safety VALUE          read, propose, or write (default: write for claim)
+  --scope VALUE           Scope entry; repeatable
+  --next-action TEXT      Next action text
+  --ttl-hours HOURS       Expiry window for claim/renew (default: 2)
+  --goal TEXT             Handoff goal
+  --state TEXT            Handoff current state; repeatable
+  --file VALUE            Handoff changed/owned file; repeatable
+  --check VALUE           Handoff check and result; repeatable
+  --blocker TEXT          Handoff blocker; repeatable
+  --note TEXT             Handoff note; repeatable
+  --apply                 For sweep: mark stale claims released instead of dry-run
+  --json                  Emit JSON
+
+AgentCoord is a coordination hint layer for coding agents, not a lock service.`);
+}
+
+function parseArgs(argv) {
+  const command = argv.shift() || "list";
+  const args = {
+    command,
+    root: process.env.AGENTCOORD_ROOT || DEFAULT_ROOT,
+    repo: "",
+    slug: "",
+    agent: process.env.AGENT_NAME || "codex",
+    host: os.hostname().split(".")[0],
+    safety: "write",
+    scope: [],
+    nextAction: "",
+    ttlHours: 2,
+    json: false,
+    mode: "active",
+    help: false,
+    apply: false,
+    goal: "",
+    state: [],
+    files: [],
+    checks: [],
+    blockers: [],
+    notes: [],
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const [rawKey, inlineValue] = arg.startsWith("--") ? arg.split(/=(.*)/s, 2) : [arg, undefined];
+    const key = rawKey.replace(/^--/, "");
+
+    if (arg === "-h" || arg === "--help") {
+      args.help = true;
+      continue;
+    }
+    if (["json", "all", "active", "stale", "invalid", "released", "apply"].includes(key)) {
+      if (key === "json") args.json = true;
+      else if (key === "apply") args.apply = true;
+      else args.mode = key;
+      continue;
+    }
+
+    const value = inlineValue !== undefined ? inlineValue : argv[++i];
+    if (value === undefined) throw new Error(`${arg} requires a value`);
+
+    if (key === "root") args.root = value;
+    else if (key === "repo") args.repo = value;
+    else if (key === "slug") args.slug = value;
+    else if (key === "agent") args.agent = value;
+    else if (key === "host") args.host = value;
+    else if (key === "safety") args.safety = value;
+    else if (key === "scope") args.scope.push(value);
+    else if (key === "next-action") args.nextAction = value;
+    else if (key === "ttl-hours") args.ttlHours = Number(value);
+    else if (key === "goal") args.goal = value;
+    else if (key === "state") args.state.push(value);
+    else if (key === "file") args.files.push(value);
+    else if (key === "check") args.checks.push(value);
+    else if (key === "blocker") args.blockers.push(value);
+    else if (key === "note") args.notes.push(value);
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  if (args.command === "check") args.command = "validate";
+  return args;
+}
+
+function claimsRoot(root) { return path.join(root, "claims"); }
+function handoffsRoot(root) { return path.join(root, "handoffs"); }
+function tmpRoot(root) { return path.join(root, "tmp"); }
+
+function walk(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(full));
+    else if (entry.isFile() && entry.name.endsWith(".json")) out.push(full);
+  }
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+function parseTimestamp(value) {
+  if (!value || typeof value !== "string") return null;
+  const direct = Date.parse(value);
+  if (Number.isFinite(direct)) return new Date(direct);
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})(Z|[+-]\d{2}:?\d{2})$/);
+  if (!match) return null;
+  const parsed = Date.parse(`${match[1]}T${match[2]}:${match[3]}:${match[4]}${match[5]}`);
+  return Number.isFinite(parsed) ? new Date(parsed) : null;
+}
+
+function normalizeTimestamp(value) {
+  const date = parseTimestamp(value);
+  return date ? iso(date) : value || "";
+}
+
+function safeSlug(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "claim";
+}
+
+function repoParts(repo) {
+  return String(repo || "misc").split(/[\\/]+/).filter(Boolean).map(safeSlug);
+}
+
+function repoDir(root, repo) { return path.join(claimsRoot(root), ...repoParts(repo)); }
+
+function claimPath(root, claim) {
+  const agent = safeSlug(claim.agent || "codex");
+  const host = safeSlug(claim.host || os.hostname().split(".")[0]);
+  return path.join(repoDir(root, claim.repo), `${safeSlug(claim.slug)}.${agent}.${host}.json`);
+}
+
+function readClaim(file, now = new Date()) {
+  const issues = [];
+  let data = null;
+  try {
+    data = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    return { file, data: null, status: "invalid", issues: [`invalid JSON: ${error.message}`] };
+  }
+
+  for (const field of ["repo", "slug", "agent", "host", "safety", "scope", "started_at", "expires_at", "next_action"]) {
+    if (data[field] === undefined || data[field] === null || data[field] === "") issues.push(`missing ${field}`);
+  }
+  if (data.safety && !SAFETY.has(data.safety)) issues.push(`invalid safety ${data.safety}`);
+  if (data.scope && !Array.isArray(data.scope)) issues.push("scope must be an array");
+
+  const started = parseTimestamp(data.started_at);
+  const expires = parseTimestamp(data.expires_at);
+  if (!started) issues.push("invalid started_at");
+  if (!expires) issues.push("invalid expires_at");
+
+  let status = "invalid";
+  if (!issues.length) status = data.released_at ? "released" : expires.getTime() < now.getTime() ? "stale" : "active";
+  return { file, data, status, issues, started, expires };
+}
+
+function readClaims(root) { return walk(claimsRoot(root)).map((file) => readClaim(file)); }
+
+function matches(entry, args) {
+  if (args.repo && entry.data?.repo !== args.repo) return false;
+  if (args.mode === "all") return true;
+  return entry.status === args.mode;
+}
+
+function renderList(entries, root = "") {
+  if (!entries.length) return "agentcoord: no matching claims";
+  return entries.map((entry) => {
+    const data = entry.data || {};
+    const file = root ? path.relative(root, entry.file) : entry.file;
+    const issues = entry.issues?.length ? ` issues=${entry.issues.join("; ")}` : "";
+    return [
+      entry.status,
+      data.repo || "unknown-repo",
+      data.slug || path.basename(entry.file),
+      data.agent || "unknown-agent",
+      data.host || "unknown-host",
+      data.safety || "unknown-safety",
+      `expires=${normalizeTimestamp(data.expires_at)}`,
+      `file=${file}`,
+      `next=${data.next_action || ""}`,
+      issues,
+    ].filter(Boolean).join(" ");
+  }).join("\n");
+}
+
+function summarize(entries) {
+  const summary = { total: entries.length, active: 0, stale: 0, invalid: 0, released: 0 };
+  for (const entry of entries) summary[entry.status] = (summary[entry.status] || 0) + 1;
+  return summary;
+}
+
+function requireClaimArgs(args) {
+  if (!args.repo) throw new Error("--repo is required");
+  if (!args.slug) throw new Error("--slug is required");
+  if (!Number.isFinite(args.ttlHours) || args.ttlHours <= 0) throw new Error("--ttl-hours must be positive");
+  if (!SAFETY.has(args.safety)) throw new Error("--safety must be read, propose, or write");
+}
+
+function iso(date = new Date()) { return date.toISOString().replace(/\.\d{3}Z$/, "Z"); }
+
+function atomicWrite(root, target, data) {
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.mkdirSync(tmpRoot(root), { recursive: true });
+  const tmp = path.join(tmpRoot(root), `${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
+  fs.writeFileSync(tmp, typeof data === "string" ? data : `${JSON.stringify(data, null, 2)}\n`);
+  fs.renameSync(tmp, target);
+}
+
+function publicEntry(root, entry) {
+  return { file: entry.file, relative_file: path.relative(root, entry.file), status: entry.status, issues: entry.issues, claim: entry.data };
+}
+
+function commandList(args) {
+  const entries = readClaims(args.root).filter((entry) => matches(entry, args));
+  if (args.json) console.log(JSON.stringify({ root: args.root, summary: summarize(entries), claims: entries.map((entry) => publicEntry(args.root, entry)) }, null, 2));
+  else console.log(renderList(entries, args.root));
+}
+
+function commandValidate(args) {
+  const entries = readClaims(args.root);
+  const summary = summarize(entries);
+  const invalid = entries.filter((entry) => entry.status === "invalid");
+  if (args.json) console.log(JSON.stringify({ root: args.root, summary, invalid: invalid.map((entry) => publicEntry(args.root, entry)) }, null, 2));
+  else {
+    console.log(`agentcoord: root=${args.root}`);
+    console.log(`agentcoord: total=${summary.total} active=${summary.active} stale=${summary.stale} released=${summary.released} invalid=${summary.invalid}`);
+    if (invalid.length) console.log(renderList(invalid, args.root));
+  }
+  if (invalid.length) process.exitCode = 1;
+}
+
+function commandClaim(args) {
+  requireClaimArgs(args);
+  const now = new Date();
+  const claim = {
+    repo: args.repo,
+    slug: args.slug,
+    agent: args.agent,
+    host: args.host,
+    safety: args.safety,
+    scope: args.scope.length ? args.scope : [args.repo],
+    started_at: iso(now),
+    expires_at: iso(new Date(now.getTime() + args.ttlHours * 3600000)),
+    next_action: args.nextAction || "Claim created; update next_action before handoff.",
+    contact: "Joel Kehle <joel@kehle.com>",
+  };
+  const target = claimPath(args.root, claim);
+  atomicWrite(args.root, target, claim);
+  if (args.json) console.log(JSON.stringify({ file: target, claim }, null, 2));
+  else console.log(`agentcoord: claimed ${target}`);
+}
+
+function findExistingClaim(args) {
+  if (!args.repo || !args.slug) throw new Error("--repo and --slug are required");
+  const matches = readClaims(args.root).filter((entry) => {
+    const data = entry.data || {};
+    return data.repo === args.repo && data.slug === args.slug && (!args.agent || data.agent === args.agent) && (!args.host || data.host === args.host);
+  });
+  if (!matches.length) throw new Error(`claim not found: ${args.repo}/${args.slug}`);
+  matches.sort((a, b) => a.file.localeCompare(b.file));
+  return matches[0];
+}
+
+function commandRenew(args) {
+  if (!Number.isFinite(args.ttlHours) || args.ttlHours <= 0) throw new Error("--ttl-hours must be positive");
+  const existing = findExistingClaim(args);
+  const data = { ...existing.data, expires_at: iso(new Date(Date.now() + args.ttlHours * 3600000)) };
+  if (args.nextAction) data.next_action = args.nextAction;
+  delete data.released_at;
+  atomicWrite(args.root, existing.file, data);
+  if (args.json) console.log(JSON.stringify({ file: existing.file, claim: data }, null, 2));
+  else console.log(`agentcoord: renewed ${existing.file}`);
+}
+
+function commandRelease(args) {
+  const existing = findExistingClaim(args);
+  const data = { ...existing.data, released_at: iso(new Date()) };
+  if (args.nextAction) data.next_action = args.nextAction;
+  atomicWrite(args.root, existing.file, data);
+  if (args.json) console.log(JSON.stringify({ file: existing.file, claim: data }, null, 2));
+  else console.log(`agentcoord: released ${existing.file}`);
+}
+
+function commandSweep(args) {
+  const stale = readClaims(args.root).filter((entry) => entry.status === "stale");
+  const changed = [];
+  if (args.apply) {
+    for (const entry of stale) {
+      const data = { ...entry.data, released_at: iso(new Date()), sweep_note: "Released by agentcoord sweep after expiry." };
+      atomicWrite(args.root, entry.file, data);
+      changed.push(publicEntry(args.root, readClaim(entry.file)));
+    }
+  }
+  if (args.json) console.log(JSON.stringify({ root: args.root, dry_run: !args.apply, stale: stale.map((entry) => publicEntry(args.root, entry)), changed }, null, 2));
+  else {
+    console.log(`agentcoord: ${args.apply ? "released" : "would release"} ${stale.length} stale claim(s)`);
+    if (stale.length) console.log(renderList(stale, args.root));
+  }
+}
+
+function requireHandoffArgs(args) {
+  if (!args.repo) throw new Error("--repo is required");
+  if (!args.slug) throw new Error("--slug is required");
+  if (!args.goal) throw new Error("--goal is required");
+  if (!args.state.length) throw new Error("--state is required");
+  if (!args.nextAction) throw new Error("--next-action is required");
+}
+
+function bullet(items, fallback = "None.") {
+  if (!items.length) return fallback;
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
+function commandHandoff(args) {
+  requireHandoffArgs(args);
+  const stamp = iso(new Date()).replace(/[-:]/g, "").replace(/Z$/, "Z");
+  const dir = path.join(handoffsRoot(args.root), ...repoParts(args.repo));
+  const target = path.join(dir, `${safeSlug(args.slug)}-${stamp}.md`);
+  const body = `# ${args.slug} handoff\n\n` +
+    `- Repo: ${args.repo}\n` +
+    `- Agent: ${args.agent}\n` +
+    `- Host: ${args.host}\n` +
+    `- Written: ${iso(new Date())}\n\n` +
+    `## Goal\n\n${args.goal}\n\n` +
+    `## Current State\n\n${bullet(args.state)}\n\n` +
+    `## Files\n\n${bullet(args.files)}\n\n` +
+    `## Checks\n\n${bullet(args.checks)}\n\n` +
+    `## Blockers\n\n${bullet(args.blockers)}\n\n` +
+    `## Notes\n\n${bullet(args.notes)}\n\n` +
+    `## Next Action\n\n${args.nextAction}\n`;
+  atomicWrite(args.root, target, body);
+  if (args.json) console.log(JSON.stringify({ file: target }, null, 2));
+  else console.log(`agentcoord: handoff ${target}`);
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) return usage();
+  if (args.command === "list") commandList(args);
+  else if (args.command === "validate") commandValidate(args);
+  else if (args.command === "claim") commandClaim(args);
+  else if (args.command === "renew") commandRenew(args);
+  else if (args.command === "release") commandRelease(args);
+  else if (args.command === "sweep") commandSweep(args);
+  else if (args.command === "handoff") commandHandoff(args);
+  else throw new Error(`unknown command: ${args.command}`);
+}
+
+try { main(); } catch (error) {
+  console.error(`agentcoord: ${error.message}`);
+  process.exit(1);
+}

@@ -23,6 +23,20 @@ Local tool catalog for this machine.
 - Defaults: JK bus on `localhost:8081`, UCLA TDG bus on `localhost:8080`
 - Examples: `bus-discover`, `bus-discover --capability events-list`, `bus-discover --format json`
 
+## agent-start
+- Purpose: read-only coding-agent startup packet with WWI, compliance, bus discovery, AgentCoord claims, docs, git state, validation dry-run, and loop receipt context.
+- Location: ~/Projects/shared/agent-scripts/bin/agent-start
+- Docs: ~/Projects/shared/agent-scripts/docs/agent-start.md
+
+## agentcoord
+- Purpose: AgentCoord claim lifecycle and validation CLI.
+- Location: ~/Projects/shared/agent-scripts/bin/agentcoord
+- Docs: ~/Projects/shared/agent-scripts/docs/agentcoord.md
+
+## agent-env-install
+- Purpose: install user-level command shims for coding-agent tools; production host-level links are owned by shared/manager.
+- Location: ~/Projects/shared/agent-scripts/bin/agent-env-install
+
 ## codex-bg
 - Purpose: durable background runner for long Codex-adjacent jobs; captures logs, writes resume metadata, and can send completion email through `jk-gmail-ingest`.
 - Location: ~/Projects/shared/agent-scripts/bin/codex-bg

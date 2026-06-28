@@ -79,6 +79,16 @@ branch change, or if ownership of the dirty files is ambiguous.
 
 Use `loop-receipt` to turn the end of a loop into structured next-turn context. Receipts are written outside the repo by default under `~/.local/share/agent-loops/receipts/`, so they do not dirty working trees.
 
+Use `agent-start` at the beginning of non-trivial coding sessions when the
+runtime has not already provided equivalent startup context. It prints the
+current WWI loops, startup compliance, bus discovery, AgentCoord claims, docs,
+git state, validation dry-run, and latest loop receipt in one read-only packet.
+
+```bash
+agent-start --root .
+agent-start --root . --json
+```
+
 ```bash
 loop-receipt \
   --goal "Fix issue 42" \

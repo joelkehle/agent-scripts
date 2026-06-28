@@ -81,6 +81,15 @@ proof-packs/<repo>/<slug>-<YYYYMMDDThhmmssZ>/
 logs/<repo>/<slug>-<YYYYMMDDThhmmssZ>.log
 ```
 
+Use `agentcoord` for claim lifecycle work instead of hand-writing JSON when
+possible:
+
+```bash
+agentcoord claim --repo shared/agent-scripts --slug launch-ritual --safety write --scope bin/agent-start
+agentcoord list --all
+agentcoord check
+```
+
 ## Claim Contract
 
 Before overlapping write work, create a claim. Claims are coordination hints, not permanent locks.
@@ -102,6 +111,8 @@ Example:
 }
 ```
 
+Canonical schema: `docs/schemas/agentcoord-claim.schema.json`.
+
 Safety values:
 
 - `read`: discovery only.
@@ -119,6 +130,7 @@ Preferred patterns:
 - Create claim directories with `mkdir`, because mkdir is atomic on the mounted share.
 - Write new files to `tmp/`, then rename into place.
 - Include `expires_at` in every claim.
+- Use ISO-8601 UTC timestamps with colons, for example `2026-06-28T06:50:58Z`.
 - Treat stale claims as advisory: read the handoff/logs, then proceed or ask Joel if the scope is risky.
 
 ## Handoff Contract

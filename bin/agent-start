@@ -1,0 +1,190 @@
+#!/usr/bin/env node
+
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const DEFAULT_AGENTCOORD_ROOT = process.env.AGENTCOORD_ROOT || "/mnt/synology-share1/AgentCoord";
+const REQUIRED_TOOLS = ["agent-start", "agentcoord", "machine-compliance", "committer", "docs-list", "bus-discover", "wwi", "claude", "codex", "agent-check"];
+
+function usage() {
+  console.log(`Usage: agent-start [--root DIR] [--json] [--card PATH] [--skip-bus|--no-bus] [--timeout MS]
+
+Prints a coding-agent launch packet: WWI, compliance, bus discovery, AgentCoord,
+repo docs, git state, and validation entrypoint.`);
+}
+
+function parseArgs(argv) {
+  const args = { root: process.cwd(), json: false, cardPath: "", skipBus: false, timeoutMs: 5000, help: false };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--help" || arg === "-h") args.help = true;
+    else if (arg === "--json") args.json = true;
+    else if (arg === "--skip-bus" || arg === "--no-bus") args.skipBus = true;
+    else if (arg === "--root") args.root = argv[++i];
+    else if (arg === "--card") args.cardPath = argv[++i];
+    else if (arg === "--timeout") args.timeoutMs = Number(argv[++i]);
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  if (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0) throw new Error("--timeout must be positive milliseconds");
+  args.root = path.resolve(args.root);
+  return args;
+}
+
+function run(command, args = [], options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd || process.cwd(),
+    env: { ...process.env, ...(options.env || {}) },
+    encoding: "utf8",
+    timeout: options.timeoutMs || 5000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  return {
+    command: [command, ...args].join(" "),
+    status: result.status,
+    signal: result.signal || null,
+    error: result.error ? result.error.message : null,
+    stdout: result.stdout || "",
+    stderr: result.stderr || "",
+  };
+}
+
+function lines(text) { return String(text || "").split("\n").filter(Boolean); }
+function shellQuote(value) { return `'${String(value).replaceAll("'", `'\\''`)}'`; }
+
+function commandExists(name) {
+  const result = run("bash", ["-lc", `command -v ${shellQuote(name)}`], { timeoutMs: 1500 });
+  return result.status === 0 ? result.stdout.trim() : "";
+}
+
+function gitRoot(start) {
+  const result = run("git", ["-C", start, "rev-parse", "--show-toplevel"], { timeoutMs: 2000 });
+  return result.status === 0 ? result.stdout.trim() : start;
+}
+
+function docsList(root, timeoutMs) {
+  const result = run("docs-list", [root], { cwd: root, timeoutMs });
+  if (result.status === 0) return { ok: true, output: result.stdout.trim(), command: result.command };
+  const fallback = path.join(os.homedir(), "Projects/shared/agent-scripts/bin/docs-list");
+  if (fs.existsSync(fallback)) {
+    const retry = run(fallback, [root], { cwd: root, timeoutMs });
+    return { ok: retry.status === 0, output: (retry.stdout || retry.stderr).trim(), command: retry.command };
+  }
+  return { ok: false, output: (result.stderr || result.error || "docs-list unavailable").trim(), command: result.command };
+}
+
+function compliance(timeoutMs) {
+  const primary = run("machine-compliance", ["--agent-startup", "--format", "text"], { timeoutMs });
+  if (primary.status === 0 || primary.stdout || primary.stderr) return primary;
+  const fallback = path.join(os.homedir(), "Projects/shared/manager/bin/machine-compliance");
+  return run(fallback, ["--agent-startup", "--format", "text"], { timeoutMs });
+}
+
+function busDiscovery(timeoutMs) {
+  const primary = run("bus-discover", [], { timeoutMs });
+  if (primary.status === 0 || primary.stdout) return primary;
+  const fallback = path.join(os.homedir(), "Projects/shared/agent-scripts/bin/bus-discover");
+  if (fs.existsSync(fallback)) return run(fallback, [], { timeoutMs });
+  return primary;
+}
+
+function sectionFromCommand(title, result, maxLines = 80) {
+  const output = lines(result.stdout || result.stderr || result.error || "").slice(0, maxLines);
+  return { title, command: result.command, status: result.status, signal: result.signal, output };
+}
+
+function complianceAlerts(section) {
+  return section.output.filter((line) => /^(FAIL|WARN)\s+[^:]+:/.test(String(line).trim())).map((line) => line.trim());
+}
+
+function buildSurface(packet) {
+  const reasons = [];
+  for (const [tool, location] of Object.entries(packet.tools)) {
+    if (!location) reasons.push(`missing tool: ${tool}`);
+  }
+  const compliance = packet.results.find((item) => item.title === "Machine Compliance");
+  if (compliance) reasons.push(...complianceAlerts(compliance));
+  for (const section of packet.results) {
+    if (["AgentCoord Validate", "Docs", "Validation Entrypoint"].includes(section.title) && section.status !== 0) {
+      reasons.push(`${section.title} failed: ${section.command}`);
+    }
+  }
+  packet.surfaceReasons = reasons;
+  packet.shouldSurface = reasons.length > 0;
+}
+
+function collect(args) {
+  const root = gitRoot(args.root);
+  const agentcoordPath = path.join(os.homedir(), "Projects/shared/agent-scripts/bin/agentcoord");
+  const coordCmd = commandExists("agentcoord") || (fs.existsSync(agentcoordPath) ? agentcoordPath : "agentcoord");
+  const packet = {
+    label: "Coding-agent startup brief",
+    safetyClass: "read",
+    generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    host: os.hostname().split(".")[0],
+    cwd: process.cwd(),
+    root,
+    tools: Object.fromEntries(REQUIRED_TOOLS.map((tool) => [tool, commandExists(tool) || null])),
+    shouldSurface: false,
+    surfaceReasons: [],
+    results: [],
+  };
+  packet.results.push(sectionFromCommand("WWI", run("wwi", [], { cwd: root, timeoutMs: args.timeoutMs }), 40));
+  packet.results.push(sectionFromCommand("Machine Compliance", compliance(args.timeoutMs), 80));
+  if (!args.skipBus) packet.results.push(sectionFromCommand("Bus Discovery", busDiscovery(Math.max(args.timeoutMs, 8000)), 120));
+  packet.results.push(sectionFromCommand("AgentCoord Validate", run(coordCmd, ["validate", "--root", DEFAULT_AGENTCOORD_ROOT], { cwd: root, timeoutMs: args.timeoutMs }), 40));
+  packet.results.push(sectionFromCommand("AgentCoord Active Claims", run(coordCmd, ["list", "--root", DEFAULT_AGENTCOORD_ROOT, "--active"], { cwd: root, timeoutMs: args.timeoutMs }), 40));
+  packet.results.push(sectionFromCommand("AgentCoord Stale Claims", run(coordCmd, ["list", "--root", DEFAULT_AGENTCOORD_ROOT, "--stale"], { cwd: root, timeoutMs: args.timeoutMs }), 40));
+  const docs = docsList(root, args.timeoutMs);
+  packet.results.push({ title: "Docs", command: docs.command || "docs-list", status: docs.ok ? 0 : 1, signal: null, output: lines(docs.output).slice(0, 120) });
+  packet.results.push(sectionFromCommand("Git Status", run("git", ["-C", root, "status", "--short", "--branch"], { timeoutMs: args.timeoutMs }), 80));
+  packet.results.push(sectionFromCommand("Validation Entrypoint", run("agent-check", ["--root", root, "--dry-run"], { cwd: root, timeoutMs: args.timeoutMs }), 20));
+  buildSurface(packet);
+  return packet;
+}
+
+function renderText(packet) {
+  const out = [];
+  out.push("Agent Start");
+  out.push(`host=${packet.host}`);
+  out.push(`root=${packet.root}`);
+  out.push(`generated=${packet.generated_at}`);
+  out.push(`shouldSurface=${packet.shouldSurface}`);
+  if (packet.surfaceReasons.length) {
+    out.push("surfaceReasons:");
+    out.push(...packet.surfaceReasons.map((reason) => `- ${reason}`));
+  }
+  out.push("");
+  out.push("== Tool Visibility ==");
+  for (const [tool, location] of Object.entries(packet.tools)) out.push(`${location ? "OK" : "MISSING"} ${tool}${location ? ` -> ${location}` : ""}`);
+  for (const section of packet.results) {
+    out.push("");
+    out.push(`== ${section.title} ==`);
+    out.push(`command: ${section.command}`);
+    out.push(`status: ${section.status}${section.signal ? ` signal=${section.signal}` : ""}`);
+    if (!section.output.length) out.push("(no output)");
+    else out.push(...section.output);
+  }
+  return `${out.join("\n")}\n`;
+}
+
+function writeCard(file, packet) {
+  fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(packet, null, 2)}\n`);
+}
+
+try {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    process.exit(0);
+  }
+  const packet = collect(args);
+  if (args.cardPath) writeCard(args.cardPath, packet);
+  if (args.json) console.log(JSON.stringify(packet, null, 2));
+  else process.stdout.write(renderText(packet));
+} catch (error) {
+  console.error(`agent-start: ${error.message}`);
+  process.exit(1);
+}
