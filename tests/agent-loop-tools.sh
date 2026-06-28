@@ -167,6 +167,58 @@ set -e
 assert_contains "$coord_invalid" "invalid=1"
 assert_contains "$coord_invalid" "invalid expires_at"
 
+sweep_root="$tmp/AgentCoordSweep"
+mkdir -p "$sweep_root/claims/sweep"
+node - "$sweep_root" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+const root = process.argv[2];
+const now = Date.now();
+function iso(ms) { return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z"); }
+function write(name, expiresAt) {
+  const claim = {
+    repo: "sweep",
+    slug: name,
+    agent: "codex-test",
+    host: "beelink",
+    safety: "write",
+    scope: [name],
+    started_at: iso(now - 15 * 86400000),
+    expires_at: expiresAt,
+    next_action: `${name} next action`,
+    contact: "Joel Kehle <joel@kehle.com>"
+  };
+  fs.writeFileSync(path.join(root, "claims", "sweep", `${name}.codex-test.beelink.json`), `${JSON.stringify(claim, null, 2)}\n`);
+}
+write("old-stale", iso(now - 10 * 86400000));
+write("recent-stale", iso(now - 2 * 86400000));
+write("active", iso(now + 2 * 86400000));
+NODE
+old_stale_file="$sweep_root/claims/sweep/old-stale.codex-test.beelink.json"
+recent_stale_file="$sweep_root/claims/sweep/recent-stale.codex-test.beelink.json"
+sweep_dry="$(AGENTCOORD_ROOT="$sweep_root" agentcoord sweep --stale-after-days 7)"
+assert_contains "$sweep_dry" "janitor dry-run stale=2 eligible=1 skipped_recent=1 released=0 invalid=0 errors=0 stale_after_days=7"
+assert_contains "$sweep_dry" "old-stale"
+assert_contains "$sweep_dry" "skipped 1 recent stale"
+[ -f "$old_stale_file" ] || fail "old stale claim deleted during dry-run"
+assert_not_contains "$(cat "$old_stale_file")" "released_at"
+sweep_apply="$(AGENTCOORD_ROOT="$sweep_root" agentcoord sweep --apply --stale-after-days 7 --json)"
+assert_contains "$sweep_apply" '"released": 1'
+assert_contains "$sweep_apply" '"skipped_recent": 1'
+[ -f "$old_stale_file" ] || fail "old stale claim deleted during apply"
+[ -f "$recent_stale_file" ] || fail "recent stale claim deleted during apply"
+old_stale_json="$(cat "$old_stale_file")"
+recent_stale_json="$(cat "$recent_stale_file")"
+assert_contains "$old_stale_json" '"released_by": "agentcoord-janitor"'
+assert_contains "$old_stale_json" '"release_reason": "expired without renewal after'
+assert_contains "$old_stale_json" '"previous_status": "stale"'
+assert_contains "$old_stale_json" '"stale_since":'
+assert_not_contains "$recent_stale_json" '"released_at"'
+sweep_after="$(AGENTCOORD_ROOT="$sweep_root" agentcoord list --all)"
+assert_contains "$sweep_after" "released sweep old-stale"
+assert_contains "$sweep_after" "stale sweep recent-stale"
+assert_contains "$sweep_after" "active sweep active"
+
 set +e
 bg_fail_output="$(
   CODEX_BG_STATE_DIR="$bg_state" CODEX_HOME="$codex_home" \

@@ -14,7 +14,7 @@ function usage() {
   agentcoord claim --repo REPO --slug SLUG [options]
   agentcoord renew --repo REPO --slug SLUG [options]
   agentcoord release --repo REPO --slug SLUG [options]
-  agentcoord sweep [--root DIR] [--apply] [--json]
+  agentcoord sweep [--root DIR] [--stale-after-days DAYS] [--apply] [--json]
   agentcoord handoff --repo REPO --slug SLUG --goal TEXT --state TEXT --next-action TEXT [options]
 
 Options:
@@ -31,7 +31,9 @@ Options:
   --check VALUE           Handoff check and result; repeatable
   --blocker TEXT          Handoff blocker; repeatable
   --note TEXT             Handoff note; repeatable
-  --apply                 For sweep: mark stale claims released instead of dry-run
+  --stale-after-days DAYS For sweep: only release claims stale this many days (default: 7)
+  --released-by NAME      For sweep: released_by metadata (default: agentcoord-janitor)
+  --apply                 For sweep: mark eligible stale claims released instead of dry-run
   --json                  Emit JSON
 
 AgentCoord is a coordination hint layer for coding agents, not a lock service.`);
@@ -54,6 +56,8 @@ function parseArgs(argv) {
     mode: "active",
     help: false,
     apply: false,
+    staleAfterDays: 7,
+    releasedBy: "agentcoord-janitor",
     goal: "",
     state: [],
     files: [],
@@ -90,6 +94,8 @@ function parseArgs(argv) {
     else if (key === "scope") args.scope.push(value);
     else if (key === "next-action") args.nextAction = value;
     else if (key === "ttl-hours") args.ttlHours = Number(value);
+    else if (key === "stale-after-days") args.staleAfterDays = Number(value);
+    else if (key === "released-by") args.releasedBy = value;
     else if (key === "goal") args.goal = value;
     else if (key === "state") args.state.push(value);
     else if (key === "file") args.files.push(value);
@@ -99,6 +105,7 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (args.command === "check") args.command = "validate";
+  if (!Number.isFinite(args.staleAfterDays) || args.staleAfterDays < 0) throw new Error("--stale-after-days must be zero or positive");
   return args;
 }
 
@@ -303,21 +310,83 @@ function commandRelease(args) {
   else console.log(`agentcoord: released ${existing.file}`);
 }
 
+function staleAgeDays(entry, now = new Date()) {
+  if (!entry.expires) return 0;
+  return Math.max(0, (now.getTime() - entry.expires.getTime()) / 86400000);
+}
+
+function janitorSummary({ entries, eligible, skippedRecent, released, invalid, errors }) {
+  return {
+    stale: entries.length,
+    eligible: eligible.length,
+    skipped_recent: skippedRecent.length,
+    released: released.length,
+    invalid: invalid.length,
+    errors: errors.length,
+  };
+}
+
 function commandSweep(args) {
-  const stale = readClaims(args.root).filter((entry) => entry.status === "stale");
-  const changed = [];
+  const now = new Date();
+  const entries = readClaims(args.root);
+  const stale = entries.filter((entry) => entry.status === "stale");
+  const invalid = entries.filter((entry) => entry.status === "invalid");
+  const eligible = [];
+  const skippedRecent = [];
+  for (const entry of stale) {
+    const age = staleAgeDays(entry, now);
+    entry.stale_age_days = age;
+    if (age >= args.staleAfterDays) eligible.push(entry);
+    else skippedRecent.push(entry);
+  }
+  const released = [];
+  const errors = [];
   if (args.apply) {
-    for (const entry of stale) {
-      const data = { ...entry.data, released_at: iso(new Date()), sweep_note: "Released by agentcoord sweep after expiry." };
-      atomicWrite(args.root, entry.file, data);
-      changed.push(publicEntry(args.root, readClaim(entry.file)));
+    for (const entry of eligible) {
+      try {
+        const age = staleAgeDays(entry, now);
+        const data = {
+          ...entry.data,
+          released_at: iso(now),
+          released_by: args.releasedBy,
+          release_reason: `expired without renewal after ${age.toFixed(1)} day(s); threshold ${args.staleAfterDays} day(s)`,
+          previous_status: "stale",
+          stale_since: normalizeTimestamp(entry.data.expires_at),
+        };
+        atomicWrite(args.root, entry.file, data);
+        const updated = readClaim(entry.file);
+        updated.stale_age_days = age;
+        released.push(updated);
+      } catch (error) {
+        errors.push({ file: entry.file, error: error.message });
+      }
     }
   }
-  if (args.json) console.log(JSON.stringify({ root: args.root, dry_run: !args.apply, stale: stale.map((entry) => publicEntry(args.root, entry)), changed }, null, 2));
+  const decorate = (entry) => ({ ...publicEntry(args.root, entry), stale_age_days: Number(staleAgeDays(entry, now).toFixed(3)) });
+  const summary = janitorSummary({ entries: stale, eligible, skippedRecent, released, invalid, errors });
+  if (args.json) console.log(JSON.stringify({
+    root: args.root,
+    dry_run: !args.apply,
+    apply: args.apply,
+    stale_after_days: args.staleAfterDays,
+    released_by: args.releasedBy,
+    summary,
+    stale: stale.map(decorate),
+    eligible: eligible.map(decorate),
+    skipped_recent: skippedRecent.map(decorate),
+    invalid: invalid.map((entry) => publicEntry(args.root, entry)),
+    released: released.map((entry) => publicEntry(args.root, entry)),
+    changed: released.map((entry) => publicEntry(args.root, entry)),
+    errors,
+  }, null, 2));
   else {
-    console.log(`agentcoord: ${args.apply ? "released" : "would release"} ${stale.length} stale claim(s)`);
-    if (stale.length) console.log(renderList(stale, args.root));
+    console.log(`agentcoord: ${args.apply ? "janitor applied" : "janitor dry-run"} stale=${summary.stale} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} released=${summary.released} invalid=${summary.invalid} errors=${summary.errors} stale_after_days=${args.staleAfterDays}`);
+    const shown = args.apply ? released : eligible;
+    if (shown.length) console.log(renderList(shown, args.root));
+    if (skippedRecent.length) console.log(`agentcoord: skipped ${skippedRecent.length} recent stale claim(s) below threshold`);
+    if (errors.length) console.log(errors.map((error) => `agentcoord: error ${path.relative(args.root, error.file)} ${error.error}`).join("\n"));
   }
+  if (errors.length) process.exitCode = 1;
 }
 
 function requireHandoffArgs(args) {
