@@ -6,25 +6,48 @@ const os = require("node:os");
 const path = require("node:path");
 
 const DEFAULT_AGENTCOORD_ROOT = process.env.AGENTCOORD_ROOT || "/mnt/synology-share1/AgentCoord";
+const DEFAULT_WORKBENCH_SUMMARY = process.env.AGENT_WORKBENCH_SUMMARY || "/home/joelkehle/Projects/shared/dev-dashboard/codex-output/agentic-software-ops/agent-workbench/latest/summary.json";
+const DEFAULT_WORKBENCH_URL = process.env.AGENT_WORKBENCH_URL || "http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/latest/";
 const REQUIRED_TOOLS = ["agent-start", "agentcoord", "machine-compliance", "committer", "docs-list", "bus-discover", "wwi", "claude", "codex", "agent-check"];
 
 function usage() {
-  console.log(`Usage: agent-start [--root DIR] [--json] [--card PATH] [--skip-bus|--no-bus] [--timeout MS]
+  console.log(`Usage: agent-start [--root DIR] [--json] [--notice] [--card PATH] [--skip-bus|--no-bus] [--timeout MS]
+                   [--workbench-summary PATH] [--workbench-url URL]
 
 Prints a coding-agent launch packet: WWI, compliance, bus discovery, AgentCoord,
-repo docs, git state, and validation entrypoint.`);
+repo docs, git state, and validation entrypoint.
+
+Use --notice from Codex/Claude launch wrappers. It reads the latest workbench
+summary and prints a terminal-safe warning plus proof URL only when needed.`);
 }
 
 function parseArgs(argv) {
-  const args = { root: process.cwd(), json: false, cardPath: "", skipBus: false, timeoutMs: 5000, help: false };
+  const args = {
+    root: process.cwd(),
+    json: false,
+    notice: false,
+    cardPath: "",
+    skipBus: false,
+    timeoutMs: 5000,
+    help: false,
+    workbenchSummary: DEFAULT_WORKBENCH_SUMMARY,
+    explicitWorkbenchSummary: Boolean(process.env.AGENT_WORKBENCH_SUMMARY),
+    workbenchUrl: DEFAULT_WORKBENCH_URL,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--help" || arg === "-h") args.help = true;
     else if (arg === "--json") args.json = true;
+    else if (arg === "--notice") args.notice = true;
     else if (arg === "--skip-bus" || arg === "--no-bus") args.skipBus = true;
     else if (arg === "--root") args.root = argv[++i];
     else if (arg === "--card") args.cardPath = argv[++i];
     else if (arg === "--timeout") args.timeoutMs = Number(argv[++i]);
+    else if (arg === "--workbench-summary") {
+      args.workbenchSummary = argv[++i];
+      args.explicitWorkbenchSummary = true;
+    }
+    else if (arg === "--workbench-url") args.workbenchUrl = argv[++i];
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0) throw new Error("--timeout must be positive milliseconds");
@@ -98,6 +121,50 @@ function complianceAlerts(section) {
   return section.output.filter((line) => /^(FAIL|WARN)\s+[^:]+:/.test(String(line).trim())).map((line) => line.trim());
 }
 
+function normalizeWorkbenchPayload(payload) {
+  const summary = payload && payload.summary ? payload.summary : payload;
+  const artifacts = payload && payload.artifacts ? payload.artifacts : {};
+  return { summary: summary || {}, artifacts };
+}
+
+function readWorkbenchSummary(summaryPath, proofUrl, explicitSummary = false) {
+  const resolvedPath = path.resolve(summaryPath);
+  try {
+    const raw = fs.readFileSync(resolvedPath, "utf8");
+    const { summary, artifacts } = normalizeWorkbenchPayload(JSON.parse(raw));
+    const url = artifacts.latestUrl || proofUrl;
+    return {
+      available: true,
+      path: resolvedPath,
+      url,
+      label: summary.label || "Coding-agent workbench",
+      timestamp: summary.timestamp || null,
+      shouldSurface: Boolean(summary.shouldSurface),
+      surfaceReasons: Array.isArray(summary.surfaceReasons) ? summary.surfaceReasons : [],
+      counts: summary.counts || {},
+    };
+  } catch (error) {
+    const shouldSurface = explicitSummary || os.hostname().split(".")[0] === "beelink";
+    return {
+      available: false,
+      path: resolvedPath,
+      url: proofUrl,
+      label: "Coding-agent workbench",
+      timestamp: null,
+      shouldSurface,
+      surfaceReasons: shouldSurface ? [`workbench summary unavailable: ${error.message}`] : [],
+      counts: {},
+    };
+  }
+}
+
+function workbenchReasons(workbench) {
+  if (!workbench.available) return workbench.surfaceReasons;
+  if (!workbench.shouldSurface) return [];
+  if (workbench.surfaceReasons.length) return workbench.surfaceReasons;
+  return ["workbench requested Joel attention"];
+}
+
 function buildSurface(packet) {
   const reasons = [];
   for (const [tool, location] of Object.entries(packet.tools)) {
@@ -110,6 +177,7 @@ function buildSurface(packet) {
       reasons.push(`${section.title} failed: ${section.command}`);
     }
   }
+  if (packet.workbench) reasons.push(...workbenchReasons(packet.workbench));
   packet.surfaceReasons = reasons;
   packet.shouldSurface = reasons.length > 0;
 }
@@ -126,6 +194,7 @@ function collect(args) {
     cwd: process.cwd(),
     root,
     tools: Object.fromEntries(REQUIRED_TOOLS.map((tool) => [tool, commandExists(tool) || null])),
+    workbench: readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
     shouldSurface: false,
     surfaceReasons: [],
     results: [],
@@ -144,6 +213,17 @@ function collect(args) {
   return packet;
 }
 
+function renderNotice(workbench) {
+  const reasons = workbenchReasons(workbench);
+  if (!reasons.length) return "";
+  const headline = reasons.length === 1 ? reasons[0] : `${reasons.length} issues`;
+  const out = [`Agent workbench warning: ${headline}`];
+  for (const reason of reasons.slice(0, 5)) out.push(`- ${reason}`);
+  if (reasons.length > 5) out.push(`- ${reasons.length - 5} more`);
+  out.push(`Proof: ${workbench.url}`);
+  return `${out.join("\n")}\n`;
+}
+
 function renderText(packet) {
   const out = [];
   out.push("Agent Start");
@@ -154,6 +234,16 @@ function renderText(packet) {
   if (packet.surfaceReasons.length) {
     out.push("surfaceReasons:");
     out.push(...packet.surfaceReasons.map((reason) => `- ${reason}`));
+  }
+  out.push("");
+  out.push("== Workbench ==");
+  out.push(`summary: ${packet.workbench.path}`);
+  out.push(`available: ${packet.workbench.available}`);
+  out.push(`shouldSurface: ${packet.workbench.shouldSurface}`);
+  out.push(`proof: ${packet.workbench.url}`);
+  if (packet.workbench.surfaceReasons.length) {
+    out.push("surfaceReasons:");
+    out.push(...packet.workbench.surfaceReasons.map((reason) => `- ${reason}`));
   }
   out.push("");
   out.push("== Tool Visibility ==");
@@ -178,6 +268,10 @@ try {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     usage();
+    process.exit(0);
+  }
+  if (args.notice) {
+    process.stdout.write(renderNotice(readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary)));
     process.exit(0);
   }
   const packet = collect(args);

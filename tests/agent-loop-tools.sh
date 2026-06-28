@@ -7,6 +7,12 @@ unset AGENT_CHECK_ACTIVE
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+timeout_cmd=""
+if command -v timeout >/dev/null 2>&1; then
+  timeout_cmd="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  timeout_cmd="gtimeout"
+fi
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -17,7 +23,7 @@ assert_contains() {
   local haystack="$1"
   local needle="$2"
 
-  if ! printf '%s\n' "$haystack" | grep -Fq "$needle"; then
+  if ! printf '%s\n' "$haystack" | grep -Fq -- "$needle"; then
     printf 'output:\n%s\n' "$haystack" >&2
     fail "missing expected text: $needle"
   fi
@@ -27,7 +33,7 @@ assert_not_contains() {
   local haystack="$1"
   local needle="$2"
 
-  if printf '%s\n' "$haystack" | grep -Fq "$needle"; then
+  if printf '%s\n' "$haystack" | grep -Fq -- "$needle"; then
     printf 'output:\n%s\n' "$haystack" >&2
     fail "unexpected text: $needle"
   fi
@@ -198,7 +204,11 @@ cat > "$recursive/package.json" <<'JSON'
   }
 }
 JSON
-recursive_output="$(timeout 10 agent-check --root "$recursive" 2>&1)"
+if [ -n "$timeout_cmd" ]; then
+  recursive_output="$("$timeout_cmd" 10 agent-check --root "$recursive" 2>&1)"
+else
+  recursive_output="$(agent-check --root "$recursive" 2>&1)"
+fi
 assert_contains "$recursive_output" "agent-check: command=npm run agent:check"
 assert_contains "$recursive_output" "agent-check: command=npm test"
 
@@ -248,7 +258,55 @@ assert_contains "$agent_start_output" "== AgentCoord Active Claims =="
 agent_start_json="$(cat "$agent_start_card")"
 assert_contains "$agent_start_json" '"label": "Coding-agent startup brief"'
 assert_contains "$agent_start_json" '"safetyClass": "read"'
+assert_contains "$agent_start_json" '"workbench"'
 assert_contains "$agent_start_json" '"results"'
+
+workbench_summary="$tmp/workbench-summary.json"
+cat > "$workbench_summary" <<'JSON'
+{
+  "summary": {
+    "label": "Coding-agent workbench",
+    "shouldSurface": false,
+    "surfaceReasons": [],
+    "counts": {
+      "missingTools": 0,
+      "complianceAlerts": 0
+    }
+  },
+  "artifacts": {
+    "latestUrl": "http://example.test/workbench/latest/"
+  }
+}
+JSON
+notice_clean="$(agent-start --notice --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
+[ "$notice_clean" = "" ] || fail "clean notice should be quiet, got: $notice_clean"
+
+cat > "$workbench_summary" <<'JSON'
+{
+  "summary": {
+    "label": "Coding-agent workbench",
+    "shouldSurface": true,
+    "surfaceReasons": [
+      "missing tool: codex",
+      "Machine Compliance failed"
+    ],
+    "counts": {
+      "missingTools": 1,
+      "complianceAlerts": 1
+    }
+  },
+  "artifacts": {
+    "latestUrl": "http://example.test/workbench/latest/"
+  }
+}
+JSON
+notice_warn="$(agent-start --notice --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
+assert_contains "$notice_warn" "Agent workbench warning: 2 issues"
+assert_contains "$notice_warn" "- missing tool: codex"
+assert_contains "$notice_warn" "Proof: http://example.test/workbench/latest/"
+notice_missing="$(agent-start --notice --workbench-summary "$tmp/missing-workbench.json" --workbench-url http://fallback.test/latest/)"
+assert_contains "$notice_missing" "Agent workbench warning: workbench summary unavailable"
+assert_contains "$notice_missing" "Proof: http://fallback.test/latest/"
 
 mkdir -p "$dirty_repo/proofs/run"
 git -C "$dirty_repo" init -q
