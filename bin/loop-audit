@@ -4,14 +4,72 @@ set -euo pipefail
 workspace="${1:-$HOME/Projects}"
 issues=0
 expected_skills=(ship-loop review-loop repair-loop learn-loop hygiene-loop)
+off_limit_names=(MedProjects rapamycin-kb kidney-radar patient-care-dashboard)
+
+if [ -n "${AGENT_OFF_LIMIT_NAMES:-}" ]; then
+  read -r -a extra_off_limit_names <<< "${AGENT_OFF_LIMIT_NAMES//,/ }"
+  off_limit_names+=("${extra_off_limit_names[@]}")
+fi
+
+is_off_limit_path() {
+  local path_value="$1"
+  local part name
+  local -a parts
+
+  case "$path_value" in
+    "$HOME/MedProjects"|"$HOME/MedProjects"/*)
+      return 0
+      ;;
+  esac
+
+  IFS='/' read -r -a parts <<< "$path_value"
+  for part in "${parts[@]}"; do
+    for name in "${off_limit_names[@]}"; do
+      if [ -n "$name" ] && [ "$part" = "$name" ]; then
+        return 0
+      fi
+    done
+  done
+
+  return 1
+}
+
+if is_off_limit_path "$workspace"; then
+  printf 'loop-audit: workspace is off-limits\n' >&2
+  exit 2
+fi
 
 if [ ! -d "$workspace" ]; then
   printf 'loop-audit: workspace not found: %s\n' "$workspace" >&2
   exit 2
 fi
 
+prune_args=(
+  -path "$workspace/.git"
+  -o -path "$workspace/.next"
+  -o -path "$workspace/archive"
+  -o -path "$workspace/node_modules"
+  -o -path "$workspace/oss"
+  -o -path "$workspace/tmp"
+  -o -path "$workspace/vendor"
+  -o -path "$workspace/worktrees"
+  -o -path '*/.git'
+  -o -path '*/.next'
+  -o -path '*/node_modules'
+  -o -path '*/vendor'
+)
+
+for name in "${off_limit_names[@]}"; do
+  if [ -n "$name" ]; then
+    prune_args+=(-o -name "$name")
+  fi
+done
+
 skip_path() {
   local rel="$1"
+  if is_off_limit_path "$rel"; then
+    return 0
+  fi
   rel="${rel#$workspace/}"
 
   case "$rel" in
@@ -65,7 +123,7 @@ audit_skill_dir() {
 
 repo_candidates() {
   find "$workspace" -maxdepth 5 \
-    \( -path "$workspace/.git" -o -path "$workspace/.next" -o -path "$workspace/archive" -o -path "$workspace/node_modules" -o -path "$workspace/oss" -o -path "$workspace/tmp" -o -path "$workspace/vendor" -o -path "$workspace/worktrees" \) -prune \
+    \( "${prune_args[@]}" \) -prune \
     -o -type f \( -name package.json -o -name go.mod -o -name pyproject.toml -o -name Makefile -o -path '*/scripts/agent-check.sh' \) -print |
     while IFS= read -r marker; do
       if skip_path "$marker"; then
@@ -118,7 +176,7 @@ while IFS= read -r file; do
   fi
 
   printf '%s %7s %s\n' "$status" "$bytes" "${file#$workspace/}"
-done < <(find "$workspace" -maxdepth 5 -type f \( -name AGENTS.md -o -name AGENTS.MD \) | sort)
+done < <(find "$workspace" -maxdepth 5 \( "${prune_args[@]}" \) -prune -o -type f \( -name AGENTS.md -o -name AGENTS.MD \) -print | sort)
 
 print_header "validation entrypoints"
 while IFS= read -r repo; do

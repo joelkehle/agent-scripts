@@ -15,11 +15,34 @@ const skipDirNames = new Set([
   "worktrees",
 ]);
 
+const defaultOffLimitNames = [
+  "MedProjects",
+  "rapamycin-kb",
+  "kidney-radar",
+  "patient-care-dashboard",
+];
+
 function usage() {
   console.log(`Usage: dirty-audit [WORKSPACE] [--json]
 
 Read-only dirty workspace inventory for repo hygiene loops.
 `);
+}
+
+function offLimitNames() {
+  const extra = String(process.env.AGENT_OFF_LIMIT_NAMES || "")
+    .split(/[,:]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return new Set([...defaultOffLimitNames, ...extra]);
+}
+
+function isOffLimitPath(pathname) {
+  const resolved = path.resolve(pathname);
+  const homeMedProjects = path.join(os.homedir(), "MedProjects");
+  if (resolved === homeMedProjects || resolved.startsWith(`${homeMedProjects}${path.sep}`)) return true;
+  const names = offLimitNames();
+  return resolved.split(path.sep).some((part) => names.has(part));
 }
 
 function parseArgs(argv) {
@@ -54,6 +77,7 @@ function run(command, args, cwd, options = {}) {
 function findRepos(workspace) {
   const repos = [];
   const root = path.resolve(workspace);
+  if (isOffLimitPath(root)) return repos;
   const stack = [{ dir: root, depth: 0 }];
 
   while (stack.length > 0) {
@@ -74,7 +98,9 @@ function findRepos(workspace) {
 
     for (const entry of entries) {
       if (!entry.isDirectory() || skipDirNames.has(entry.name)) continue;
-      stack.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+      const child = path.join(dir, entry.name);
+      if (isOffLimitPath(child)) continue;
+      stack.push({ dir: child, depth: depth + 1 });
     }
   }
 
@@ -214,6 +240,9 @@ function main() {
     return;
   }
   const workspace = path.resolve(args.workspace);
+  if (isOffLimitPath(workspace)) {
+    throw new Error("workspace is off-limits");
+  }
   if (!fs.existsSync(workspace)) {
     throw new Error(`workspace not found: ${args.workspace}`);
   }

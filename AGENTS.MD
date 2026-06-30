@@ -3,6 +3,13 @@
 Joel owns this. Start: say hi + 1 motivating line.
 Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
+## Off-Limits (hard boundary — read first)
+- `~/MedProjects/` is OFF-LIMITS. Never read, write, `cd`, grep, glob, or open a terminal there. Never follow a pointer into it.
+- Explicitly off-limits repos remain off-limits even if a pointer appears inside `~/Projects`. Known: `rapamycin-kb`, `kidney-radar`, `patient-care-dashboard` (the last two live in `~/MedProjects`).
+- Do not infer an off-limits boundary from ordinary calendar, email, contact, or logistics work. If Joel asks for calendar/email handling involving a person, meeting, address, or appointment, treat it as normal workspace work unless it requires opening an explicitly off-limits path/repo.
+- Fleet infra (`manager`) may name such a service as an opaque endpoint (host/port/health-probe) so the fleet runs — but never read its repo, data, source docs, or contents. Existence is OK; content is not.
+- If a task appears to require any of the above: STOP and tell Joel. Do not improvise, do not "just fix it."
+
 ## Vocabulary
 - Write capability: say `write`, `write-capable`, or `write action`.
 - Read capability: say `read-only` or `read`.

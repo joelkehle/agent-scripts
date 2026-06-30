@@ -292,13 +292,33 @@ printf script-ok
 SH
 chmod +x "$script_repo/scripts/agent-check.sh"
 
-audit_output="$(HOME="$home" loop-audit "$workspace")"
+blocked_repo="$workspace/blocked-fixture"
+mkdir -p "$blocked_repo/scripts"
+cat > "$blocked_repo/package.json" <<'JSON'
+{
+  "scripts": {
+    "test": "printf blocked"
+  }
+}
+JSON
+cat > "$blocked_repo/AGENTS.md" <<'MD'
+blocked fixture should not be read
+MD
+git -C "$blocked_repo" init -q
+git -C "$blocked_repo" config user.email "agent-loop-test@example.com"
+git -C "$blocked_repo" config user.name "Agent Loop Test"
+git -C "$blocked_repo" add package.json AGENTS.md
+git -C "$blocked_repo" commit -q -m "init"
+printf 'dirty\n' >> "$blocked_repo/AGENTS.md"
+
+audit_output="$(HOME="$home" AGENT_OFF_LIMIT_NAMES="blocked-fixture" loop-audit "$workspace")"
 assert_contains "$audit_output" "OK $home/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK $workspace/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK $home/.agents/skills/hygiene-loop/SKILL.md"
 assert_contains "$audit_output" "OK $workspace/.agents/skills/hygiene-loop/SKILL.md"
 assert_contains "$audit_output" "OK make-only -> make agent-check"
 assert_contains "$audit_output" "OK script-only -> scripts/agent-check.sh"
+assert_not_contains "$audit_output" "blocked-fixture"
 
 dirty_repo="$workspace/dirty-repo"
 agent_start_card="$tmp/agent-start/card.json"
@@ -374,9 +394,10 @@ dirty_output="$(dirty-audit "$workspace")"
 assert_contains "$dirty_output" "dirty-repo"
 assert_contains "$dirty_output" "generated/proof: 1"
 assert_contains "$dirty_output" "split generated/proof artifacts"
-dirty_json="$(dirty-audit "$workspace" --json)"
+dirty_json="$(AGENT_OFF_LIMIT_NAMES="blocked-fixture" dirty-audit "$workspace" --json)"
 assert_contains "$dirty_json" '"repo": "dirty-repo"'
 assert_contains "$dirty_json" '"validation": "npm test"'
+assert_not_contains "$dirty_json" "blocked-fixture"
 
 receipt_repo="$workspace/receipt-repo"
 mkdir -p "$receipt_repo/src"
