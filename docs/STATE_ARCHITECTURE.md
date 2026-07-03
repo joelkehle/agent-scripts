@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.9 (2026-06-27)
+Version: 1.10 (2026-07-03)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -125,6 +125,20 @@ projection.
   nouns, or narrative truth. Rows must carry source refs and be safe to delete
   and rebuild from upstream evidence plus watcher reprocessing.
 
+- **ucla-tdg-ip-agents intern-manager PM event log
+  (`data/intern-manager/pm-events.jsonl` + sibling JSON state files, added
+  2026-07-03, JK-SPEC-INTERNPM-001 mission A1):** durable, append-only owner of
+  the intern-manager's own action/outcome history — dispatches sent, dispatch
+  failures, check-ins observed, review replies received, proposals filed, and
+  (as later missions land) nudges, routes, and escalations. Unlike the sweep
+  cursor above, this log is NOT disposable: it is the audit trail (spec NFR-2)
+  and metrics substrate (PM-MET-1/4), and its failure-and-timing facts are not
+  rebuildable from upstream. GitHub remains the source for issues/PRs/comments;
+  project-manager remains the owner of proposals; records carry evidence
+  pointers (URLs, SHAs, conversation IDs) back to those owners. UCLA work
+  product: per PM-MET-4 it must never be written to the personal llm-wiki
+  ledger.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -146,6 +160,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.10 (2026-07-03): register the ucla-tdg-ip-agents intern-manager PM event
+  log as the durable, non-disposable owner of PM action/outcome history
+  (JK-SPEC-INTERNPM-001 audit + metrics substrate).
 - 1.9 (2026-06-27): register email-triage `data/attention-events/` as
   disposable Gmail History watcher working state / interaction projection.
 - 1.8 (2026-06-26): register the ucla-tdg-ip-agents intern-manager GitHub sweep
