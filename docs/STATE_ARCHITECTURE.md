@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.10 (2026-07-03)
+Version: 1.11 (2026-07-13)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -23,7 +23,7 @@ projection.
 
 | Tier | Authoritative store | Owns | Everything else is |
 |---|---|---|---|
-| Identity nouns | `ucla-tdg-assistant-db` — hosted on beelink Postgres + PostgREST `127.0.0.1:8239` since 2026-06-10 (cloud Supabase is a frozen legacy copy pending teardown; do NOT write to it) | people, organizations, agreements, their IDs and relationships (`people`, `organizations`, `agreement_people`, rolodex) | a cache with a pointer back |
+| Identity and IP docket nouns | `ucla-tdg-assistant-db` — hosted on beelink Postgres + PostgREST `127.0.0.1:8239` since 2026-06-10 (cloud Supabase is a frozen legacy copy pending teardown; do NOT write to it) | people, organizations, agreements, technologies, IP sequences, patent/application matters, interested parties, funding assertions, imported source dates, their IDs and relationships | a cache with a pointer back |
 | Work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds | a proposal *into* it |
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
@@ -57,6 +57,12 @@ projection.
   doing: projects, tasks, proposals). They reference each other by ID only. Neither
   mirrors the other's tables; any project-ish data in assistant-db is a UI
   projection of PM, not a source.
+- **IP docket vs project-manager:** assistant-db owns the imported technology,
+  sequence, application, ownership-interest, funding-assertion, and source-deadline
+  facts, with Inteum export provenance. Project-manager may consume those facts and
+  propose or own filing-decision tasks; it must not mirror the docket as task state.
+  A filing deadline in assistant-db is a docket fact. The assignment, escalation,
+  and completion of work prompted by that deadline belong to project-manager.
 - **Inteum / Ironclad:** external systems of record for final operational
   agreement/case state where they exist. Our stores hold working state plus
   pointers, until a sync is explicitly engineered.
@@ -160,6 +166,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.11 (2026-07-13): clarify assistant-db ownership of technology and IP docket
+  nouns imported from Inteum, including uncertain funding assertions and source
+  deadlines; keep resulting filing-decision work in project-manager.
 - 1.10 (2026-07-03): register the ucla-tdg-ip-agents intern-manager PM event
   log as the durable, non-disposable owner of PM action/outcome history
   (JK-SPEC-INTERNPM-001 audit + metrics substrate).
