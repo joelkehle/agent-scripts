@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.11 (2026-07-13)
+Version: 1.12 (2026-07-14)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -145,6 +145,16 @@ projection.
   product: per PM-MET-4 it must never be written to the personal llm-wiki
   ledger.
 
+- **assistant-db `ip_sequence_email_threads` (added 2026-07-14, feat/inteum-docket-import):**
+  assistant-db owns the docket-relevance mapping between Inteum IP sequences and
+  Gmail threads (match status, match location, message-level provenance with body
+  hashes only — never body content). Rows are labeled projections of Gmail search
+  evidence: each carries thread/message source refs and is safe to delete and
+  rebuild by re-running the sequence-token search. Gmail/NAS remain source
+  evidence; the PM `interactions` table remains the owner of promoted
+  communication-event facts; PM `intake_work_state` metadata (derived from these
+  links) lives in project-manager and cites `ip_sequence_id` back to assistant-db.
+
 ## Known Violations (to retire)
 
 (none open)
@@ -166,6 +176,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.12 (2026-07-14): register assistant-db `ip_sequence_email_threads` as the
+  canonical case↔Gmail-thread docket-relevance link table (rebuildable labeled
+  projection; PM keeps interaction/event ownership and intake work state).
 - 1.11 (2026-07-13): clarify assistant-db ownership of technology and IP docket
   nouns imported from Inteum, including uncertain funding assertions and source
   deadlines; keep resulting filing-decision work in project-manager.
