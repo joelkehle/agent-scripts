@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Walkthrough"
+  short_description: "Run clean human-AI product design reviews"
+  default_prompt: "Use $design-walkthrough to prepare and facilitate a clean product design walkthrough."

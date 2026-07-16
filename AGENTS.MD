@@ -103,6 +103,7 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## Coding Loops
 - Shared loop model: `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
 - Prefer durable skills over long repeated prompts. Skills are linked at `~/.agents/skills/` and `~/Projects/.agents/skills/`; tracked source lives under `workspace-roots/projects/.agents/skills/`.
+- For user-visible products, prototypes, dashboards, and UI walkthroughs, use the `design-walkthrough` skill. Show a clean product canvas before any reviewer annotations or design rationale; observe the user before explaining intent.
 - Use `ship-loop` for bounded implementation, `review-loop` for read/propose review, `repair-loop` for focused validation failures, `learn-loop` for durable repo lessons, and `hygiene-loop` for reducing dirty repo state in small safe batches.
 - Local write loops that reach green should usually commit before handoff. `ship-loop` commits green coherent slices by default; `hygiene-loop` commits coherent cleanup; `repair-loop` commits focused fixes inside an active write task. `review-loop` stays read/propose, and `learn-loop` proposes unless explicitly asked to write.
 - Use `loop-receipt` at the end of non-trivial loops to capture goal, checks, risks, files, and next-loop recommendation; use `loop-resume` at the next turn to feed that evidence back into context.
