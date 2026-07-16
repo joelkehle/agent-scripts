@@ -90,6 +90,9 @@ uses the documented payload fields and proves that the child receives the same
 validated capsule as the parent. After installing or changing a project hook,
 also review it in `/hooks` and run one fresh parent -> subagent smoke; an
 already-running process does not retroactively load or trust changed hook code.
+Use a normal persisted Codex thread for that proof: current
+`codex exec --ephemeral` sessions cannot start native collaborators. See
+`LIVE_PROOF.md` for the isolated end-to-end evidence.
 
 ## Portability
 

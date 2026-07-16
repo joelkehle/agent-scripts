@@ -27,6 +27,8 @@ the tracked receipt or active-marker boundary.
   adopting repository keeps.
 - `RECOVERY.md` — stuck-session recovery, incident findings, and improvement
   backlog.
+- `LIVE_PROOF.md` — isolated fresh-Codex evidence that the parent capsule reaches
+  a real subagent, plus the current noninteractive-mode caveat.
 
 ## Ownership boundary
 

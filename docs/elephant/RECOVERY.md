@@ -101,14 +101,14 @@ What failed:
 - Split receipt parsing/rendering into `elephant_contract.py` so the runtime
   entrypoint remains below the shared file-size guideline.
 
+## Live lifecycle proof
+
+An isolated fresh Codex parent -> subagent proof passed on 2026-07-16. The real
+`SubagentStart` payload used the parent session id, the shared hook returned the
+validated capsule, and the tool-free child reported the capsule-only token.
+See `LIVE_PROOF.md` for evidence and the `codex exec --ephemeral` caveat.
+
 ## Remaining backlog
-
-### P0 live proof
-
-- Run one fresh, trusted Codex parent -> subagent proof. Review `/hooks` first
-  if Codex marks the project hook definition as changed. The wire-shape
-  regression is deterministic coverage, but it cannot prove that a particular
-  running Codex process loaded the project hook configuration.
 
 ### P1
 
