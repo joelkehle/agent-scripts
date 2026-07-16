@@ -193,16 +193,25 @@ Telemetry PR checklist (required when telemetry-affecting):
 - Applies to all repos under `~/Projects`.
 - Canonical host-port inventory: `~/Projects/shared/manager/docs/services/port-allocations.md`.
 - Tailscale-facing subset: `~/Projects/shared/manager/docs/services/beelink-services.md`.
-- Current beelink runtime split:
-  - `ucla-tdg-bus`: `localhost:8080`
-  - `jk-bus`: `localhost:8081`
+- Current authority split:
+  - `ucla-tdg-bus`: `http://beelink:8080`
+  - `jk-bus`: `http://keystone:8081`
+  - Beelink `localhost:8081`: compatibility relay to Keystone during the
+    48-hour JK soak started 2026-07-15 19:15 PDT
 - `ucla-tdg-bus` is hosted by `~/Projects/ucla-tdg/ucla-tdg-ip-agents/deploy/docker-compose.yml`.
-- `jk-bus` is hosted by `~/Projects/jk/jk-email-agents/docker-compose.yml`.
+- `jk-bus` is hosted by `~/Projects/shared/keystone-infra/pinakes/docker-compose.jk.yml`.
+- The old `jk-email-agents` bus container is stopped, disconnected, and
+  restart-disabled. Do not run the whole JK Compose stack during the soak;
+  preserve the Beelink relay on port `8081`.
 - Check `port-allocations.md` before assuming a bus URL or changing host ports.
 - Bus container runs in `~/Projects/ucla-tdg/ucla-tdg-ip-agents/deploy/docker-compose.yml` (will move to `~/Projects/shared/pinakes/deploy/` in a future fix).
-- Three agent stacks share one bus: `ucla-tdg-ip-agents`, `jk-email-agents`, `ucla-tdg-email-triage`. All connect to the same Docker network (`tta-agentnet`).
-- Agent allowlist: source of truth is `~/Projects/shared/manager/ops/config/allowlist.txt`. Bind-mounted into the bus container as `/etc/pinakes/allowlist.txt`. Bus hot-reloads on file change — no restart needed to add agents.
-- To add a new agent: add its ID to `allowlist.txt`, commit in manager. Bus picks it up automatically.
+- UCLA agent stacks use the Beelink bus on `tta-agentnet`. JK agent stacks use
+  the Keystone authority through the Beelink compatibility relay attached to
+  `jk-email-agents_default` with alias `bus`.
+- Agent allowlist source of truth: `~/Projects/shared/manager/ops/config/allowlist.txt`.
+  UCLA hot-reloads the bind-mounted manager config. Keystone uses a staged
+  copy; defer JK allowlist changes during the 48-hour soak unless the Keystone
+  copy is explicitly synchronized and verified.
 - Agent registration: agents heartbeat every 60s. If the bus restarts, agents re-register on next heartbeat. No manual intervention needed.
 - Bus protocol: HTTP + HMAC-SHA256 signatures. See `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md`.
 - Ops page: `techtransfer.agency/ops` shows all registered agents, bus health, and submission status.
@@ -225,7 +234,9 @@ Telemetry PR checklist (required when telemetry-affecting):
 - New persistent store (table/schema/file family): conform to `docs/STATE_ARCHITECTURE.md` first; new stores require a same-commit doc update there.
 - Do not rebuild an existing bus-backed service/agent locally without explicit user approval.
 - If bus reuse is not viable, say why before implementing new agent/service logic.
-- When adding a new agent to any stack: add the agent ID to the allowlist file, add the agent to the stack's docker-compose.yml, and ensure it connects to the `tta-agentnet` network.
+- When adding a new agent: add its ID to the allowlist and its stack Compose.
+  Use `tta-agentnet` for UCLA; preserve the existing JK relay path during the
+  soak. Do not assume the two domains share a Docker network.
 - Do NOT put the allowlist in a Docker volume. It lives in `shared/manager/ops/config/` so it's git-tracked and auditable.
 - Mount the config directory, not the file: `shared/manager/ops/config:/etc/pinakes:ro`. File-level mounts break fsnotify on atomic renames.
 

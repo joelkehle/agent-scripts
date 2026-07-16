@@ -124,7 +124,9 @@ scripts/infisical-run.sh --env=dev --path=/mock -- <cmd>
 ### Services on Beelink (Tailscale-accessible from laptop)
 
 Canonical host-port source of truth: `~/Projects/shared/manager/docs/services/port-allocations.md`.
-Current bus note: UCLA uses `http://beelink:8080`; JK uses `http://beelink:8081`.
+Current bus note: UCLA authority is `http://beelink:8080`; JK authority is
+`http://keystone:8081`. Beelink `:8081` is a compatibility relay during the JK
+48-hour soak started 2026-07-15 19:15 PDT.
 
 | Service | URL | Auth | Status |
 |---------|-----|------|--------|
@@ -208,8 +210,9 @@ cd ~/Projects/ucla-tdg/ucla-tdg-ip-agents
 export ANTHROPIC_API_KEY=... PATENT_SCREEN_AGENT_SECRET=...
 go run ./cmd/patent-screen --bus-url http://localhost:8080 --agent-id patent-screen
 
-# Email Agents (shares the pinakes bus from ucla-tdg-ip-agents)
-cd ~/Projects/jk/jk-email-agents && docker compose up -d
+# JK email agents use the Keystone authority through the Beelink relay.
+# During the 48-hour soak, do not run the whole Compose stack: it still contains
+# the stopped legacy bus service.
 # Creds in .env (gitignored). Gmail OAuth for joel@kehle.com.
 ```
 
