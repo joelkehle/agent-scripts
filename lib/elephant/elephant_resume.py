@@ -16,10 +16,18 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Any
 
+from elephant_contract import (
+    CapsuleError,
+    contained_file,
+    git,
+    parse_receipt,
+    render_context,
+)
 from elephant_traceability import (
     TraceabilityError,
     attach_active_contract,
@@ -28,16 +36,13 @@ from elephant_traceability import (
 )
 
 
-MAX_CONTEXT_BYTES = 4096
-MAX_RECEIPT_BYTES = 128 * 1024
-MAX_CONDITIONS = 12
-MAX_CONDITION_CHARS = 360
 COMPACTION_WINDOW_SECONDS = 10 * 60
 MAX_COMPACTIONS_PER_WINDOW = 3
-
-
-class CapsuleError(RuntimeError):
-    """A deterministic capsule invariant failed."""
+CONTRACT_CHANGE_MESSAGES = (
+    "changed after capsule creation",
+    "active capsule is stale",
+    "points to a different receipt",
+)
 
 
 def utc_now() -> dt.datetime:
@@ -56,15 +61,15 @@ def state_root() -> Path:
     return codex_home / "hook-state" / "elephant-resume"
 
 
-def session_id(payload: dict[str, Any] | None = None) -> str:
+def session_value(payload: dict[str, Any] | None = None) -> str:
     payload = payload or {}
     candidates = [
-        os.environ.get("CODEX_THREAD_ID"),
-        os.environ.get("CODEX_SESSION_ID"),
         payload.get("session_id"),
         payload.get("sessionId"),
         payload.get("thread_id"),
         payload.get("threadId"),
+        os.environ.get("CODEX_THREAD_ID"),
+        os.environ.get("CODEX_SESSION_ID"),
     ]
     value = next((str(item).strip() for item in candidates if item), "")
     if not value:
@@ -78,20 +83,17 @@ def session_id(payload: dict[str, Any] | None = None) -> str:
             value = match.group(1)
     if not value:
         raise CapsuleError("Codex session id is unavailable")
-    return hashlib.sha256(value.encode()).hexdigest()
+    if len(value) > 256 or not value.isprintable():
+        raise CapsuleError("Codex session id is invalid")
+    return value
+
+
+def session_id(payload: dict[str, Any] | None = None) -> str:
+    return hashlib.sha256(session_value(payload).encode()).hexdigest()
 
 
 def state_path(payload: dict[str, Any] | None = None) -> Path:
     return state_root() / f"{session_id(payload)}.json"
-
-
-def git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(root), *args],
-        check=check,
-        capture_output=True,
-        text=True,
-    )
 
 
 def git_root(cwd: Path | None = None) -> Path:
@@ -106,123 +108,6 @@ def git_root(cwd: Path | None = None) -> Path:
     return Path(result.stdout.strip()).resolve()
 
 
-def contained_file(root: Path, value: str | Path) -> Path:
-    candidate = Path(value)
-    if not candidate.is_absolute():
-        candidate = Path.cwd() / candidate
-    resolved = candidate.resolve(strict=True)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise CapsuleError("receipt must remain inside the current Git worktree") from exc
-    if not resolved.is_file():
-        raise CapsuleError("receipt is not a regular file")
-    return resolved
-
-
-def read_receipt(path: Path) -> tuple[str, str]:
-    size = path.stat().st_size
-    if size > MAX_RECEIPT_BYTES:
-        raise CapsuleError(f"receipt exceeds {MAX_RECEIPT_BYTES} bytes")
-    raw = path.read_bytes()
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise CapsuleError("receipt must be UTF-8") from exc
-    return text, hashlib.sha256(raw).hexdigest()
-
-
-def strip_markdown(value: str) -> str:
-    value = value.replace("`", "").replace("**", "")
-    return " ".join(value.split())
-
-
-def required_match(pattern: str, text: str, label: str) -> re.Match[str]:
-    match = re.search(pattern, text, flags=re.MULTILINE)
-    if not match:
-        raise CapsuleError(f"receipt is missing {label}")
-    return match
-
-
-def section(text: str, heading: str) -> str:
-    marker = f"## {heading}"
-    start = text.find(marker)
-    if start < 0:
-        raise CapsuleError(f"receipt is missing section: {heading}")
-    body_start = start + len(marker)
-    next_heading = text.find("\n## ", body_start)
-    return text[body_start : next_heading if next_heading >= 0 else len(text)].strip()
-
-
-def parse_conditions(text: str) -> list[dict[str, str]]:
-    body = section(text, "Findings and required conditions")
-    matches = list(
-        re.finditer(
-            r"(?ms)^\d+\.\s+\*\*(?P<label>.+?)\*\*\s*(?P<body>.*?)(?=^\d+\.\s+\*\*|\Z)",
-            body,
-        )
-    )
-    if not matches:
-        raise CapsuleError("receipt has no numbered binding conditions")
-    if len(matches) > MAX_CONDITIONS:
-        raise CapsuleError(f"receipt has more than {MAX_CONDITIONS} binding conditions")
-
-    conditions: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for match in matches:
-        label = strip_markdown(match.group("label"))
-        id_match = re.search(r"\bEC-\d+\b", label)
-        if not id_match:
-            raise CapsuleError(f"binding condition lacks an EC-n id: {label}")
-        condition_id = id_match.group(0)
-        if condition_id in seen:
-            raise CapsuleError(f"duplicate binding condition id: {condition_id}")
-        seen.add(condition_id)
-        description = strip_markdown(f"{label} {match.group('body')}")
-        if len(description) > MAX_CONDITION_CHARS:
-            raise CapsuleError(
-                f"{condition_id} exceeds the {MAX_CONDITION_CHARS}-character capsule limit"
-            )
-        conditions.append({"id": condition_id, "text": description})
-    return conditions
-
-
-def first_paragraph(text: str, heading: str) -> str:
-    body = section(text, heading)
-    paragraph = body.split("\n\n", 1)[0]
-    return strip_markdown(paragraph)
-
-
-def parse_receipt(root: Path, receipt: Path) -> dict[str, Any]:
-    text, digest = read_receipt(receipt)
-    title = strip_markdown(
-        required_match(r"^# Elephant Check:\s*(.+)$", text, "Elephant Check title").group(1)
-    )
-    status = strip_markdown(required_match(r"^Status:\s*(.+)$", text, "status").group(1))
-    revision_line = required_match(
-        r"^Checked (?:code )?revision(?:/runtime)?:\s*(.+)$",
-        text,
-        "checked revision",
-    ).group(1)
-    revision_match = re.search(r"`([^`]+)`", revision_line)
-    revision = revision_match.group(1) if revision_match else revision_line.split()[0]
-    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", revision):
-        raise CapsuleError("checked revision must be an immutable Git commit id")
-    if git(root, "cat-file", "-e", f"{revision}^{{commit}}", check=False).returncode != 0:
-        raise CapsuleError(f"checked revision does not resolve: {revision}")
-
-    return {
-        "schema": 1,
-        "objective": title,
-        "status": status,
-        "checked_revision": revision,
-        "receipt": str(receipt.relative_to(root)),
-        "receipt_sha256": digest,
-        "conditions": parse_conditions(text),
-        "next_action": first_paragraph(text, "Handoff and stop rule"),
-    }
-
-
 def capsule_from_active_marker(
     root: Path,
     active: tuple[dict[str, Any], str],
@@ -234,42 +119,6 @@ def capsule_from_active_marker(
     capsule["activated_at"] = isoformat(utc_now())
     capsule["recent_compactions"] = []
     return attach_active_contract(root, capsule, active)
-
-
-def render_context(capsule: dict[str, Any]) -> str:
-    lines = [
-        "ELEPHANT RESUME CAPSULE (deterministically validated)",
-        f"Objective: {capsule['objective']}",
-        f"Status: {capsule['status']}",
-        f"Receipt: {capsule['receipt']} (sha256 {capsule['receipt_sha256'][:12]})",
-        f"Checked revision: {capsule['checked_revision']}",
-        "Binding conditions:",
-    ]
-    lines.extend(f"- {item['text']}" for item in capsule["conditions"])
-    lines.extend(
-        [
-            *(
-                [
-                    "Traceability: "
-                    f"{capsule['traceability']['overall_status']} "
-                    f"({capsule['traceability']['passed']}/{capsule['traceability']['total']} EC conditions pass) "
-                    f"at {capsule['traceability']['path']}"
-                ]
-                if capsule.get("traceability")
-                else []
-            ),
-            f"Next action: {capsule['next_action']}",
-            "Resume protocol: treat every EC condition as binding; re-open the receipt "
-            "before changing architecture or claiming completion. Revalidate with "
-            "`python3 .codex/hooks/elephant_resume.py show` before delegating. This capsule "
-            "restores constraints; it does not grant deployment or external-write authority.",
-        ]
-    )
-    rendered = "\n".join(lines)
-    size = len(rendered.encode("utf-8"))
-    if size > MAX_CONTEXT_BYTES:
-        raise CapsuleError(f"rendered capsule is {size} bytes; limit is {MAX_CONTEXT_BYTES}")
-    return rendered
 
 
 def save_state(capsule: dict[str, Any], hook_payload: dict[str, Any] | None = None) -> None:
@@ -394,6 +243,31 @@ def activate(receipt_value: str) -> int:
     return 0
 
 
+def refresh(target_session_id: str, accept_current_contract: bool) -> int:
+    if not accept_current_contract:
+        raise CapsuleError(
+            "refresh requires --accept-current-contract after reviewing the current "
+            "marker, receipt, and traceability map"
+        )
+    payload = {"session_id": session_value({"session_id": target_session_id})}
+    root = git_root()
+    active = load_active_marker(root)
+    if active is None:
+        raise CapsuleError("no active Elephant marker exists")
+    capsule = capsule_from_active_marker(root, active)
+    context = render_context(capsule)
+    save_state(capsule, payload)
+    summary = capsule["traceability"]
+    print(f"Elephant resume refreshed for {capsule['receipt']}")
+    print(f"session_state={state_path(payload)}")
+    print(
+        f"traceability={summary['overall_status']} "
+        f"passed={summary['passed']}/{summary['total']}"
+    )
+    print(f"context_bytes={len(context.encode('utf-8'))}")
+    return 0
+
+
 def deactivate() -> int:
     path = state_path()
     if path.exists():
@@ -414,16 +288,44 @@ def hook_response(event_name: str, context: str) -> dict[str, Any]:
     }
 
 
-def stopped_response(message: str) -> dict[str, Any]:
+def recovery_guidance(
+    payload: dict[str, Any],
+    capsule: dict[str, Any] | None,
+    message: str,
+) -> str:
+    if capsule is None or not any(value in message for value in CONTRACT_CHANGE_MESSAGES):
+        return ""
+    try:
+        target = shlex.quote(session_value(payload))
+    except CapsuleError:
+        return ""
+    receipt = capsule.get("receipt", "unknown")
+    return "\n".join(
+        [
+            f"Stored Elephant receipt: {receipt}",
+            f"Inspect: elephant-resume status --session-id {target}",
+            "After confirming the current contract changes are intentional, refresh:",
+            f"elephant-resume refresh --session-id {target} --accept-current-contract",
+            "Otherwise reconcile the tracked contract; do not refresh blindly.",
+        ]
+    )
+
+
+def stopped_response(message: str, guidance: str = "") -> dict[str, Any]:
+    warning = f"Elephant resume blocked: {message}"
+    if guidance:
+        warning = f"{warning}\n{guidance}"
     return {
         "continue": False,
         "stopReason": f"Elephant resume blocked: {message}",
-        "systemMessage": f"Elephant resume blocked: {message}",
+        "systemMessage": warning,
     }
 
 
-def blocked_subagent_response(message: str) -> dict[str, Any]:
+def blocked_subagent_response(message: str, guidance: str = "") -> dict[str, Any]:
     warning = f"Elephant resume blocked: {message}"
+    if guidance:
+        warning = f"{warning}\n{guidance}"
     context = "\n".join(
         [
             "ELEPHANT SUBAGENT BLOCKED (contract validation failed)",
@@ -447,6 +349,7 @@ def blocked_subagent_response(message: str) -> dict[str, Any]:
 
 def run_hook() -> int:
     payload: dict[str, Any] = {}
+    capsule: dict[str, Any] | None = None
     try:
         loaded = json.load(sys.stdin)
         if not isinstance(loaded, dict):
@@ -475,20 +378,25 @@ def run_hook() -> int:
         return 0
     except (CapsuleError, TraceabilityError, json.JSONDecodeError, OSError) as exc:
         event_name = str(payload.get("hook_event_name", ""))
+        if capsule is None:
+            try:
+                capsule = load_state(payload)
+            except (CapsuleError, OSError):
+                pass
+        guidance = recovery_guidance(payload, capsule, str(exc))
         response = (
-            blocked_subagent_response(str(exc))
+            blocked_subagent_response(str(exc), guidance)
             if event_name == "SubagentStart"
-            else stopped_response(str(exc))
+            else stopped_response(str(exc), guidance)
         )
         print(json.dumps(response))
         return 0
 
 
-def show() -> int:
-    payload = {
-        "session_id": os.environ.get("CODEX_THREAD_ID", ""),
-        "cwd": str(Path.cwd()),
-    }
+def show(target_session_id: str | None = None) -> int:
+    payload = {"cwd": str(Path.cwd())}
+    if target_session_id:
+        payload["session_id"] = target_session_id
     capsule = load_state(payload)
     if capsule is None:
         print("Elephant resume is not active for this session")
@@ -497,23 +405,76 @@ def show() -> int:
     return 0
 
 
+def traceability_status(summary: dict[str, Any]) -> str:
+    return (
+        f"{summary['overall_status']} "
+        f"passed={summary['passed']}/{summary['total']}"
+    )
+
+
+def status(target_session_id: str | None = None) -> int:
+    root = git_root()
+    active = load_active_marker(root)
+    current: dict[str, Any] | None = None
+    if active is None:
+        print("marker=inactive")
+    else:
+        current = capsule_from_active_marker(root, active)
+        print("marker=active")
+        print(f"receipt={current['receipt']}")
+        print(f"current_traceability={traceability_status(current['traceability'])}")
+
+    target = target_session_id
+    if target is None:
+        target = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    if not target:
+        print("capsule=not_checked reason=session-id-unavailable")
+        return 0
+
+    payload = {"session_id": session_value({"session_id": target}), "cwd": str(root)}
+    capsule = load_state(payload)
+    if capsule is None:
+        print("capsule=missing")
+        return 1 if active is not None else 0
+    if capsule.get("traceability"):
+        print(f"stored_traceability={traceability_status(capsule['traceability'])}")
+    try:
+        validate(capsule, payload)
+    except (CapsuleError, TraceabilityError, OSError, subprocess.SubprocessError) as exc:
+        print("capsule=stale")
+        print(f"reason={exc}")
+        return 1
+    print("capsule=fresh")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     activate_parser = subparsers.add_parser("activate")
     activate_parser.add_argument("--receipt", required=True)
+    refresh_parser = subparsers.add_parser("refresh")
+    refresh_parser.add_argument("--session-id", required=True)
+    refresh_parser.add_argument("--accept-current-contract", action="store_true")
     subparsers.add_parser("deactivate")
-    subparsers.add_parser("show")
+    show_parser = subparsers.add_parser("show")
+    show_parser.add_argument("--session-id")
+    status_parser = subparsers.add_parser("status")
+    status_parser.add_argument("--session-id")
     subparsers.add_parser("hook")
     args = parser.parse_args()
 
     try:
         if args.command == "activate":
             return activate(args.receipt)
+        if args.command == "refresh":
+            return refresh(args.session_id, args.accept_current_contract)
         if args.command == "deactivate":
             return deactivate()
         if args.command == "show":
-            return show()
+            return show(args.session_id)
+        if args.command == "status":
+            return status(args.session_id)
         return run_hook()
     except (CapsuleError, TraceabilityError, OSError, subprocess.SubprocessError) as exc:
         print(f"elephant-resume: {exc}", file=sys.stderr)

@@ -78,9 +78,8 @@ enough to load on every lifecycle event.
 
 With that marker present, repo-local Codex hooks automatically create the
 session capsule on startup, resume, clear, and compaction. No remembered setup
-command is required. Manual activation remains available to refresh the current
-session after an intentional receipt or traceability edit, or for a receipt
-that has no tracked active marker:
+command is required. Manual activation remains available for a receipt that has
+no tracked active marker:
 
 Codex does not retroactively add a newly installed project hook to an already
 running parent process. On first install or after a hook-definition change,
@@ -92,6 +91,18 @@ a parent that predates the hook is not a valid propagation test.
 python3 .codex/hooks/elephant_resume.py activate \
   --receipt docs/elephant-checks/<receipt>.md
 ```
+
+After an intentional marker, receipt, or traceability change, inspect and
+refresh only the affected thread:
+
+```bash
+elephant-resume status --session-id <thread-id>
+elephant-resume refresh --session-id <thread-id> --accept-current-contract
+elephant-resume status --session-id <thread-id>
+```
+
+The acceptance flag is mandatory. If the change was not expected, reconcile
+the tracked contract instead of refreshing it.
 
 The hooks validate the receipt before compaction and restore a session-scoped
 context capsule after every supported session lifecycle event and subagent

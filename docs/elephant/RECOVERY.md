@@ -35,19 +35,31 @@ Codex:
    diff, and the session projection under
    `~/.codex/hook-state/elephant-resume/`.
 3. Confirm the change was intentional and the receipt still authorizes it.
-4. From the governed repo root, refresh only that thread:
+4. From the governed repo root, inspect the current contract against that
+   thread's stored capsule:
 
 ```bash
-CODEX_THREAD_ID=<thread-id> elephant-resume activate \
-  --receipt docs/elephant-checks/<receipt>.md
-CODEX_THREAD_ID=<thread-id> elephant-resume show
+elephant-resume status --session-id <thread-id>
 ```
 
-5. Resubmit the interrupted turn.
-6. Verify that compaction completes and SessionStart injects a validated capsule.
+5. Only after confirming that the marker, receipt, and traceability changes are
+   intentional, refresh that exact thread and verify freshness:
+
+```bash
+elephant-resume refresh --session-id <thread-id> --accept-current-contract
+elephant-resume status --session-id <thread-id>
+```
+
+6. Resubmit the interrupted turn.
+7. Verify that compaction completes and SessionStart injects a validated capsule.
 
 If the marker or receipt changed unexpectedly, stop and reconcile the tracked
-contract instead of running activation.
+contract instead of running refresh. The acceptance flag is deliberately
+required; it requires an explicit operator decision instead of automatic trust.
+
+Changed-contract hook warnings now include the stored receipt plus copyable
+thread-scoped `status` and `refresh` commands. The stop reason stays concise so
+Codex can still classify the failure deterministically.
 
 ## July 2026 incident
 
@@ -73,31 +85,36 @@ What failed:
   despite the isolated parent/subagent propagation test passing;
 - `EC` was used without an explicit expansion.
 
-## Improvement backlog
+## Hardened after the incident
 
-### P0
+- Added first-class external `refresh --session-id` with mandatory
+  `--accept-current-contract`.
+- Added actionable changed-contract warnings with the stored receipt and exact
+  recovery commands.
+- Added `status --session-id`, including stored versus current EC pass counts
+  and a `fresh`, `stale`, or `missing` capsule result.
+- Added regression coverage for changed traceability -> PreCompact block ->
+  explicit external refresh -> successful compact SessionStart.
+- Added a regression using the documented Codex `SubagentStart` wire shape:
+  parent `session_id`, `turn_id`, `agent_id`, `agent_type`, model, permission
+  mode, nullable transcript path, and worktree.
+- Split receipt parsing/rendering into `elephant_contract.py` so the runtime
+  entrypoint remains below the shared file-size guideline.
 
-- Add a first-class external `refresh --session-id <id>` command or equivalent
-  safe interface.
-- Include the governed receipt and a copyable recovery command in changed-map
-  stop output.
-- Keep a regression test for changed traceability -> block -> explicit refresh
-  -> successful SessionStart/PreCompact.
-- Capture the real Codex `SubagentStart` payload and add a live-shape regression
-  for parent capsule propagation; isolated synthetic payload coverage is not
-  sufficient.
+## Remaining backlog
+
+### P0 live proof
+
+- Run one fresh, trusted Codex parent -> subagent proof. Review `/hooks` first
+  if Codex marks the project hook definition as changed. The wire-shape
+  regression is deterministic coverage, but it cannot prove that a particular
+  running Codex process loaded the project hook configuration.
 
 ### P1
 
-- Show stored versus current traceability summaries in diagnostics without
-  dumping internal paths or unrelated state.
-- Require an explicit capsule refresh immediately after intentional receipt or
-  traceability edits.
 - Add a short known-issues entry whenever an Elephant failure needs out-of-band
   recovery.
 
 ### P2
 
 - Evaluate packaging for repositories outside Joel's managed workspace.
-- Add a small status command that reports active receipt, EC pass count, and
-  whether the current session capsule is fresh.

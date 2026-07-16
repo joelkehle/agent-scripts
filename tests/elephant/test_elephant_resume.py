@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "lib" / "elephant" / "elephant_resume.py"
 TRACE_SCRIPT = REPO_ROOT / "lib" / "elephant" / "elephant_traceability.py"
 THREAD_ID = "019f6965-0a89-7052-95ec-bb1ea43fc8e6"
+SECOND_THREAD_ID = "019f6b5c-a59b-74f1-9f66-51e64c06473e"
 
 
 def receipt(revision: str, condition_body: str = "Keep every goal generic and source-bound.") -> str:
@@ -216,6 +217,37 @@ class ElephantResumeTest(unittest.TestCase):
             self.assertEqual(response["hookSpecificOutput"]["hookEventName"], "SubagentStart")
             self.assertEqual(response["hookSpecificOutput"]["additionalContext"], parent_context)
 
+    def test_documented_subagent_start_payload_uses_parent_session(self) -> None:
+        self.write_active_contract()
+        common = {
+            "session_id": THREAD_ID,
+            "transcript_path": None,
+            "cwd": str(self.repo),
+            "model": "gpt-5.2",
+            "permission_mode": "bypassPermissions",
+        }
+        parent_payload = {
+            **common,
+            "hook_event_name": "SessionStart",
+            "source": "startup",
+        }
+        parent = self.run_script("hook", payload=parent_payload, include_thread_env=False)
+        parent_response = json.loads(parent.stdout)
+        subagent_payload = {
+            **common,
+            "hook_event_name": "SubagentStart",
+            "turn_id": "turn-test",
+            "agent_id": "agent-test",
+            "agent_type": "default",
+        }
+        subagent = self.run_script("hook", payload=subagent_payload, include_thread_env=False)
+        subagent_response = json.loads(subagent.stdout)
+        self.assertTrue(subagent_response["continue"])
+        self.assertEqual(
+            subagent_response["hookSpecificOutput"]["additionalContext"],
+            parent_response["hookSpecificOutput"]["additionalContext"],
+        )
+
     def test_invalid_subagent_receives_blocking_context(self) -> None:
         self.assertEqual(self.activate().returncode, 0)
         (self.repo / "receipt.md").write_text(receipt(self.revision, "Changed after activation."))
@@ -310,11 +342,104 @@ class ElephantResumeTest(unittest.TestCase):
         self.assertFalse(stale["continue"])
         self.assertIn("traceability map changed", stale["stopReason"])
 
-        refreshed = self.activate()
+        refreshed = self.run_script(
+            "refresh",
+            "--session-id",
+            THREAD_ID,
+            "--accept-current-contract",
+            include_thread_env=False,
+        )
         self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+        self.assertIn("Elephant resume refreshed", refreshed.stdout)
         compacted = json.loads(self.hook("SessionStart", source="compact").stdout)
         self.assertTrue(compacted["continue"])
         self.assertIn("ELEPHANT RESUME CAPSULE", compacted["hookSpecificOutput"]["additionalContext"])
+
+    def test_changed_contract_stop_includes_external_recovery_commands(self) -> None:
+        self.write_active_contract()
+        self.assertTrue(json.loads(self.hook("SessionStart", source="startup").stdout)["continue"])
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["proof"] = ["pending:intentional-change"]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        response = json.loads(self.hook("PreCompact").stdout)
+        warning = response["systemMessage"]
+        self.assertFalse(response["continue"])
+        self.assertIn("Stored Elephant receipt: receipt.md", warning)
+        self.assertIn(f"elephant-resume status --session-id {THREAD_ID}", warning)
+        self.assertIn(
+            f"elephant-resume refresh --session-id {THREAD_ID} --accept-current-contract",
+            warning,
+        )
+        self.assertIn("do not refresh blindly", warning)
+
+    def test_external_refresh_requires_explicit_contract_acceptance(self) -> None:
+        self.write_active_contract()
+        result = self.run_script(
+            "refresh",
+            "--session-id",
+            THREAD_ID,
+            include_thread_env=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires --accept-current-contract", result.stderr)
+        self.assertFalse(self.state.exists())
+
+    def test_explicit_session_id_overrides_caller_environment(self) -> None:
+        self.write_active_contract()
+        refreshed = self.run_script(
+            "refresh",
+            "--session-id",
+            SECOND_THREAD_ID,
+            "--accept-current-contract",
+        )
+        self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+        second_digest = hashlib.sha256(SECOND_THREAD_ID.encode()).hexdigest()
+        first_digest = hashlib.sha256(THREAD_ID.encode()).hexdigest()
+        self.assertTrue((self.state / f"{second_digest}.json").exists())
+        self.assertFalse((self.state / f"{first_digest}.json").exists())
+
+    def test_status_compares_stored_and_current_traceability(self) -> None:
+        self.write_active_contract()
+        self.assertTrue(json.loads(self.hook("SessionStart", source="startup").stdout)["continue"])
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["status"] = "pass"
+        trace["conditions"][0]["proof"] = ["receipt.md::verified"]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        result = self.run_script(
+            "status",
+            "--session-id",
+            THREAD_ID,
+            include_thread_env=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("receipt=receipt.md", result.stdout)
+        self.assertIn("current_traceability=in_progress passed=1/2", result.stdout)
+        self.assertIn("stored_traceability=in_progress passed=0/2", result.stdout)
+        self.assertIn("capsule=stale", result.stdout)
+
+    def test_status_reports_fresh_after_external_refresh(self) -> None:
+        self.write_active_contract()
+        refreshed = self.run_script(
+            "refresh",
+            "--session-id",
+            THREAD_ID,
+            "--accept-current-contract",
+            include_thread_env=False,
+        )
+        self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+        result = self.run_script(
+            "status",
+            "--session-id",
+            THREAD_ID,
+            include_thread_env=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("marker=active", result.stdout)
+        self.assertIn("capsule=fresh", result.stdout)
 
     def test_structure_only_accepts_pending_and_strict_rejects_it(self) -> None:
         self.write_active_contract()

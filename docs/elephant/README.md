@@ -15,6 +15,10 @@ system-level implementation anchored to the whole-system design, carries bounded
 acceptance conditions across compaction and delegation, and maps each condition
 to code, tests, and proof.
 
+Its thread-scoped runtime fails closed on contract drift, reports stored versus
+current EC status, and supports explicit out-of-band recovery without weakening
+the tracked receipt or active-marker boundary.
+
 ## Documents
 
 - `ELEPHANT_CHECK.md` — normative design, trigger, procedure, lifecycle, and
@@ -59,4 +63,3 @@ change contract state during the ownership cutover.
 `EC` means **Elephant Check**. `EC-10` is the tenth binding condition emitted
 by a specific Elephant receipt; it is not a global condition shared by every
 project.
-

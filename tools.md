@@ -75,11 +75,11 @@ Local tool catalog for this machine.
 - Examples: `loop-resume`, `loop-resume --root ~/Projects/shared/pinakes`
 
 ## elephant-resume
-- Purpose: activate, validate, restore, and clear a thread-scoped Elephant context capsule.
+- Purpose: activate, inspect, explicitly refresh, restore, and clear a thread-scoped Elephant context capsule.
 - Location: ~/Projects/shared/agent-scripts/bin/elephant-resume
 - Docs: ~/Projects/shared/agent-scripts/docs/elephant/README.md
 - Recovery: ~/Projects/shared/agent-scripts/docs/elephant/RECOVERY.md
-- Examples: `elephant-resume activate --receipt docs/elephant-checks/<receipt>.md`, `elephant-resume show`, `elephant-resume deactivate`
+- Examples: `elephant-resume status --session-id <thread-id>`, `elephant-resume refresh --session-id <thread-id> --accept-current-contract`, `elephant-resume show`, `elephant-resume deactivate`
 
 ## elephant-traceability
 - Purpose: validate the active Elephant receipt's EC-to-code/test/proof map.
