@@ -13,6 +13,8 @@ import textwrap
 import unittest
 
 
+os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "lib" / "elephant" / "elephant_resume.py"
 TRACE_SCRIPT = REPO_ROOT / "lib" / "elephant" / "elephant_traceability.py"
