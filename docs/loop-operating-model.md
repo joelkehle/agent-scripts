@@ -231,6 +231,13 @@ Move long examples, templates, domain cases, and historical notes into docs.
 
 Start with skills and validation commands. Add hooks only for deterministic guardrails.
 
+Elephant is the shared system-context and compaction-continuity guard for
+system-level work. Its canonical policy, adoption map, recovery procedure, and
+implementation live under `docs/elephant/` and `lib/elephant/`. Repositories
+keep only their active marker, receipts, traceability/proof, and minimal hook
+entrypoints. Do not fork the reusable Elephant implementation into product
+repos.
+
 Safe hook pilots:
 
 - pre-tool secret/path guard for `.env`, credentials, production config, and destructive shell commands
