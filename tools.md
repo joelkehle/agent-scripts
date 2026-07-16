@@ -1,3 +1,11 @@
+---
+summary: "On-demand catalog of local coding-agent commands, browser and desktop tools, debugging helpers, and screenshot workflows."
+read_when:
+  - "Choosing or locating a local tool mentioned by the global AGENTS router."
+  - "Using browser, desktop, audio, debugger, Oracle, tmux, screenshot, or GitHub helpers."
+  - "Updating the shared command catalog."
+---
+
 # Tools
 
 Local tool catalog for this machine.
@@ -85,3 +93,69 @@ Local tool catalog for this machine.
 - Purpose: validate the active Elephant receipt's EC-to-code/test/proof map.
 - Location: ~/Projects/shared/agent-scripts/bin/elephant-traceability
 - Examples: `elephant-traceability verify --structure-only`, `elephant-traceability verify`
+
+## browser-tools
+- Purpose: Chrome DevTools navigation, evaluation, screenshots, inspection, and
+  browser lifecycle.
+- Location: ~/Projects/shared/agent-scripts/bin/browser-tools
+- Commands: `start`, `nav`, `eval`, `screenshot`, `pick`, `cookies`, `inspect`,
+  `kill`.
+- Rebuild:
+  `bun build scripts/browser-tools.ts --compile --target bun --outfile bin/browser-tools`.
+
+## peekaboo
+- Purpose: macOS screen capture, inspection, and interaction.
+- Repo: ~/Projects/Peekaboo
+- Commands: `capture`, `see`, `click`, `list`, `tools`,
+  `permissions status`.
+- Requires Screen Recording and Accessibility permissions.
+
+## Screenshot Workflow
+- Choose the newest candidate image in `~/Desktop` or `~/Downloads` and inspect
+  it visually; filenames are not evidence.
+- Check dimensions with `identify -format "%wx%h" <file>`; prefer 2x assets.
+- Optimize PNG with `optipng` and JPEG with `jpegoptim`.
+- Preserve intended dimensions, replace the owned asset, run the local gate, and
+  verify the rendered result.
+
+## oracle
+- Purpose: bundle a prompt and files for a second-model review.
+- Before first use in a session, run `npx -y @steipete/oracle --help`.
+- Use when stuck, debugging a difficult failure, or seeking independent review.
+
+## gh
+- Purpose: GitHub issues, pull requests, comments, releases, and repository
+  metadata.
+- Given an issue or PR URL, use `gh` rather than web search.
+- Examples: `gh pr view <url> --comments --files`,
+  `gh issue view <url> --comments`.
+- GitHub Actions are not Joel's standard validation surface; use local gates.
+
+## tmux
+- Purpose: persistent or interactive jobs such as debuggers and servers.
+- Use only when persistence/interaction is necessary.
+- Examples: `tmux new -d -s agent-shell`, `tmux attach -t agent-shell`,
+  `tmux list-sessions`, `tmux kill-session -t agent-shell`.
+
+## lldb
+- Use inside tmux for native-app debugging and attachment to running processes.
+
+## mcporter, iterm, firecrawl
+- MCP launcher: `npx mcporter <server>`; inspect
+  `npx mcporter --help` first.
+- Common servers: `iterm` and `firecrawl`.
+
+## sonoscli
+- Repo/command: ~/Projects/sonoscli/bin/sonos
+- Commands: `discover`, `status`, `play`, `pause`, `stop`, `volume set`,
+  `group`.
+- SSDP fallback: pass `--ip <speaker-ip>`.
+
+## sweetistics
+- Purpose: X analytics application.
+- Repo: ~/Projects/sweetistics
+
+## Slash Commands
+- Codex: `~/.codex/prompts/`.
+- Claude Code: `~/.claude/commands/`.
+- Repo-local references may live under `docs/slash-commands/`.

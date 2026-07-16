@@ -152,12 +152,12 @@ audit_skill_dir "$workspace/.agents/skills"
 
 print_header "codex project-doc budget"
 budget="$(awk -F= '/^[[:space:]]*project_doc_max_bytes[[:space:]]*=/ { gsub(/[[:space:]]/, "", $2); print $2; exit }' "$HOME/.codex/config.toml" 2>/dev/null || true)"
-if [ -n "$budget" ] && [ "$budget" -ge 65536 ] 2>/dev/null; then
+if [ -n "$budget" ] && [ "$budget" -ge 32768 ] 2>/dev/null; then
   printf 'OK %s project_doc_max_bytes=%s\n' "$HOME/.codex/config.toml" "$budget"
 elif [ -n "$budget" ]; then
-  printf 'WARN %s project_doc_max_bytes=%s below 65536\n' "$HOME/.codex/config.toml" "$budget"
+  printf 'WARN %s project_doc_max_bytes=%s below 32768\n' "$HOME/.codex/config.toml" "$budget"
 else
-  printf 'WARN %s missing project_doc_max_bytes>=65536\n' "$HOME/.codex/config.toml"
+  printf 'WARN %s missing project_doc_max_bytes>=32768\n' "$HOME/.codex/config.toml"
 fi
 
 print_header "instruction sizes"
@@ -171,7 +171,7 @@ while IFS= read -r file; do
 
   if [ "$bytes" -gt 65536 ]; then
     status="FAIL"
-  elif [ "$bytes" -gt 30000 ]; then
+  elif [ "$bytes" -gt 16384 ]; then
     status="WARN"
   fi
 

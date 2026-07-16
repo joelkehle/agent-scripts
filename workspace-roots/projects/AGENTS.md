@@ -2,265 +2,55 @@ READ ~/Projects/shared/agent-scripts/AGENTS.MD BEFORE ANYTHING (skip if missing)
 
 # Workspace: ~/Projects
 
-This is the root workspace. It contains all of Joel's projects and infrastructure.
-When launched here, you have cross-project context. Use it for multi-repo ops, planning, and infra work.
+This layer is for cross-project navigation. Keep implementation work inside the
+owning Git repository and let its nearest `AGENTS.md` provide local commands,
+tests, and deployment rules.
 
-Loop workflows are available from `~/Projects/.agents/skills/`: use `ship-loop`, `review-loop`, `repair-loop`, `learn-loop`, and `hygiene-loop`. Use `loop-receipt` to capture loop evidence and `loop-resume` to feed it into the next turn. Shared policy lives in `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.
+## Ownership
 
-## Directory Ownership
+- `~/Projects/jk`: Joel's personal products and agents.
+- `~/Projects/ucla-tdg`: UCLA Technology Development Group products and agents.
+- `~/Projects/shared`: cross-domain capabilities, infrastructure, operations,
+  policy, and reusable tooling.
+- `~/Projects/oss`: third-party/open-source checkouts.
 
-- `~/Projects/jk`: Joel Kehle personal context.
-- `~/Projects/ucla-tdg`: Joel Kehle professional context.
-- `~/Projects/shared`: capabilities, infrastructure, docs, and services used by
-  both personal and professional contexts.
+Do not infer ownership from a bus URL, deploy host, adapter, or historical agent
+ID. Shared capabilities may serve JK, UCLA, or both.
 
-Do not infer ownership from a current bus URL, deploy host, adapter, or
-historical agent ID prefix. A shared capability may register on the JK bus, the
-UCLA bus, or both. Example: Joel's Outlook calendar plus scheduling/travel-time
-blocks are shared capabilities even though today's code and IDs still include
-`jk` and `ucla-tdg` names from their implementation history.
+## Cross-Project Routing
 
-Chief of Staff concept in development: `~/Projects/shared/brainstorm/chief-of-staff-agent.md`.
-Read it before planning or building anything that answers "what should Joel do today",
-combines email/deals/IP Agency/PM/calendar priorities, or risks duplicating the daily
-command-brief role.
+- Current project/capability map:
+  `~/Projects/shared/brainstorm/project-capability-index.md`.
+- Fleet, hosts, services, ports, DNS, and monitoring:
+  `~/Projects/shared/manager/docs/`.
+- Human host notebooks and released machine state:
+  `~/Projects/shared/operations/`; agents must follow the global read/write
+  boundary before using it.
+- Coding-agent loops and shared instructions:
+  `~/Projects/shared/agent-scripts/docs/instruction-architecture.md`.
+- Live bus capabilities: run `bus-discover`, then read
+  `~/Projects/shared/agent-scripts/docs/bus-discovery.md`.
+- Cross-host/overlapping coding work:
+  `~/Projects/shared/agent-scripts/docs/shared-agent-coordination.md`.
 
-Joel Inc collective-intelligence north star:
-`~/Projects/shared/brainstorm/collective-intelligence-north-star.md`. Read it before
-designing intake, routing, content-buffer, subconscious-processing, or cross-agent
-prioritization workflows. The system goal is converting environmental signal into
-better collective action using the optimal processor under bounded resources.
+Before work that prioritizes environmental signal, intake, routing, background
+processing, or cross-agent attention, read
+`~/Projects/shared/brainstorm/collective-intelligence-north-star.md`.
+Before work that answers “what should Joel do today?”, read
+`~/Projects/shared/brainstorm/chief-of-staff-agent.md`.
 
-## Project Inventory
+## Cross-Repo Work
 
-### Core Platform
-
-| Project | Type | Lang/Runtime | Deploy | Status |
-|---------|------|-------------|--------|--------|
-| **ucla-tdg-assistant-db** | SaaS — email triage + project mgmt for UCLA TDG | TS/Next.js 15, React 19 | Vercel + Supabase | Production |
-| **pinakes** | Reusable agent bus — HTTP+SSE message routing + Go client SDK | Go | Docker / local binary | Active |
-| **ucla-tdg-ip-agents** | SME agents — patent-screen, prior-art-search | Go | Docker → bus | Active |
-| **jk-email-agents** | Personal email processing — per-sender agents on pinakes bus | Go | Docker → shared bus | Active |
-
-### Infrastructure & Config
-
-| Project | Purpose |
-|---------|---------|
-| **agent-scripts** | Master AGENTS.MD, tools (committer, trash), collaboration patterns |
-| **calendar-agents** | Shared Outlook calendar read/write, scheduler/travel runtime, and contracts for personal + professional workflows |
-| **manager** | Fleet control plane: host provisioning, compliance, monitoring, DNS/service inventory |
-| **operations** | Per-host notebooks plus intent/manifests/waivers/observations for machine state |
-| **workbench** (dir: `shared/workbench`) | Dev portal — launch/manage agent terminals per project (Go + SQLite + xterm.js) |
-| **brainstorm** | Roadmap, project scoring, tool inventory, planning docs |
-| **AgentCoord** | NAS-backed coordination layer for Codex / Claude Code claims, handoffs, patches, proof packs |
-
-### TDG Variants (support surfaces around `ucla-tdg-assistant-db`)
-
-| Repo | Role |
-|------|------|
-| **ucla-tdg-assistant-db-nightly** | Dedicated staging automation checkout; active host nightly timer runs here on `staging` |
-| **worktrees/ucla-tdg-assistant-db-release-lane** | Parked `ucla-tdg-assistant-db` worktree for release prep / validation |
-
-### Inactive
-
-- **agent-scripts-steipete-backup** — archive; reference only
-- **tdg-assistant-staging-runner** — archived salvage checkout; superseded by `ucla-tdg-assistant-db-nightly` for live staging automation
-- **techtransfer-agency** — archived legacy bus/operator repo; local copy lives in `~/Projects/archive/techtransfer-agency`
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────┐
-│         ucla-tdg-assistant-db                 │
-│  Next.js 15 · Supabase · Anthropic Claude    │
-│  Email intake → triage → project routing     │
-└──────────────────┬──────────────────────────┘
-                   │ (future integration)
-┌──────────────────▼──────────────────────────┐
-│           pinakes (shared bus)               │
-│  Go · HTTP+SSE · HMAC-SHA256 auth            │
-│  Agent registration · message routing        │
-└──┬────────────┬────────────┬────────────────┘
-   │            │            │
-┌──▼─────────┐ ┌▼──────────┐ ┌▼──────────────┐
-│patent-screen│ │prior-art  │ │jk-email-agents│
-│(Go agent)  │ │search (Go)│ │ gmail-ingest  │
-└────────────┘ └───────────┘ │ polsia-agent  │
-                             │ travel-agent  │
-                             │ email-operator│
-                             └───────────────┘
-```
-
-## Key Infrastructure Details
-
-### Environments (`ucla-tdg-assistant-db`)
-
-| Env | DB | Secrets Path | Command |
-|-----|----|-------------|---------|
-| mock | None (mocked) | `/mock` | `npm run dev` |
-| local | Local Supabase | `/local` | `npm run dev:local` |
-| staging | Supabase `riceuuhoisqqgzqbkewm` | staging | `npm run dev:staging` |
-| prod | Production Supabase | prod | `npm run dev:prod` |
-
-### Secrets: Infisical (not .env.local)
-
-```bash
-# Login
-infisical login --domain https://app.infisical.com/api
-# Run with secrets
-scripts/infisical-run.sh --env=dev --path=/mock -- <cmd>
-```
-
-### Hosts (from manager)
-
-- **beelink** — primary dev machine (this machine when on Linux)
-  - Tailscale IP: `100.110.64.120`
-  - MagicDNS: `beelink`
-- **macmini** — secondary host
-- **laptop** (Surface/WSL) — access from beelink: `ssh -p 2222 joelkehle@laptop`
-- Fleet bootstrap: `~/Projects/shared/manager/bin/bootstrap.sh`
-- Host details: `~/Projects/shared/manager/docs/infra/hosts.md`
-
-### Services on Beelink (Tailscale-accessible from laptop)
-
-Canonical host-port source of truth: `~/Projects/shared/manager/docs/services/port-allocations.md`.
-Current bus note: UCLA authority is `http://beelink:8080`; JK authority is
-`http://keystone:8081`. Beelink `:8081` is a compatibility relay during the JK
-48-hour soak started 2026-07-15 19:15 PDT.
-
-| Service | URL | Auth | Status |
-|---------|-----|------|--------|
-| **UCLA TDG Operator UI** | `http://beelink:3000` | App auth | Active (`ucla-tdg/ucla-tdg-ip-agents/deploy/`) |
-| **Langfuse** | `http://beelink:3010` | App login | Active |
-| **Workbench** (dev portal) | `http://beelink:8090` | Bearer token (`WORKBENCH_API_TOKEN`) | Prototype |
-| **Dev Dashboard** | `http://beelink:8091` | App auth | Active |
-| **Grafana** (ops portal) | `http://beelink:3400` | Admin login (`shared/manager/ops/.env`) | Active (`shared/manager/ops/`) |
-| **Prometheus** | `http://beelink:9095` | None (internal) | Active (`shared/manager/ops/`) |
-| **Ops Exporter** | `http://beelink:9808` | None | Active (`manager/ops/`) |
-| **gmail-ingest** | `http://beelink:8201` | HMAC (bus) | Active (`jk/jk-email-agents/`) |
-| **polsia-agent** | `http://beelink:8202` | HMAC (bus) | Active (`jk/jk-email-agents/`) |
-| **travel-agent** | `http://beelink:8203` | HMAC (bus) | Active (`jk/jk-email-agents/`) |
-| **email-operator** | `http://beelink:8205` | None | Active (`jk/jk-email-agents/`) |
-
-All services bind `0.0.0.0` when exposed. No public internet access — Tailscale only.
-
-### Ops Portal API Access (for agents)
-
-Credentials in `~/Projects/shared/manager/ops/.env` (gitignored). Read the file to get tokens.
-
-```bash
-# Grafana API (needs agent token from .env GRAFANA_AGENT_TOKEN)
-TOKEN=$(grep GRAFANA_AGENT_TOKEN ~/Projects/shared/manager/ops/.env | cut -d= -f2)
-curl -H "Authorization: Bearer $TOKEN" http://localhost:3400/api/dashboards/uid/tdg-ops-overview
-
-# Prometheus (no auth)
-curl 'http://localhost:9095/api/v1/query?query=ops_project_overall_health_code'
-
-# Exporter metrics (no auth)
-curl http://localhost:9808/metrics
-
-# Ops stack management
-cd ~/Projects/shared/manager/ops
-docker compose up -d --build   # start
-docker compose down             # stop
-docker compose logs -f          # tail logs
-```
-
-### Git Conventions
-
-- Conventional Commits: `feat|fix|refactor|build|ci|chore|docs|style|perf|test`
-- Commit helper: `committer` (on PATH) — stages only listed paths
-- Remotes: prefer HTTPS under ~/Projects
-- Definition of done always includes merged to `main` and pushed to `origin/main`, unless Joel explicitly waives it
-- Trunk-based: feat/* → staging (force-push) → main (after validation)
-- Never push main/staging without Joel's approval
-
-### Testing (`ucla-tdg-assistant-db`)
-
-- General validation entrypoint: run `agent-check` from the owning repo when a repo-specific gate is not already named below.
-- Smoke: `npm run test:smoke` (vitest) / `npm run pw:smoke` (playwright)
-- Unit: `npm run test:unit`
-- E2E mock: `PW_SCOPE=e2e:mock npx playwright test --project=e2e:mock`
-- E2E local: `scripts/infisical-run.sh --env=dev --path=/local -- PW_SCOPE=e2e:local npx playwright test --project=e2e:local`
-- Full gate: lint + typecheck + tests + docs
-
-### Testing (pinakes)
-
-- Gate: `go test ./...`
-- Run locally: `go run ./cmd/pinakes`
-
-### Testing (`jk-email-agents`)
-
-- Gate: `go test ./...`
-- Run stack: `cd ~/Projects/jk/jk-email-agents && docker compose up -d`
-- Query: `curl -s -X POST http://beelink:8205/query -H 'Content-Type: application/json' -d '{"question":"..."}'`
-- Query specific agent: add `"agent":"travel-agent"` to the JSON body
-
-### Running Locally
-
-```bash
-# TDG Assistant
-cd ~/Projects/ucla-tdg/ucla-tdg-assistant-db && npm install && npm run dev
-
-# pinakes bus
-cd ~/Projects/shared/pinakes && go run ./cmd/pinakes
-
-# IP Agents (need bus running + env vars)
-cd ~/Projects/ucla-tdg/ucla-tdg-ip-agents
-export ANTHROPIC_API_KEY=... PATENT_SCREEN_AGENT_SECRET=...
-go run ./cmd/patent-screen --bus-url http://localhost:8080 --agent-id patent-screen
-
-# JK email agents use the Keystone authority through the Beelink relay.
-# During the 48-hour soak, do not run the whole Compose stack: it still contains
-# the stopped legacy bus service.
-# Creds in .env (gitignored). Gmail OAuth for joel@kehle.com.
-```
-
-### Validation
-
-- All GitHub repos: local validation only while UCLA Enterprise GitHub is in use.
-- Default check: `agent-check` from the owning repo, or the repo's documented local
-  full gate.
-- Do not inspect, rely on, create, rerun, or repair GitHub Actions.
-- Missing GitHub Actions are expected, not a blocker.
-
-### Key Docs Paths
-
-| What | Where |
-|------|-------|
-| Agent protocol | `~/Projects/shared/agent-scripts/AGENTS.MD` |
-| Subagent guidance | `~/Projects/shared/agent-scripts/docs/subagent.md` |
-| Shared agent coordination | `~/Projects/shared/agent-scripts/docs/shared-agent-coordination.md` |
-| Collaboration patterns | `~/Projects/shared/agent-scripts/collaboration.md` |
-| Tool catalog | `~/Projects/shared/agent-scripts/tools.md` |
-| Fleet/host docs | `~/Projects/shared/manager/docs/infra/` |
-| TDG onboarding | `~/Projects/ucla-tdg/ucla-tdg-assistant-db/docs/01-foundations/` |
-| TDG architecture | `~/Projects/ucla-tdg/ucla-tdg-assistant-db/docs/02-systems/` |
-| TDG operations | `~/Projects/ucla-tdg/ucla-tdg-assistant-db/docs/04-operations/` |
-| Bus contract | `~/Projects/shared/pinakes/docs/BUS_HTTP_CONTRACT.md` |
-| Email agents | `~/Projects/jk/jk-email-agents/README.md` |
-| Chief of Staff concept | `~/Projects/shared/brainstorm/chief-of-staff-agent.md` |
-| Project capability index | `~/Projects/shared/brainstorm/project-capability-index.md` |
-| Legacy agency archive | `~/Projects/archive/techtransfer-agency/` |
-| Roadmap | `~/Projects/shared/brainstorm/roadmap.md` |
-| Private ops/DNS | `~/Projects/shared/manager/docs/` |
-
-## Cross-Project Dependencies
-
-```
-shared/agent-scripts ─► ALL projects (global protocol)
-ucla-tdg/ucla-tdg-ip-agents ─► shared/pinakes (bus client via go module)
-jk/jk-email-agents ───► shared/pinakes (bus client via go module)
-jk/jk-email-agents ───► Gmail API (OAuth2, joel@kehle.com)
-jk/jk-email-agents ───► Anthropic API (Claude, via polsia/travel agents)
-ucla-tdg/ucla-tdg-assistant-db ─► Supabase (PostgreSQL)
-ucla-tdg/ucla-tdg-assistant-db ─► Anthropic API (Claude)
-shared/pinakes ───────► ucla-tdg/ucla-tdg-ip-agents (registers as external agents)
-shared/pinakes ───────► jk/jk-email-agents (registers as external agents)
-shared/manager ───────► ALL hosts (bootstrap, SSH, fleet config)
-```
-
-## Model Preferences
-
-Latest only. OK: Anthropic Opus 4.5 / Sonnet 4.5, OpenAI GPT-5.2, xAI Grok-4.1 Fast, Google Gemini 3 Flash.
-No `gpt-5.1-pro` / `grok-4.1` on Joel's keys yet.
+- Identify the owning repo before editing. Run its `docs-list`, inspect its Git
+  state, and use its local validation entrypoint.
+- Do not maintain service status, secrets commands, dependency diagrams, model
+  versions, or environment inventories in this always-loaded file. Resolve live
+  facts from their authoritative docs or runtime.
+- Keep changes, validation, commits, and receipts separated by repo. Do not
+  bundle unrelated repositories into one commit or proof claim.
+- For overlapping edits, create an AgentCoord claim before writing. For
+  cross-host handoff, write the handoff before switching runtimes.
+- Prefer launching Codex/Claude from beelink. Use macmini through SSH for
+  macOS-only execution unless Joel explicitly requests a macmini-local agent.
+- Validate locally with `agent-check` or the repo's documented full gate.
+  GitHub Actions are not the standard validation surface.

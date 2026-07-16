@@ -214,18 +214,14 @@ Before touching a repo, read its `AGENTS.md`, check WWI for overlapping work, in
 
 ## Instruction Budget
 
-Codex loads global and project instructions up to a byte limit. Large AGENTS chains can drop later guidance.
+Canonical layering, placement rules, and byte targets live in
+`docs/instruction-architecture.md`. In short: keep AGENTS files as routers for
+mission, ownership, validation, authority, and release rules; move conditional
+policy and examples into `read_when` docs; use skills for workflows, hooks for
+mechanical enforcement, and live discovery for facts that drift.
 
-Keep AGENTS files as routers:
-
-- mission and ownership
-- start-here docs
-- one validation entrypoint
-- write/destructive-write boundaries
-- deploy/release rules
-- links to detailed docs with `read_when`
-
-Move long examples, templates, domain cases, and historical notes into docs.
+Do not treat a raised `project_doc_max_bytes` as a content budget. Design the
+combined instruction chain to remain useful under Codex's documented default.
 
 ## Hooks And Automations
 

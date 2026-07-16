@@ -311,13 +311,20 @@ git -C "$blocked_repo" add package.json AGENTS.md
 git -C "$blocked_repo" commit -q -m "init"
 printf 'dirty\n' >> "$blocked_repo/AGENTS.md"
 
+large_repo="$workspace/large-instructions"
+mkdir -p "$large_repo"
+printf '{"scripts":{"test":"printf large"}}\n' > "$large_repo/package.json"
+awk 'BEGIN { for (i = 0; i < 17000; i++) printf "x" }' > "$large_repo/AGENTS.md"
+
 audit_output="$(HOME="$home" AGENT_OFF_LIMIT_NAMES="blocked-fixture" loop-audit "$workspace")"
+assert_contains "$audit_output" "OK $home/.codex/config.toml project_doc_max_bytes=70000"
 assert_contains "$audit_output" "OK $home/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK $workspace/.agents/skills/ship-loop/SKILL.md"
 assert_contains "$audit_output" "OK $home/.agents/skills/hygiene-loop/SKILL.md"
 assert_contains "$audit_output" "OK $workspace/.agents/skills/hygiene-loop/SKILL.md"
 assert_contains "$audit_output" "OK make-only -> make agent-check"
 assert_contains "$audit_output" "OK script-only -> scripts/agent-check.sh"
+assert_contains "$audit_output" "WARN   17000 large-instructions/AGENTS.md"
 assert_not_contains "$audit_output" "blocked-fixture"
 
 dirty_repo="$workspace/dirty-repo"
