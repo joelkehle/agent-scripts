@@ -103,6 +103,10 @@ What failed:
 - Missing pass-proof files now report the affected `EC-n.proof` field and the
   required `<repo-relative-file>::<optional note>` form instead of exposing a
   raw operating-system path exception during compaction.
+- A compact lifecycle delivered `SessionStart` three times after one visible
+  compaction, falsely opening the compaction fuse. `PreCompact` now persists a
+  single-use arm; only the first corresponding compact start restores context
+  and increments the fuse, while duplicate starts are silent no-ops.
 
 ## Live lifecycle proof
 

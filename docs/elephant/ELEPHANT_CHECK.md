@@ -117,9 +117,12 @@ Recovery for a stopped full-context session is documented in `RECOVERY.md`.
 The hook fails closed when the active marker, receipt, or traceability map
 changes after capsule creation; when the checked revisions no longer anchor
 the current `HEAD`; when the capsule exceeds its size limit; or when a session
-reaches four compactions within ten minutes. This prevents stale-context
-continuation and provides a fuse against compaction loops. `SessionStart` and
-`PreCompact` can stop on failure. `SubagentStart` uses the blocking-context
+reaches four compactions within ten minutes. Each validated `PreCompact` arms
+exactly one compact-sourced `SessionStart`; duplicate restart delivery without
+a new pre-compaction event is a no-op. This prevents repeated capsule injection
+from looking like independent compactions while preserving the fuse for real
+compaction loops. `SessionStart` and `PreCompact` can stop on failure.
+`SubagentStart` uses the blocking-context
 behavior above because Codex does not stop the child when that event returns
 `continue: false`.
 

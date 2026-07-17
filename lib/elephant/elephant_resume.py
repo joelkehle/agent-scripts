@@ -207,6 +207,19 @@ def validate(capsule: dict[str, Any], payload: dict[str, Any]) -> str:
     return render_context(capsule)
 
 
+def arm_compaction(capsule: dict[str, Any], payload: dict[str, Any]) -> None:
+    capsule["pending_compaction"] = {
+        "armed_at": isoformat(utc_now()),
+        "turn_id": str(payload.get("turn_id") or ""),
+    }
+
+
+def consume_compaction(capsule: dict[str, Any]) -> bool:
+    if capsule.pop("pending_compaction", None) is None:
+        return False
+    return True
+
+
 def record_compaction(capsule: dict[str, Any]) -> None:
     now = utc_now()
     cutoff = now - dt.timedelta(seconds=COMPACTION_WINDOW_SECONDS)
@@ -362,12 +375,16 @@ def run_hook() -> int:
         event_name = str(payload.get("hook_event_name", ""))
         context = validate(capsule, payload)
         if event_name == "PreCompact":
+            arm_compaction(capsule, payload)
+            save_state(capsule, payload)
             return 0
         if event_name == "SessionStart":
             source = str(payload.get("source", ""))
             if source not in {"startup", "resume", "clear", "compact"}:
                 return 0
             if source == "compact":
+                if not consume_compaction(capsule):
+                    return 0
                 record_compaction(capsule)
                 save_state(capsule, payload)
             print(json.dumps(hook_response("SessionStart", context)))

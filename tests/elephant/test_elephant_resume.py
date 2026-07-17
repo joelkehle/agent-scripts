@@ -183,12 +183,30 @@ class ElephantResumeTest(unittest.TestCase):
 
     def test_fourth_compaction_within_window_opens_fuse(self) -> None:
         self.assertEqual(self.activate().returncode, 0)
-        for _ in range(3):
+        for index in range(3):
+            armed = self.hook("PreCompact", turn_id=f"turn-{index}")
+            self.assertEqual(armed.returncode, 0, armed.stderr)
             response = json.loads(self.hook("SessionStart", source="compact").stdout)
             self.assertTrue(response["continue"])
+        armed = self.hook("PreCompact", turn_id="turn-3")
+        self.assertEqual(armed.returncode, 0, armed.stderr)
         response = json.loads(self.hook("SessionStart", source="compact").stdout)
         self.assertFalse(response["continue"])
         self.assertIn("fuse opened", response["stopReason"])
+
+    def test_duplicate_compact_session_start_is_suppressed(self) -> None:
+        self.assertEqual(self.activate().returncode, 0)
+        armed = self.hook("PreCompact", turn_id="turn-one")
+        self.assertEqual(armed.returncode, 0, armed.stderr)
+        first = self.hook("SessionStart", source="compact")
+        self.assertTrue(json.loads(first.stdout)["continue"])
+        for _ in range(3):
+            duplicate = self.hook("SessionStart", source="compact")
+            self.assertEqual(duplicate.returncode, 0, duplicate.stderr)
+            self.assertEqual(duplicate.stdout, "")
+        state_file = next(self.state.glob("*.json"))
+        state = json.loads(state_file.read_text())
+        self.assertEqual(len(state["recent_compactions"]), 1)
 
     def test_oversized_condition_is_rejected_at_activation(self) -> None:
         (self.repo / "receipt.md").write_text(receipt(self.revision, "x" * 500))
@@ -351,6 +369,9 @@ class ElephantResumeTest(unittest.TestCase):
         )
         self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
         self.assertIn("Elephant resume refreshed", refreshed.stdout)
+        armed = self.hook("PreCompact", turn_id="turn-after-refresh")
+        self.assertEqual(armed.returncode, 0, armed.stderr)
+        self.assertEqual(armed.stdout, "")
         compacted = json.loads(self.hook("SessionStart", source="compact").stdout)
         self.assertTrue(compacted["continue"])
         self.assertIn("ELEPHANT RESUME CAPSULE", compacted["hookSpecificOutput"]["additionalContext"])
