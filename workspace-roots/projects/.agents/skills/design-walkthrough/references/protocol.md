@@ -24,6 +24,22 @@ component, label, route, or mental model is being tested.
 
 ## 2. Preflight before human attention
 
+First choose the operating lane:
+
+- **Studio:** collaborative owner preview; run affected deterministic checks
+  and at most one fast cold review. Do not claim usability evidence or
+  acceptance. Record only the correction, changed surface, focused checks, and
+  fresh preview URL.
+- **Acceptance:** formal first-use observation or preservation/ship checkpoint;
+  run structural, cold-reader, and Joel-twin layers.
+
+See [model-routing.md](model-routing.md). Do not run full Acceptance ceremony
+after every Studio correction.
+
+"Preserve this candidate" starts Acceptance packaging. Repository policy and
+active coordination boundaries determine whether preservation also includes a
+commit and push.
+
 Inspect the product with these lenses:
 
 1. Each repeated object has a declared information schema.
@@ -106,11 +122,13 @@ alternatives when the decision is provisional.
 
 ## 7. Repair, verify, replay
 
-Implement only accepted scope. Re-run semantic consistency, interaction,
-accessibility, responsive, and repository gates. Capture before/after evidence.
-Replay the same neutral task without describing the fix. If the change affects
-the overall information architecture or mental model, restart from the first
-task instead of testing only the edited component.
+Implement only accepted scope. In Studio, rerun affected semantic,
+interaction, accessibility, and responsive checks and return the preview. At
+Acceptance, rerun affected review layers, full repository gates, and
+before/after evidence. Do not restart unaffected strong-model reviews after a
+microfix. Replay the same neutral task without describing the fix. If the
+change affects the overall information architecture or mental model, restart
+from the first task instead of testing only the edited component.
 
 ## 8. Learn without overfitting
 

@@ -56,6 +56,10 @@ before explaining why it may matter.
 - **Contestability:** user's ability to question, correct, or reject an output.
 - **Control:** user's ability to direct, stop, undo, or change system behavior.
 - **Learning contract:** what feedback is used, how, and when its effect appears.
+- **Attention item:** a verified consequential outcome or concrete user
+  decision promoted above routine activity. Possibility alone does not qualify.
+- **No-action outcome:** a verified improvement or resolved failure worth
+  understanding even though the user owes no action; the UI says so plainly.
 
 ## Finding language
 

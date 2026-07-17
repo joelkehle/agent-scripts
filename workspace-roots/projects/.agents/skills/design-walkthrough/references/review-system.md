@@ -4,6 +4,22 @@ This is the complete map for reviewing a user-visible product with Joel. The
 three internal review layers strengthen the existing Clean Canvas walkthrough;
 they do not replace it.
 
+## Two operating speeds
+
+Use **Studio** while Joel and Codex are still shaping the experience. Studio
+returns a clean preview after targeted deterministic checks and at most one
+fast cold review. It does not claim preflight green or acceptance.
+
+Use **Acceptance** only when the direction is ready for formal observation,
+preservation, or production consideration. Acceptance runs all three internal
+layers, independent regression, full gates, proof, and traceability.
+
+This distinction protects both speed and evidence quality. A Studio preview is
+for collaborative design judgment; a formal first-use observation is usability
+evidence and still requires full preflight. See
+[model-routing.md](model-routing.md) for model choices, escalation, and the
+5-15 minute Studio target.
+
 ## Whole system
 
 ```text
@@ -11,28 +27,31 @@ Frame the user outcome and neutral task
                     |
 Build the clean product canvas and separate review surface
                     |
-Internal preflight before spending Joel's attention
-  1. Structural review
-  2. Cold-reader comprehension review
-  3. Joel-twin taste review
-                    |
-             all three pass
-                    |
-Joel's first-use observation on the clean canvas
-                    |
-Clarify without teaching
-                    |
-Reveal design intent on the separate review surface
-                    |
-Critique -> Joel decides -> repair -> replay
-                    |
-Learn at the correct scope
+             Choose operating lane
+              /               \
+ Studio collaboration       Acceptance checkpoint
+ targeted checks            1. Structural review
+ optional fast review        2. Cold-reader review
+       |                     3. Joel-twin review
+ fresh preview URL                    |
+       |                         all three pass
+ Joel decides -> repair               |
+       |                     Joel's first-use observation
+       +-----------> preserve direction / formal review
+                                      |
+                           Clarify -> reveal -> critique
+                                      |
+                           Joel decides -> repair -> replay
+                                      |
+                           Regression -> proof -> gates
+                                      |
+                           Learn at the correct scope
 ```
 
-The three layers live entirely inside **Internal preflight**. Joel remains the
-authority for lived experience, taste, and acceptance. Passing preflight means
-the design is ready to spend Joel's attention on; it does not mean Joel will
-understand or accept it.
+The three full layers live entirely inside the **Acceptance checkpoint**. Joel
+remains the authority for lived experience, taste, and acceptance. Passing
+preflight means the design is ready to spend Joel's attention on; it does not
+mean Joel will understand or accept it.
 
 ## Phase 1: Frame
 
@@ -66,9 +85,11 @@ It does not prove that the content is comprehensible.
 
 ## Phase 3: Internal preflight
 
-Run three reviews in order. Use fresh context for layers 2 and 3. Give those
-reviewers raw product artifacts and the neutral task, never the intended route,
-desired verdict, generator conversation, or design rationale.
+At an Acceptance checkpoint, run three reviews in order. During Studio, run
+the affected structural checks and at most one fast comprehension review; do
+not call that preflight green. Use fresh context for Acceptance layers 2 and 3.
+Give those reviewers raw product artifacts and the neutral task, never the
+intended route, desired verdict, generator conversation, or design rationale.
 
 ### Layer 1: Structural review
 
@@ -136,6 +157,15 @@ Current seed principles (Joel design profile version 1, 2026-07-16):
 - Give one crystal-clear instruction at a time.
 - Spend Joel's attention on decisions and lived experience, not defects an AI
   reviewer can find first.
+- Possibility is not attention. A promoted attention item must carry a verified
+  consequence or a concrete decision; “this might matter” stays below the
+  waterline for more investigation.
+- A no-action verified improvement or resolved failure can still deserve
+  attention because it builds understanding, trust, and joy. Say **No action
+  needed** explicitly.
+- Every attention item must state what happened, what was verified, what the
+  collective already did, the current state, Joel's exact part, and the
+  inspectable evidence.
 - Aim for usefulness, trust, and joy—not merely administrative correctness.
 
 The Joel twin is a preflight critic, not Joel's replacement. It may block an
@@ -165,6 +195,10 @@ Ready for Joel means:
 - the product and review surfaces remain separate;
 - the neutral task is singular and nonleading;
 - the root reviewer can complete the task without supplying hidden context.
+
+This readiness label applies to formal first-use observation. A Studio preview
+may return to Joel sooner when it is clearly labeled collaborative and carries
+its open hypotheses.
 
 ## Phase 4: Joel's first-use observation
 
@@ -218,12 +252,14 @@ decided, when, and the evidence pointer.
 
 ## Phase 8: Repair and replay
 
-Implement accepted decisions only. Run the affected preflight layers again,
-then targeted and repository gates. Capture before/after evidence. Replay the
-same neutral task without announcing the fix. Restart from the first task when
-the information architecture or mental model changed. Give an independent
-regression reviewer the repaired artifact without the desired verdict and keep
-its report with the proof.
+Implement accepted decisions only. During Studio, run targeted checks and the
+one affected fast-review layer, then return the next preview. At Acceptance,
+run the affected preflight layers again, then repository gates and before/after
+proof. Do not rerun unaffected strong-model layers after each microfix. Replay
+the same neutral task without announcing the fix. Restart from the first task
+when the information architecture or mental model changed. Give one
+independent regression reviewer the repaired artifact without the desired
+verdict and keep its report with the proof.
 
 ## Phase 9: Learn at the correct scope
 
@@ -233,7 +269,10 @@ its report with the proof.
 - General recurring process failures update this shared skill.
 - One person's preferences do not become universal usability claims.
 
-## Required artifacts
+## Acceptance required artifacts
+
+These artifacts are required for the Acceptance lane, not after each Studio
+correction:
 
 - session contract and neutral task;
 - known starting state and reset instructions;
@@ -247,6 +286,10 @@ its report with the proof.
 - before/after proof and replay result;
 - independent regression-review result without the desired verdict;
 - validation evidence and loop receipt.
+
+The Studio lane keeps only a minimal iteration record: the observation or
+accepted correction, changed surface, focused checks, and fresh preview URL.
+That record may live in the active loop breadcrumb or product decision log.
 
 ## Status vocabulary
 

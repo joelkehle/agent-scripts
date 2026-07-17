@@ -13,7 +13,9 @@ end-to-end system and review gates. Read [protocol.md](references/protocol.md)
 before preparing or facilitating a walkthrough. Read
 [design-language.md](references/design-language.md) when critiquing visual or
 interaction design. Use [finding-schema.md](references/finding-schema.md) to
-record the session.
+record the session. Read [model-routing.md](references/model-routing.md) before
+choosing models, delegating review, or deciding whether a correction needs the
+Studio lane or the Acceptance lane.
 
 ## Required separation
 
@@ -33,28 +35,33 @@ the product itself requires that disclosure for honest use.
 
 1. **Frame:** name the user, outcome, scenario, product maturity, research
    questions, and what is out of scope.
-2. **Preflight:** pass structural, cold-reader, and Joel-twin review before
-   spending human attention. Remove obvious consistency, semantics,
-   responsive, accessibility, state, and annotation-leakage defects. Run
+2. **Choose the lane:** use fast Studio iteration while Joel and Codex are
+   discovering the design; use full Acceptance preflight only when Joel says
+   the direction is ready for formal review/preservation or before production.
+   Never turn every copy or interaction correction into a ship ceremony.
+3. **Preflight proportionally:** Studio runs affected structural checks and at
+   most one fast review before returning the next preview. Acceptance passes
+   structural, fresh cold-reader, and fresh Joel-twin review. Run
    `scripts/clean_canvas_check.py <manifest.json>` when a web prototype has
    separable files.
-3. **Observe:** present the clean product canvas and one neutral, believable
+4. **Observe:** present the clean product canvas and one neutral, believable
    task. Ask the user to think aloud. Stay quiet. Do not name intended sections,
    explain the design, teach navigation, defend decisions, or ask leading
    questions.
-4. **Clarify:** after the attempt, ask neutral questions such as "What did you
+5. **Clarify:** after the attempt, ask neutral questions such as "What did you
    expect?" and "What made you think that?" Do not solve yet.
-5. **Reveal:** open the separate review surface. Explain intent and compare the
+6. **Reveal:** open the separate review surface. Explain intent and compare the
    intended mental model with the observed one.
-6. **Critique:** apply the shared design language. Tie findings to a user,
+7. **Critique:** apply the shared design language. Tie findings to a user,
    scenario, goal, or principle. Separate observation, quote, inference,
    preference, requirement, and idea.
-7. **Decide:** ask the human authority to assign a disposition—change, keep,
+8. **Decide:** ask the human authority to assign a disposition—change, keep,
    explore, or defer—and separately choose whether any learning is session,
    product, or shared scope. Do not silently turn every comment into a feature.
-8. **Repair and replay:** implement accepted decisions, run targeted and full
-   gates, capture before/after proof, and repeat the affected neutral task.
-9. **Learn:** keep session evidence in the proof/receipt; record product rules
+9. **Repair and replay:** in Studio, implement one accepted repair, run targeted
+   checks, and return the preview. At Acceptance, run affected review layers,
+   full gates, and before/after proof before replaying the neutral task.
+10. **Learn:** keep session evidence in the proof/receipt; record product rules
    in the product's experience contract; promote a lesson into this shared
    skill only when it recurs or Joel explicitly makes it general.
 
