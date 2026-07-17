@@ -58,10 +58,15 @@ the product itself requires that disclosure for honest use.
 8. **Decide:** ask the human authority to assign a disposition—change, keep,
    explore, or defer—and separately choose whether any learning is session,
    product, or shared scope. Do not silently turn every comment into a feature.
-9. **Repair and replay:** in Studio, implement one accepted repair, run targeted
+9. **Apply the semantic stop:** before a meaning-changing repair, compare it
+   with the product contract and any active Elephant conditions. Changes to
+   meaning, object model, agency, ownership, or the action/attention/task
+   boundary stop for reconciliation. Implement one representative instance and
+   replay it before propagating the pattern across repeated objects or screens.
+10. **Repair and replay:** in Studio, implement one accepted repair, run targeted
    checks, and return the preview. At Acceptance, run affected review layers,
    full gates, and before/after proof before replaying the neutral task.
-10. **Learn:** keep session evidence in the proof/receipt; record product rules
+11. **Learn:** keep session evidence in the proof/receipt; record product rules
    in the product's experience contract; promote a lesson into this shared
    skill only when it recurs or Joel explicitly makes it general.
 
@@ -88,6 +93,11 @@ Stop before implementation when product intent is unclear, the user has not
 made the required decision, the clean canvas cannot be separated from review
 material, or the proposed repair changes product scope. A polished prototype
 and green DOM checks are not evidence that a user understood the experience.
+
+When the participant says they are out of steam or otherwise signals fatigue,
+record the evidence and stop meaning-changing repair until a fresh checkpoint.
+Mechanical preservation may finish; fatigue, silence, or departure does not
+authorize interpretation, propagation, or a product decision.
 
 ## Handoff
 

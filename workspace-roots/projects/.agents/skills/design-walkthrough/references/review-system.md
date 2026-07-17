@@ -158,14 +158,14 @@ Current seed principles (Joel design profile version 1, 2026-07-16):
 - Spend Joel's attention on decisions and lived experience, not defects an AI
   reviewer can find first.
 - Possibility is not attention. A promoted attention item must carry a verified
-  consequence or a concrete decision; “this might matter” stays below the
-  waterline for more investigation.
-- A no-action verified improvement or resolved failure can still deserve
-  attention because it builds understanding, trust, and joy. Say **No action
-  needed** explicitly.
-- Every attention item must state what happened, what was verified, what the
-  collective already did, the current state, Joel's exact part, and the
-  inspectable evidence.
+  consequence or a rare concrete human-authority request; “this might matter”
+  stays below the waterline for more investigation.
+- An attention surface spends awareness; it does not create or own Joel's task
+  state. A rare authority request names the decision only Joel can make, while
+  any resulting commitment stays with its owning work system.
+- State the absence of an obligation in contextual prose when that distinction
+  is useful. Do not make action/no-action a mandatory label, status, field, or
+  classification, and do not require “Joel's part” on routine objects.
 - Aim for usefulness, trust, and joy—not merely administrative correctness.
 
 The Joel twin is a preflight critic, not Joel's replacement. It may block an

@@ -369,6 +369,10 @@ The check fails when any of these are true:
 - State has no canonical owner or duplicates another owner's truth.
 - A new long-lived agent or store is proposed without proving existing
   capabilities cannot own the work.
+- Binding `EC-n` conditions or controlling documents contain an unresolved
+  semantic contradiction, even when each statement could pass in isolation.
+  Resolving that contradiction remains inference-led; do not add keyword
+  parsers or hook/capsule semantic automation that pretends to supply judgment.
 - Deterministic phrase matching substitutes for conversational or semantic
   judgment.
 - A stage-complete message can pass while the substantive specialist result is

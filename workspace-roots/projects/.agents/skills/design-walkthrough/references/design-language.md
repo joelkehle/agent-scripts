@@ -56,10 +56,14 @@ before explaining why it may matter.
 - **Contestability:** user's ability to question, correct, or reject an output.
 - **Control:** user's ability to direct, stop, undo, or change system behavior.
 - **Learning contract:** what feedback is used, how, and when its effect appears.
-- **Attention item:** a verified consequential outcome or concrete user
-  decision promoted above routine activity. Possibility alone does not qualify.
-- **No-action outcome:** a verified improvement or resolved failure worth
-  understanding even though the user owes no action; the UI says so plainly.
+- **Attention item:** a verified consequential outcome or rare concrete
+  human-authority request promoted into the user's awareness. Attention is a
+  presentation projection, not task state; possibility alone does not qualify.
+- **Authority request:** a rare, concrete decision that automation cannot own.
+  Name the authority being exercised; any resulting commitment belongs to its
+  owning work system.
+- **Obligation copy:** contextual prose may clarify that the user owes nothing
+  when useful. It is not a mandatory label, status, field, or classification.
 
 ## Finding language
 
