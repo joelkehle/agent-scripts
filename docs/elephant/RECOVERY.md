@@ -100,6 +100,9 @@ What failed:
   mode, nullable transcript path, and worktree.
 - Split receipt parsing/rendering into `elephant_contract.py` so the runtime
   entrypoint remains below the shared file-size guideline.
+- Missing pass-proof files now report the affected `EC-n.proof` field and the
+  required `<repo-relative-file>::<optional note>` form instead of exposing a
+  raw operating-system path exception during compaction.
 
 ## Live lifecycle proof
 

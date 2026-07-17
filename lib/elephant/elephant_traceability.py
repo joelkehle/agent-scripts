@@ -117,7 +117,13 @@ def condition_ref_path(root: Path, value: str, label: str, must_exist: bool) -> 
     if not isinstance(value, str) or not value.strip():
         raise TraceabilityError(f"{label} contains an empty reference")
     path_text = value.split("::", 1)[0]
-    contained_path(root, path_text, must_exist=must_exist)
+    try:
+        contained_path(root, path_text, must_exist=must_exist)
+    except FileNotFoundError as exc:
+        raise TraceabilityError(
+            f"{label} must start with an existing repo-relative file before "
+            f"optional ::note: {path_text}"
+        ) from exc
 
 
 def validate_traceability(

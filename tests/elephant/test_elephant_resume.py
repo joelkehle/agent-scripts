@@ -456,6 +456,36 @@ class ElephantResumeTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("traceability=pass passed=2/2", result.stdout)
 
+    def test_pass_proof_requires_existing_file_anchor(self) -> None:
+        self.write_active_contract(passed=True)
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["proof"] = ["browser 21/21 desktop/mobile"]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        result = self.run_traceability(structure_only=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "EC-1.proof must start with an existing repo-relative file before optional ::note",
+            result.stderr,
+        )
+        self.assertNotIn("[Errno", result.stderr)
+
+    def test_pass_proof_accepts_slash_rich_note_after_file_anchor(self) -> None:
+        self.write_active_contract(passed=True)
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["proof"] = [
+            "receipt.md::browser 21/21 desktop/mobile"
+        ]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        result = self.run_traceability(structure_only=False)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("traceability=pass passed=2/2", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

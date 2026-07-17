@@ -135,6 +135,10 @@ python3 .codex/hooks/elephant_traceability.py verify
 The strict command succeeds only when every exact receipt `EC-n` condition is
 `pass`, no proof remains pending, and referenced code, test, and proof artifact
 files exist.
+Use `<repo-relative-file>::<optional note>` for proof references that need a
+human-readable result summary. The file anchor must exist inside the worktree;
+the note may contain slashes or URLs. Free-form proof descriptions without a
+file anchor are invalid.
 
 The capsule is deterministic continuity infrastructure, not semantic review.
 Inference still decides whether the design satisfies the receipt. Deterministic
