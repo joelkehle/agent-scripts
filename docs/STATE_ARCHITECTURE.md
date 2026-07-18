@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.12 (2026-07-14)
+Version: 1.13 (2026-07-18)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -90,6 +90,18 @@ projection.
   wwi loop files, and Pinakes read endpoints. It never owns service truth, work
   nouns, or bus registry facts; it only remembers what hall-monitor has already
   reported.
+
+- **fleet-repair-dispatcher shadow state (added 2026-07-18):**
+  `~/.local/state/fleet-repair-dispatcher/notification.json` is disposable
+  agent-working state used only for at-most-once daily ntfy delivery. The proof
+  files under
+  `shared/dev-dashboard/codex-output/fleet-repair-shadow-pilot/` are a disposable
+  projection of Hall Monitor findings plus Manager-owned policy; Hall Monitor and
+  Prometheus remain the source of observed alert truth, while
+  `shared/manager/ops/config/repair-policies.json` owns the pilot classification
+  policy. Neither location is an action audit. Before enabling any real repair or
+  investigator launch, define a durable append-only owner for attempts, evidence,
+  outcomes, approvals, and rollback records in this document.
 
 - **jk-fitness-telemetry `data/fitness.db` (added 2026-06-11, v1 spec):** fleet-side
   archive of Apple Health *fitness* telemetry. The iPhone Health database remains
@@ -176,6 +188,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.13 (2026-07-18): register fleet-repair-dispatcher notification state and
+  proof output as disposable projections; require a new durable append-only audit
+  owner before any write-mode remediation.
 - 1.12 (2026-07-14): register assistant-db `ip_sequence_email_threads` as the
   canonical case↔Gmail-thread docket-relevance link table (rebuildable labeled
   projection; PM keeps interaction/event ownership and intake work state).
