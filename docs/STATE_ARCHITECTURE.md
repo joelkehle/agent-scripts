@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.13 (2026-07-18)
+Version: 1.14 (2026-07-18)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -91,17 +91,29 @@ projection.
   nouns, or bus registry facts; it only remembers what hall-monitor has already
   reported.
 
-- **fleet-repair-dispatcher shadow state (added 2026-07-18):**
+- **fleet-repair-dispatcher state and repair receipts (added 2026-07-18):**
   `~/.local/state/fleet-repair-dispatcher/notification.json` is disposable
-  agent-working state used only for at-most-once daily ntfy delivery. The proof
-  files under
+  agent-working state used only for at-most-once daily ntfy delivery. Dry-run
+  JSONL under that directory is also disposable evaluation evidence: it records
+  no attempted action and is not an action audit. The proof files under
   `shared/dev-dashboard/codex-output/fleet-repair-shadow-pilot/` are a disposable
   projection of Hall Monitor findings plus Manager-owned policy; Hall Monitor and
   Prometheus remain the source of observed alert truth, while
   `shared/manager/ops/config/repair-policies.json` owns the pilot classification
-  policy. Neither location is an action audit. Before enabling any real repair or
-  investigator launch, define a durable append-only owner for attempts, evidence,
-  outcomes, approvals, and rollback records in this document.
+  and compiled recipe policy.
+
+  Durable repair decision, attempt, outcome, verification, approval, and rollback
+  events belong to the private Operations repo at
+  `observations/<target_host_id>/repair-log/`, written only through the dedicated
+  `~/.local/share/ops-state` clone. Each event is a new immutable, uniquely named
+  JSON file; earlier events are never edited. A pre-action decision/attempt event
+  must be atomically created, committed, and pushed before any repair write. Git
+  sync failure, an unpushed prior event, unreadable receipt history, or corrupt
+  local projection fails write mode closed. Receipt records contain fixed step
+  identifiers and structured outcomes, never raw alert bodies, stdout/stderr, or
+  secrets. Any local cooldown, lease, or idempotency database is a disposable
+  projection rebuilt from pushed receipts plus live Hall Monitor truth. Manager
+  owns policy/recipe definitions; Operations owns the immutable lifecycle record.
 
 - **jk-fitness-telemetry `data/fitness.db` (added 2026-06-11, v1 spec):** fleet-side
   archive of Apple Health *fitness* telemetry. The iPhone Health database remains
@@ -188,6 +200,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.14 (2026-07-18): define Operations `observations/<target_host_id>/repair-log/`
+  as the immutable repair-lifecycle owner; classify guarded dry-run JSONL as a
+  disposable projection and require pushed pre-action receipts before any write.
 - 1.13 (2026-07-18): register fleet-repair-dispatcher notification state and
   proof output as disposable projections; require a new durable append-only audit
   owner before any write-mode remediation.
