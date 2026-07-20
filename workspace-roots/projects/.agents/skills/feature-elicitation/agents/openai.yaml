@@ -1,0 +1,4 @@
+interface:
+  display_name: "Feature Elicitation"
+  short_description: "Turn ambiguous features into agreed specifications"
+  default_prompt: "Use $feature-elicitation to interview me and produce an implementation-ready feature specification."
