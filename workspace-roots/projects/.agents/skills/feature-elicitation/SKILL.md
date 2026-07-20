@@ -47,3 +47,26 @@ The implementation handoff must include the agreed specification, owning repo,
 current revision and dirty state, validation entrypoint, known risks, and the
 first implementation step. The receiving agent must treat the specification as
 authoritative unless new evidence creates a material conflict.
+
+## Automatic trial evidence
+
+The initial fleet trial is `feature-elicitation-v1-202607`. Coding agents own
+the bookkeeping; do not ask Joel to file a scorecard or paste a test prompt.
+
+For the first three eligible implementations that use this skill, add these
+structured checks to the normal loop receipt:
+
+- `feature-elicitation.trial_id=feature-elicitation-v1-202607`
+- `feature-elicitation.spec_revision_after_start=none|minor|major|unknown`
+- `feature-elicitation.post_start_scope_corrections=<integer>|unknown`
+- `feature-elicitation.discarded_implementation_work=none|small|material|unknown`
+- `feature-elicitation.product_questions_reopened=true|false|unknown`
+
+Infer the values from the agreed specification, conversation, diff, and
+validation evidence. Record `unknown` when evidence is insufficient; never
+turn missing telemetry into user clerical work. On the third eligible receipt,
+compare the three receipts and recommend `keep`, `tune`, or `drop` with the
+observed evidence.
+
+The loop receipt is the only trial record. Do not create a scorecard,
+spreadsheet, topic-note set, tracker, or database for this trial.

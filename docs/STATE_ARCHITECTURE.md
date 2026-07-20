@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.15 (2026-07-19)
+Version: 1.16 (2026-07-19)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -184,6 +184,17 @@ projection.
   product: per PM-MET-4 it must never be written to the personal llm-wiki
   ledger.
 
+- **private Langfuse evaluation datasets (added 2026-07-19):** disposable
+  evaluation telemetry only. They may hold fixture IDs, hashes, redacted
+  structured outputs, model usage, latency, cost, and scores. They never own
+  production dialogue, source evidence, workflow state, policy, tasks, trial
+  state, or model-selection decisions, and must be safe to rebuild from
+  committed fixtures, code, and explicitly authorized runs. Do not store source
+  bodies, private conversation replays, full prompts, raw evidence references,
+  or free-form model responses without a separate explicit privacy contract.
+  Loop receipts and proof pages are working-state projections; ratified policy
+  remains in its owning repository.
+
 - **assistant-db `ip_sequence_email_threads` (added 2026-07-14, feat/inteum-docket-import):**
   assistant-db owns the docket-relevance mapping between Inteum IP sequences and
   Gmail threads (match status, match location, message-level provenance with body
@@ -215,6 +226,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.16 (2026-07-19): classify private Langfuse evaluation datasets as
+  disposable, redacted evaluation telemetry; forbid them from owning source,
+  conversation, workflow, policy, task, trial, or model-selection truth.
 - 1.15 (2026-07-19): register the `life-events` single-writer immutable log at
   `nas:state/life-events/` as canonical personal timeline state; keep evidence in
   `nas:evidence/...`, allow only an explicit local interim root, and classify

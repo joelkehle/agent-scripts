@@ -18,7 +18,7 @@ Follow this implementation loop:
 9. Before handoff, run `agent-check` when feasible.
 10. Inspect the diff and remove accidental churn.
 11. If the slice is coherent and validation is green, commit it by default unless Joel asked not to commit or a stop rule applies.
-12. Final receipt: files changed, behavior changed, checks run, failures repaired, risks, and proof-pack URL when applicable. If work was committed first, use `loop-receipt --from-head` or `loop-receipt --commit <ref>` so receipt files come from the commit, not unrelated dirty state.
+12. Final receipt: files changed, behavior changed, checks run, failures repaired, risks, and proof-pack URL when applicable. If `feature-elicitation` was used, follow its automatic trial-evidence contract in this receipt; the agent records and counts trial evidence without asking Joel to do bookkeeping. If work was committed first, use `loop-receipt --from-head` or `loop-receipt --commit <ref>` so receipt files come from the commit, not unrelated dirty state.
 
 Stop and ask one direct question if the work needs a product decision, secrets, production config, schema migration, deployment, force-push, or destructive write not explicitly requested by Joel.
 
