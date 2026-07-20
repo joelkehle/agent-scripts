@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.14 (2026-07-18)
+Version: 1.15 (2026-07-19)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -27,7 +27,8 @@ projection.
 | Work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds | a proposal *into* it |
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
-| Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; Phase-3 personal store for `scope=personal` | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
+| Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
+| Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; `life-events` event log for promoted `scope=personal` timeline events | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
 | Source evidence | NAS `/mnt/synology-share1/evidence/<channel>/<id>/` canonical owned copies; Gmail, Krisp, Apple, and other vendor clouds are capture devices and convenience caches | the immutable record: media, transcript, message/export bytes, manifest, hashes, and stable `source_ref` / `evidence_ref` | never copied as truth |
 | Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
 | Agent org governance | `shared/manager/ops/config/agent-org.json` | Joel Inc agent titles, reporting lines, trust level, safety class, and escalation policy | a projection into bus passports, dashboards, docs, or wiki pages |
@@ -73,8 +74,22 @@ projection.
   must not destroy the source record. Commitments point to PM proposals/tasks
   rather than owning their state. Decisions and knowledge are queued as
   propose-only wiki distillation items; the wiki remains narrative truth after
-  human approval. Personal-scope rows wait for the Phase-3 personal store and
-  must not be written into UCLA systems.
+  human approval. Personal-scope events promoted into the personal timeline belong
+  to the `life-events` event log and must not be written into UCLA systems.
+- **personal life-event log (`nas:state/life-events/`, added 2026-07-19,
+  JK-SPEC-LIFEEVENT-001):** `life-events` owns canonical personal timeline state.
+  The Beelink `life-events` service is the sole writer. It appends immutable
+  one-record-per-file JSON under `log/`; corrections and retractions are new
+  records, never edits or deletes. Source archives, media, transcripts, and other
+  evidence bytes remain under `nas:evidence/...`; life-event records contain only
+  evidence references and hashes.
+
+  While the NAS state root is unavailable, the writer may use an explicitly
+  configured local state root with the identical immutable-file layout. There is
+  no implicit repo-local fallback. Restoration copies immutable record files into
+  `nas:state/life-events/`, then rebuilds projections. Feed, people, geo, and
+  undated SQLite projections live on Beelink local SSD only, never on NFS/SMB, and
+  are safe to delete and rebuild from the event log.
 - **email-triage document clerk (`data/documents/`, added 2026-06-10, branch
   document-clerk):** content-addressed projection cache of Gmail attachments
   (blobs + meta + extracted text/facts, keyed by sha256). Agent-working-state
@@ -200,6 +215,10 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.15 (2026-07-19): register the `life-events` single-writer immutable log at
+  `nas:state/life-events/` as canonical personal timeline state; keep evidence in
+  `nas:evidence/...`, allow only an explicit local interim root, and classify
+  local-SSD SQLite indexes as rebuildable projections.
 - 1.14 (2026-07-18): define Operations `observations/<target_host_id>/repair-log/`
   as the immutable repair-lifecycle owner; classify guarded dry-run JSONL as a
   disposable projection and require pushed pre-action receipts before any write.
