@@ -61,6 +61,14 @@ Changed-contract hook warnings now include the stored receipt plus copyable
 thread-scoped `status` and `refresh` commands. The stop reason stays concise so
 Codex can still classify the failure deterministically.
 
+Hook configurations that include `Stop` let Elephant catch this earlier. When
+the Codex changes its own active contract during a turn, Elephant creates one
+continuation prompt with the same inspection and explicit-refresh commands
+before full context is lost. If that continuation does not restore a fresh
+capsule, the next stop fails closed. Older processes and adopters that have not
+loaded and trusted the `Stop` hook still require the out-of-band procedure
+above.
+
 ## July 2026 incident
 
 The first NOUS walkthrough session updated its traceability map from 0/10 to
@@ -107,6 +115,9 @@ What failed:
   compaction, falsely opening the compaction fuse. `PreCompact` now persists a
   single-use arm; only the first corresponding compact start restores context
   and increments the fuse, while duplicate starts are silent no-ops.
+- Contract drift created during a turn now triggers one `Stop` continuation so
+  the originating Codex can inspect and explicitly refresh before teardown;
+  `stop_hook_active` prevents recovery loops and the second stop fails closed.
 
 ## Live lifecycle proof
 

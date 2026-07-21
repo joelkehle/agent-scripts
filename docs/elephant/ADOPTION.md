@@ -56,6 +56,13 @@ Preferred hook command on Joel's managed machines:
 }
 ```
 
+Configure that command for `SessionStart`, `PreCompact`, `SubagentStart`, and
+`Stop`. The first three events restore or validate the capsule. `Stop` catches
+contract drift created during the just-finished turn and gives the same Codex
+one continuation prompt to inspect and explicitly refresh while its full
+context and tools still exist. On the second stop, unrepaired drift remains
+fail-closed. Elephant never auto-accepts changed contract state.
+
 A compatibility shim may execute the shared script when a trusted Codex process
 already loaded a repo-local hook command. Keep shims mechanical; no policy or
 validation logic belongs in them.
@@ -68,7 +75,7 @@ validation logic belongs in them.
    definitions.
 4. Let startup create the disposable session capsule.
 5. After an intentional receipt or traceability edit, explicitly refresh that
-   session before its next compaction:
+   session before its next compaction or stop:
 
    ```bash
    elephant-resume status --session-id <thread-id>
@@ -81,7 +88,9 @@ validation logic belongs in them.
 7. Run strict traceability and semantic review before completion.
 8. Commit `active: false`, then clear the disposable projection.
 
-See `RECOVERY.md` when step 5 was missed and PreCompact is already stopping.
+With the `Stop` hook configured, missing step 5 once creates a single in-turn
+recovery continuation. See `RECOVERY.md` when that continuation cannot repair
+the contract or an older process has already stopped.
 
 ## Lifecycle verification
 

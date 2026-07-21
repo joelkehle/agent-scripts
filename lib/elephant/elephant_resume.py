@@ -335,6 +335,28 @@ def stopped_response(message: str, guidance: str = "") -> dict[str, Any]:
     }
 
 
+def stop_recovery_response(message: str, guidance: str) -> dict[str, Any]:
+    reason = "\n".join(
+        [
+            f"Elephant detected contract drift before this turn could stop: {message}",
+            guidance,
+            "Inspect the marker, receipt, and traceability changes now, while this "
+            "turn still has context.",
+            "If they are intentional and belong to this task, run the exact refresh "
+            "command above, then verify status reports capsule=fresh.",
+            "If they are unexpected, reconcile the tracked contract instead. Never "
+            "refresh merely to clear the warning.",
+        ]
+    )
+    return {
+        # Stop's block decision creates one continuation prompt. The follow-up
+        # Stop payload sets stop_hook_active, so an unrepaired contract falls
+        # back to the normal fail-closed response instead of looping.
+        "decision": "block",
+        "reason": reason,
+    }
+
+
 def blocked_subagent_response(message: str, guidance: str = "") -> dict[str, Any]:
     warning = f"Elephant resume blocked: {message}"
     if guidance:
@@ -401,11 +423,12 @@ def run_hook() -> int:
             except (CapsuleError, OSError):
                 pass
         guidance = recovery_guidance(payload, capsule, str(exc))
-        response = (
-            blocked_subagent_response(str(exc), guidance)
-            if event_name == "SubagentStart"
-            else stopped_response(str(exc), guidance)
-        )
+        if event_name == "SubagentStart":
+            response = blocked_subagent_response(str(exc), guidance)
+        elif event_name == "Stop" and guidance and not payload.get("stop_hook_active"):
+            response = stop_recovery_response(str(exc), guidance)
+        else:
+            response = stopped_response(str(exc), guidance)
         print(json.dumps(response))
         return 0
 

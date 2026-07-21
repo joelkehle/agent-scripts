@@ -106,11 +106,15 @@ the tracked contract instead of refreshing it.
 
 The hooks validate the receipt before compaction and restore a session-scoped
 context capsule after every supported session lifecycle event and subagent
-start. If disposable session state is missing, the tracked active marker
-reconstructs it. The capsule contains only the objective, receipt identity,
-checked revision, numbered `EC-n` conditions, traceability summary, and next
-action. It is capped at 4,096 UTF-8 bytes. The hook never reads the transcript,
-invokes a model, or causes compaction.
+start. A `Stop` hook also detects contract drift created during the current
+turn. It creates at most one continuation prompt so that the same Codex can
+inspect and explicitly refresh the contract before losing full context; it
+never accepts the change automatically, and unrepaired drift fails closed on
+the second stop. If disposable session state is missing, the tracked active
+marker reconstructs it. The capsule contains only the objective, receipt
+identity, checked revision, numbered `EC-n` conditions, traceability summary,
+and next action. It is capped at 4,096 UTF-8 bytes. The hook never reads the
+transcript, invokes a model, or causes compaction.
 
 Recovery for a stopped full-context session is documented in `RECOVERY.md`.
 
@@ -122,6 +126,7 @@ exactly one compact-sourced `SessionStart`; duplicate restart delivery without
 a new pre-compaction event is a no-op. This prevents repeated capsule injection
 from looking like independent compactions while preserving the fuse for real
 compaction loops. `SessionStart` and `PreCompact` can stop on failure.
+`Stop` uses Codex's one-shot continuation signal for early self-recovery.
 `SubagentStart` uses the blocking-context
 behavior above because Codex does not stop the child when that event returns
 `continue: false`.

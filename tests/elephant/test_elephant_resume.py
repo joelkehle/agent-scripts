@@ -395,6 +395,61 @@ class ElephantResumeTest(unittest.TestCase):
         )
         self.assertIn("do not refresh blindly", warning)
 
+    def test_stop_continues_once_to_repair_changed_contract(self) -> None:
+        self.write_active_contract()
+        self.assertTrue(json.loads(self.hook("SessionStart", source="startup").stdout)["continue"])
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["proof"] = ["pending:intentional-change"]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        response = json.loads(self.hook("Stop", stop_hook_active=False).stdout)
+        reason = response["reason"]
+        self.assertEqual(response["decision"], "block")
+        self.assertNotIn("continue", response)
+        self.assertIn("before this turn could stop", reason)
+        self.assertIn(f"elephant-resume status --session-id {THREAD_ID}", reason)
+        self.assertIn(
+            f"elephant-resume refresh --session-id {THREAD_ID} --accept-current-contract",
+            reason,
+        )
+        self.assertIn("Never refresh merely to clear the warning", reason)
+
+    def test_second_stop_fails_closed_when_contract_remains_stale(self) -> None:
+        self.write_active_contract()
+        self.assertTrue(json.loads(self.hook("SessionStart", source="startup").stdout)["continue"])
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["proof"] = ["pending:still-stale"]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        response = json.loads(self.hook("Stop", stop_hook_active=True).stdout)
+        self.assertFalse(response["continue"])
+        self.assertIn("traceability map changed", response["stopReason"])
+        self.assertNotIn("decision", response)
+
+    def test_stop_is_silent_after_explicit_refresh(self) -> None:
+        self.write_active_contract()
+        self.assertTrue(json.loads(self.hook("SessionStart", source="startup").stdout)["continue"])
+        trace_path = self.repo / "traceability.json"
+        trace = json.loads(trace_path.read_text())
+        trace["conditions"][0]["proof"] = ["pending:intentional-change"]
+        trace_path.write_text(json.dumps(trace) + "\n")
+
+        continued = json.loads(self.hook("Stop", stop_hook_active=False).stdout)
+        self.assertEqual(continued["decision"], "block")
+        refreshed = self.run_script(
+            "refresh",
+            "--session-id",
+            THREAD_ID,
+            "--accept-current-contract",
+            include_thread_env=False,
+        )
+        self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+        repaired = self.hook("Stop", stop_hook_active=True)
+        self.assertEqual(repaired.returncode, 0, repaired.stderr)
+        self.assertEqual(repaired.stdout, "")
+
     def test_external_refresh_requires_explicit_contract_acceptance(self) -> None:
         self.write_active_contract()
         result = self.run_script(
