@@ -9,8 +9,8 @@ read_when:
 
 # Contributor Operating Protocol
 
-Version: 0.4-draft (2026-07-22). Ratification = Joel merges this file into
-`shared/agent-scripts/docs/`.
+Version: 0.5 (2026-07-23). Amendments become effective when Joel merges them
+into `main`.
 
 This document does not replace the canonical agent startup. Run the normal
 startup (wwi, compliance, nearest AGENTS.md, docs router). Read this document
@@ -121,6 +121,33 @@ ruling (Charter R5). Adjudication reasoning goes in the PR comment; if the
 adjudication creates durable architecture or policy, update the owning
 spec/ADR and link it from the PR (Charter R2).
 
+## Revision and expedited completion
+
+**Default — contributor-owned revision.** Review findings return to the
+contributor, who updates and validates the PR. For a human contributor, the
+reviewer should explain the important reasoning without taking away the
+problem-solving work.
+
+**Expedited — transparent maintainer completion.** The maintainer may finish a
+narrow remaining blocker when all of these hold:
+
+- the review and requested outcome are clear;
+- the contributor has had a reasonable opportunity to respond;
+- the remaining change does not require unresolved product or architecture
+  judgment; and
+- delay would materially block a release, migration, dependent contributor, or
+  time-sensitive objective.
+
+The expedited change must preserve the contributor's commits in merged history,
+use a separate attributed maintainer commit, and record the reason on the PR.
+For a human contributor, the maintainer follows up afterward to explain the
+change and invite questions. Expedited completion is not a negative performance
+signal.
+
+Repeated expedited completion is process evidence. Inspect issue clarity,
+review latency, assignment fit, contributor availability, and package size
+instead of normalizing maintainer takeover.
+
 ## Silence and nudges
 
 Silence on assigned work is a workflow event, not a personal failing. The
@@ -165,6 +192,9 @@ describes how the system works; only live sources describe how it is.
 
 ## Changelog
 
+- 0.5 (2026-07-23): added the contributor-owned default and the guarded,
+  transparent expedited-completion mode; clarified that merged doctrine is
+  effective rather than perpetually draft.
 - 0.4-draft (2026-07-22): label declared a rebuildable projection with
   fail-closed head_sha comparison; stale claims made advisory per
   shared-agent-coordination; erroneous 07-23 dates corrected; packet metadata
