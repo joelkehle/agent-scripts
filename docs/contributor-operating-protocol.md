@@ -70,18 +70,24 @@ Two different questions, two different rules (Charter R3, R4):
   on the issue.
 - **Review routing — independence-first.** Reviewers are selected by:
   non-author, relevant competence, current review load, round-robin
-  fairness. Never automatically by the assignment algorithm. Use a live,
+  fairness. Reviewer identity must differ from contributor identity. Never
+  route review automatically by the assignment algorithm. Use a live,
   authorized first-pass reviewer when one is discovered; otherwise perform
-  or request a read-only review.
+  or request read-only analysis, but the review remains incomplete until its
+  attributed findings are posted on the PR.
 
 ## The ready-for-Joel queue
 
-When a PR has passed validation and first-pass review, the reviewer
-prepares a **packet**. A repo-authorized, write-capable identity may post
-it as a PR comment and manage the `ready-for-joel` label when the owning
-repo's policy and the current task authorize those actions; otherwise the
-packet remains a proposal delivered to Joel. No session or agent posts
-through Joel's GitHub identity.
+When a PR has passed validation, a non-author reviewer prepares first-pass
+analysis and a **packet**. The attributed findings and packet must be posted
+on the PR through a repo-authorized, write-capable identity before the PR
+enters Joel's queue. The reviewer may post directly, or a separate
+credential-bearing poster may transmit the reviewer's output verbatim. The
+poster may not modify or re-adjudicate it. If no authorized identity can post,
+the review is incomplete and the PR is blocked; private delivery to Joel is
+not a substitute. No session or agent posts through Joel's GitHub identity.
+The authorized poster may manage the `ready-for-joel` label only when repo
+policy and the current task authorize that write action.
 
 The packet contains, in order:
 
@@ -94,12 +100,15 @@ The packet contains, in order:
 6. Risk, reversibility, and deployment status.
 
 **Commit anchoring.** Every packet records the exact reviewed `head_sha`,
-validation evidence produced against that SHA, generation time, author
-identity, and an idempotency marker (`ready-for-joel.v1`). A packet is
-automatically invalid — and the label must be removed or suppressed — when
-the head changes, the PR becomes draft, or blocking review state changes.
-A replacement packet explicitly supersedes the old one. A green label may
-never outlive the commit it reviewed. The `ready-for-joel` label is a
+validation evidence produced against that SHA, generation time,
+`contributor_identity`, `reviewer_identity`, `poster_identity`, an explicit
+`reviewer_identity != contributor_identity` check, and an idempotency marker
+(`ready-for-joel.v1`). When poster and reviewer differ, the posted findings
+must be the reviewer's attributed output transmitted verbatim. A packet is
+automatically invalid — and the label must be removed or suppressed — when the
+head changes, the PR becomes draft, or blocking review state changes. A
+replacement packet explicitly supersedes the old one. A green label may never
+outlive the commit it reviewed. The `ready-for-joel` label is a
 rebuildable projection, never readiness truth: every consumer must compare
 the packet's `head_sha` with the live PR head and fail closed on mismatch,
 even when stale-label removal failed.
@@ -158,7 +167,10 @@ describes how the system works; only live sources describe how it is.
 
 - 0.4-draft (2026-07-22): label declared a rebuildable projection with
   fail-closed head_sha comparison; stale claims made advisory per
-  shared-agent-coordination; erroneous 07-23 dates corrected.
+  shared-agent-coordination; erroneous 07-23 dates corrected; packet metadata
+  now records contributor, reviewer, and poster identities with an explicit
+  independence check; PR-posted attributed findings are mandatory and private
+  delivery is not a substitute.
 - 0.3-draft (2026-07-22): packet authority narrowed to repo-authorized
   identities (no posting through Joel's identity); commit anchoring and
   automatic invalidation added; APPROVE prohibition; delivered-work

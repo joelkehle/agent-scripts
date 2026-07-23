@@ -38,8 +38,11 @@ issues and PRs, and Joel's remaining role is judgment.
 The maintainer of these repos is **Joel plus an AI partner**.
 
 - **Analysis is collaborative by design.** Specs are drafted with AI. PR
-  adjudication is a three-step: (1) a first-pass review is posted on the PR;
-  (2) Joel discusses the findings with an AI partner (Claude or a Codex) —
+  adjudication is a three-step: (1) a non-author reviewer performs first-pass
+  analysis, and the attributed findings are posted on the PR through a
+  repo-authorized identity; a separate credential-bearing poster may transmit
+  them verbatim but may not modify or re-adjudicate them; (2) Joel discusses
+  the findings with an AI partner (Claude or a Codex) —
   real risks vs. cosmetics, what to request, what happens if the analysis is
   wrong; (3) Joel adjudicates.
 - **Judgment is Joel's alone — today, by ruling, not by architecture.** Joel
@@ -115,11 +118,15 @@ entry that turns out to be repo-shaped is evicted there with a link.
   bus-factor-of-one.*
 - **R4 — Review routing (2026-07-22).** Reviewer selection is separate from
   work assignment: non-author, relevant competence, current review load,
-  round-robin fairness. *Reason: assignment optimizes depth; review
-  optimizes independence.*
+  round-robin fairness. Reviewer identity must differ from contributor
+  identity, and the review is incomplete until attributed findings are posted
+  on the PR. *Reason: assignment optimizes depth; review optimizes
+  independence.*
 - **R5 — Ready-for-Joel packets (2026-07-22).** PRs reach Joel as prepared,
   commit-anchored packets and are adjudicated asynchronously in batches;
-  the packet's recommended disposition is an input to Joel's decision,
+  packets record contributor, reviewer, and poster identities plus an explicit
+  reviewer-is-not-contributor check. The packet's recommended disposition is
+  an input to Joel's decision,
   never a default, and never creates a GitHub APPROVE event. *Reason: keeps
   the gate cheap without letting judgment migrate to the agent.*
 - **R6 — Knowledge placement is context-scoped (2026-07-22, rev. 2).** Multiple knowledge systems coexist, each canonical in
@@ -142,7 +149,10 @@ entry that turns out to be repo-shaped is evicted there with a link.
 - 0.4-draft (2026-07-22): delegation section corrected — delegation level is
   policy, enforcement is architecture; ladder capped at bounded autonomy
   with continuous audit; R7 rewritten accordingly; erroneous 07-23 dates
-  corrected (authoring date is 2026-07-22).
+  corrected (authoring date is 2026-07-22); reviewer independence made
+  auditable through contributor, reviewer, and poster identities; attributed
+  review findings made mandatory on the PR, with verbatim credentialed
+  transport permitted.
 - 0.3-draft (2026-07-22): precedence sentence; R1 rewritten (attributed
   deterministic guardrail permitted); R2 + ADR/runbook and graduation
   requirement; R3 + eligible/active; R6 rewritten as context-scoped
