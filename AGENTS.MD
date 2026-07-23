@@ -57,6 +57,9 @@ conditional docs, skills, hooks, or live discovery:
   `docs/instruction-architecture.md`.
 - Coding loops: `docs/loop-operating-model.md` and the `ship-loop`,
   `review-loop`, `repair-loop`, `learn-loop`, and `hygiene-loop` skills.
+- Contributor coordination, spec-to-issue parsing, assignment, PR adjudication,
+  and nudges: `docs/contributor-operating-protocol.md`; durable maintainer
+  rulings: `docs/maintainer-charter.md`.
 - System-level continuity and contract drift: `docs/elephant/README.md`;
   read `docs/elephant/ELEPHANT_CHECK.md` when its `read_when` matches.
 - State-store choices or fact ownership: `docs/STATE_ARCHITECTURE.md`.
