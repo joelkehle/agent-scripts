@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly EXPECTED_GITHUB_LOGIN="kehle-contributor-agent"
+readonly CONTRIBUTOR_GIT_NAME="Kehle Contributor Agent"
+readonly CONTRIBUTOR_GIT_EMAIL="308211094+kehle-contributor-agent@users.noreply.github.com"
+readonly GITHUB_SECRET_NAME="KEHLE_CONTRIBUTOR_AGENT_GITHUB_TOKEN"
+readonly DEFAULT_INFISICAL_DOMAIN="https://app.infisical.com/api"
+readonly DEFAULT_INFISICAL_PROJECT_ID="d73a32d5-f679-47a4-86e6-aad34a1dbd86"
+readonly DEFAULT_INFISICAL_ENV="prod"
+readonly DEFAULT_INFISICAL_PATH="/shared"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  contributor-agent -- <command> [args...]
+  contributor-agent <command> [args...]
+
+Runs one command with the GitHub identity kehle-contributor-agent.
+
+The wrapper retrieves only KEHLE_CONTRIBUTOR_AGENT_GITHUB_TOKEN from
+Infisical, verifies the token's GitHub login, and applies contributor Git
+author/committer attribution. It does not change the user's persistent gh or
+Git configuration.
+
+Optional overrides:
+  CONTRIBUTOR_AGENT_INFISICAL_UA_CONFIG
+  CONTRIBUTOR_AGENT_INFISICAL_TOKEN
+  CONTRIBUTOR_AGENT_INFISICAL_DOMAIN
+  CONTRIBUTOR_AGENT_INFISICAL_PROJECT_ID
+  CONTRIBUTOR_AGENT_INFISICAL_ENV
+  CONTRIBUTOR_AGENT_INFISICAL_PATH
+USAGE
+}
+
+fail() {
+  printf 'contributor-agent: %s\n' "$1" >&2
+  exit 1
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if [ "${1:-}" = "--" ]; then
+  shift
+fi
+
+if [ "$#" -eq 0 ]; then
+  usage >&2
+  exit 2
+fi
+
+command -v infisical >/dev/null 2>&1 || fail "infisical CLI not found on PATH"
+command -v gh >/dev/null 2>&1 || fail "gh CLI not found on PATH"
+
+ua_config="${CONTRIBUTOR_AGENT_INFISICAL_UA_CONFIG:-${HOME}/.config/infisical/ua.agent.env}"
+infisical_domain="${CONTRIBUTOR_AGENT_INFISICAL_DOMAIN:-$DEFAULT_INFISICAL_DOMAIN}"
+infisical_project_id="${CONTRIBUTOR_AGENT_INFISICAL_PROJECT_ID:-$DEFAULT_INFISICAL_PROJECT_ID}"
+infisical_env="${CONTRIBUTOR_AGENT_INFISICAL_ENV:-$DEFAULT_INFISICAL_ENV}"
+infisical_path="${CONTRIBUTOR_AGENT_INFISICAL_PATH:-$DEFAULT_INFISICAL_PATH}"
+infisical_access_token="${CONTRIBUTOR_AGENT_INFISICAL_TOKEN:-}"
+
+if [ -z "$infisical_access_token" ]; then
+  [ -f "$ua_config" ] || fail "Infisical Universal Auth config not found: $ua_config"
+
+  # The config is trusted host configuration, never repository content.
+  # shellcheck disable=SC1090
+  source "$ua_config"
+
+  infisical_domain="${CONTRIBUTOR_AGENT_INFISICAL_DOMAIN:-${INFISICAL_DOMAIN:-$infisical_domain}}"
+  [ -n "${INFISICAL_CLIENT_ID:-}" ] || fail "INFISICAL_CLIENT_ID missing from $ua_config"
+  [ -n "${INFISICAL_CLIENT_SECRET:-}" ] || fail "INFISICAL_CLIENT_SECRET missing from $ua_config"
+
+  infisical_access_token="$(
+    infisical login \
+      --method universal-auth \
+      --client-id "$INFISICAL_CLIENT_ID" \
+      --client-secret "$INFISICAL_CLIENT_SECRET" \
+      --domain "$infisical_domain" \
+      --silent \
+      --plain
+  )"
+fi
+
+[ -n "$infisical_access_token" ] || fail "Infisical authentication returned an empty token"
+
+github_token="$(
+  infisical secrets get "$GITHUB_SECRET_NAME" \
+    --token "$infisical_access_token" \
+    --projectId "$infisical_project_id" \
+    --env "$infisical_env" \
+    --path "$infisical_path" \
+    --domain "$infisical_domain" \
+    --silent \
+    --plain
+)"
+
+[ -n "$github_token" ] || fail "Infisical secret $GITHUB_SECRET_NAME is missing or empty"
+
+actual_login="$(
+  GH_TOKEN="$github_token" GITHUB_TOKEN="$github_token" \
+    gh api user --jq .login
+)" || fail "GitHub rejected the contributor credential"
+
+if [ "$actual_login" != "$EXPECTED_GITHUB_LOGIN" ]; then
+  fail "refusing to continue: expected GitHub login $EXPECTED_GITHUB_LOGIN, got $actual_login"
+fi
+
+# Remove role-specific GitHub credentials inherited from a broader parent
+# environment before exposing the selected contributor identity.
+while IFS= read -r variable_name; do
+  case "$variable_name" in
+    GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN|*GITHUB_TOKEN*)
+      unset "$variable_name"
+      ;;
+  esac
+done < <(compgen -A variable)
+
+unset INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET INFISICAL_TOKEN
+unset CONTRIBUTOR_AGENT_INFISICAL_TOKEN
+unset infisical_access_token actual_login
+
+export GH_HOST="github.com"
+export GH_TOKEN="$github_token"
+export GITHUB_TOKEN="$github_token"
+export GIT_TERMINAL_PROMPT="0"
+export GIT_AUTHOR_NAME="$CONTRIBUTOR_GIT_NAME"
+export GIT_AUTHOR_EMAIL="$CONTRIBUTOR_GIT_EMAIL"
+export GIT_COMMITTER_NAME="$CONTRIBUTOR_GIT_NAME"
+export GIT_COMMITTER_EMAIL="$CONTRIBUTOR_GIT_EMAIL"
+unset github_token
+
+printf 'contributor-agent: authenticated as %s\n' "$EXPECTED_GITHUB_LOGIN" >&2
+exec "$@"

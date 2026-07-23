@@ -85,6 +85,7 @@ for tool in \
   bus-discover \
   codex-bg \
   committer \
+  contributor-agent \
   dirty-audit \
   docs-list \
   loop-audit \
@@ -126,7 +127,7 @@ cat <<VERIFY
 
 agent-env-install: installed shims into $prefix
 agent-env-install: verify with:
-  ssh beelink 'command -v agent-start agentcoord machine-compliance committer docs-list bus-discover wwi claude codex'
+  ssh beelink 'command -v agent-start agentcoord machine-compliance committer contributor-agent docs-list bus-discover wwi claude codex'
 VERIFY
 
 if [ "$dry_run" -eq 0 ]; then
