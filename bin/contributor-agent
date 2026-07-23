@@ -54,6 +54,9 @@ fi
 
 command -v infisical >/dev/null 2>&1 || fail "infisical CLI not found on PATH"
 command -v gh >/dev/null 2>&1 || fail "gh CLI not found on PATH"
+command -v git >/dev/null 2>&1 || fail "git not found on PATH"
+command -v curl >/dev/null 2>&1 || fail "curl not found on PATH"
+command -v jq >/dev/null 2>&1 || fail "jq not found on PATH"
 
 ua_config="${CONTRIBUTOR_AGENT_INFISICAL_UA_CONFIG:-${HOME}/.config/infisical/ua.agent.env}"
 infisical_domain="${CONTRIBUTOR_AGENT_INFISICAL_DOMAIN:-$DEFAULT_INFISICAL_DOMAIN}"
@@ -73,22 +76,51 @@ if [ -z "$infisical_access_token" ]; then
   [ -n "${INFISICAL_CLIENT_ID:-}" ] || fail "INFISICAL_CLIENT_ID missing from $ua_config"
   [ -n "${INFISICAL_CLIENT_SECRET:-}" ] || fail "INFISICAL_CLIENT_SECRET missing from $ua_config"
 
-  infisical_access_token="$(
-    infisical login \
-      --method universal-auth \
-      --client-id "$INFISICAL_CLIENT_ID" \
-      --client-secret "$INFISICAL_CLIENT_SECRET" \
-      --domain "$infisical_domain" \
-      --silent \
-      --plain
-  )"
+  infisical_api_base="${infisical_domain%/}"
+  case "$infisical_api_base" in
+    https://*) ;;
+    *) fail "Infisical domain must use HTTPS" ;;
+  esac
+
+  case "$infisical_api_base" in
+    */api) ;;
+    *) infisical_api_base="$infisical_api_base/api" ;;
+  esac
+
+  # Keep Universal Auth credentials out of process arguments. The protected
+  # host config is read by this shell; jq receives the values on stdin and
+  # curl receives the JSON as its request body on stdin.
+  if ! infisical_login_response="$(
+    printf '%s\0%s\0' "$INFISICAL_CLIENT_ID" "$INFISICAL_CLIENT_SECRET" |
+      jq -cRs 'split("\u0000") | {clientId: .[0], clientSecret: .[1]}' |
+      curl \
+        --fail \
+        --proto '=https' \
+        --proto-redir '=https' \
+        --silent \
+        --show-error \
+        --request POST \
+        --header 'Content-Type: application/json' \
+        --data-binary @- \
+        "$infisical_api_base/v1/auth/universal-auth/login"
+  )"; then
+    fail "Infisical Universal Auth login failed"
+  fi
+
+  if ! infisical_access_token="$(
+    printf '%s' "$infisical_login_response" |
+      jq -er '.accessToken | strings | select(length > 0)'
+  )"; then
+    fail "Infisical Universal Auth response did not contain an access token"
+  fi
+  unset infisical_login_response infisical_api_base
 fi
 
 [ -n "$infisical_access_token" ] || fail "Infisical authentication returned an empty token"
 
 github_token="$(
+  INFISICAL_TOKEN="$infisical_access_token" \
   infisical secrets get "$GITHUB_SECRET_NAME" \
-    --token "$infisical_access_token" \
     --projectId "$infisical_project_id" \
     --env "$infisical_env" \
     --path "$infisical_path" \
@@ -108,6 +140,29 @@ if [ "$actual_login" != "$EXPECTED_GITHUB_LOGIN" ]; then
   fail "refusing to continue: expected GitHub login $EXPECTED_GITHUB_LOGIN, got $actual_login"
 fi
 
+append_git_config() {
+  local key="$1"
+  local value="$2"
+  local index="${GIT_CONFIG_COUNT:-0}"
+
+  [[ "$index" =~ ^[0-9]+$ ]] || fail "inherited GIT_CONFIG_COUNT is invalid"
+  printf -v "GIT_CONFIG_KEY_${index}" '%s' "$key"
+  printf -v "GIT_CONFIG_VALUE_${index}" '%s' "$value"
+  export "GIT_CONFIG_KEY_${index}" "GIT_CONFIG_VALUE_${index}"
+  export GIT_CONFIG_COUNT="$((index + 1))"
+}
+
+# Standard GitHub SSH remote forms are made HTTPS-only. Any remaining SSH Git
+# transport fails closed instead of selecting a host SSH key. The empty helper
+# entry resets inherited/system/local helpers for this credential context; the
+# following helper must therefore obtain the verified GH_TOKEN.
+append_git_config 'url.https://github.com/.insteadOf' 'git@github.com:'
+append_git_config 'url.https://github.com/.insteadOf' 'ssh://git@github.com/'
+append_git_config 'url.https://github.com/.insteadOf' 'git+ssh://git@github.com/'
+append_git_config 'credential.https://github.com.helper' ''
+append_git_config 'credential.https://github.com.helper' '!gh auth git-credential'
+append_git_config 'credential.https://github.com.useHttpPath' 'false'
+
 # Remove role-specific GitHub credentials inherited from a broader parent
 # environment before exposing the selected contributor identity.
 while IFS= read -r variable_name; do
@@ -126,10 +181,30 @@ export GH_HOST="github.com"
 export GH_TOKEN="$github_token"
 export GITHUB_TOKEN="$github_token"
 export GIT_TERMINAL_PROMPT="0"
+export GIT_SSH_COMMAND="false"
+export GCM_INTERACTIVE="never"
 export GIT_AUTHOR_NAME="$CONTRIBUTOR_GIT_NAME"
 export GIT_AUTHOR_EMAIL="$CONTRIBUTOR_GIT_EMAIL"
 export GIT_COMMITTER_NAME="$CONTRIBUTOR_GIT_NAME"
 export GIT_COMMITTER_EMAIL="$CONTRIBUTOR_GIT_EMAIL"
+if ! git_credential="$(
+  printf 'protocol=https\nhost=github.com\n\n' | git credential fill
+)"; then
+  fail "Git could not select the contributor credential for github.com"
+fi
+
+git_credential_password=""
+while IFS='=' read -r credential_key credential_value; do
+  if [ "$credential_key" = "password" ]; then
+    git_credential_password="$credential_value"
+  fi
+done <<< "$git_credential"
+
+if [ "$git_credential_password" != "$github_token" ]; then
+  fail "Git selected a credential other than the verified contributor token"
+fi
+
+unset git_credential git_credential_password
 unset github_token
 
 printf 'contributor-agent: authenticated as %s\n' "$EXPECTED_GITHUB_LOGIN" >&2

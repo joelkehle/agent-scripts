@@ -35,11 +35,21 @@ The wrapper:
 
 1. Retrieves only `KEHLE_CONTRIBUTOR_AGENT_GITHUB_TOKEN` from Infisical.
 2. Verifies that GitHub resolves the token to `kehle-contributor-agent`.
-3. Fails closed instead of falling back to Joel's or the reviewer's identity.
-4. Sets `GH_TOKEN` and `GITHUB_TOKEN` only for the child command.
-5. Sets Git author and committer attribution to the contributor account's
+3. Resets GitHub credential helpers for the child and proves that Git selects
+   the verified contributor token.
+4. Rewrites standard GitHub SSH remotes to HTTPS and disables any residual SSH
+   Git transport, so a host SSH key cannot become an identity fallback.
+5. Fails closed before launch if either the GitHub or Git credential check fails.
+6. Sets `GH_TOKEN` and `GITHUB_TOKEN` only for the child command.
+7. Sets Git author and committer attribution to the contributor account's
    GitHub `noreply` address.
-6. Leaves persistent `gh` and Git configuration unchanged.
+8. Leaves persistent `gh` and Git configuration unchanged.
+
+Universal Auth reads the client ID and client secret from the mode-`0600` host
+file, sends them to Infisical in an HTTPS-only request body over stdin, and passes the
+short-lived access token to the Infisical CLI through its supported
+`INFISICAL_TOKEN` environment channel. Neither secret is placed in process
+arguments. The wrapper removes Infisical credentials before launching the child.
 
 The reviewer identity remains owned by the review agent's deployment and
 owning-repo policy. It is never selected by `contributor-agent`.
@@ -60,6 +70,8 @@ Joel-only step in web UI:
 3. Capture `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET`.
 
 Per-machine shell steps:
+
+Required host commands: `infisical`, `gh`, `git`, `curl`, and `jq`.
 
 ```bash
 mkdir -p ~/.config/infisical
