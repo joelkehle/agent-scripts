@@ -16,36 +16,51 @@ read_when:
 - Machine paths: `/machines/beelink`, `/machines/macmini`, `/machines/surface-wsl`
 - Default environment: `prod`
 
-## Wrapper
+## GitHub identity separation
 
-Use `bin/agent-env.sh` to inject secrets at runtime:
+Joel's normal shell, the contributor account, and the reviewer account are
+separate GitHub actors. Do not replace Joel's persistent `gh` login and do not
+reuse the reviewer service credential for contribution work.
 
-```bash
-agent-env.sh -- gh repo list
-agent-env.sh -- env | rg -n 'GH_TOKEN|GITHUB_TOKEN'
-agent-env.sh -- codex
-```
-
-Codex shortcut wrapper:
+Use `bin/contributor-agent` when a coding agent should author commits, push
+branches, or open pull requests as `kehle-contributor-agent`:
 
 ```bash
-codex-agent.sh
+contributor-agent -- gh api user --jq .login
+contributor-agent -- codex
+contributor-agent -- claude --dangerously-skip-permissions
 ```
 
-Default behavior:
-- `--projectId d73a32d5-f679-47a4-86e6-aad34a1dbd86`
-- `--env prod`
-- `--path /shared`
+The wrapper:
 
-Overrides:
-- `INFISICAL_PROJECT_ID` or `AGENT_INFISICAL_PROJECT_ID`
-- `INFISICAL_ENV` or `AGENT_INFISICAL_ENV`
-- `INFISICAL_PATH` or `AGENT_INFISICAL_PATH`
-- `INFISICAL_DOMAIN`
-- `INFISICAL_UA_CONFIG` (default `~/.config/infisical/ua.env`)
+1. Retrieves only `KEHLE_CONTRIBUTOR_AGENT_GITHUB_TOKEN` from Infisical.
+2. Verifies that GitHub resolves the token to `kehle-contributor-agent`.
+3. Resets GitHub credential helpers for the child and proves that Git selects
+   the verified contributor token.
+4. Rewrites standard GitHub SSH remotes to HTTPS and disables any residual SSH
+   Git transport, so a host SSH key cannot become an identity fallback.
+5. Fails closed before launch if either the GitHub or Git credential check fails.
+6. Sets `GH_TOKEN` and `GITHUB_TOKEN` only for the child command.
+7. Sets Git author and committer attribution to the contributor account's
+   GitHub `noreply` address.
+8. Leaves persistent `gh` and Git configuration unchanged.
 
-`ua.env` is used for UA credentials (`INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET`).
-The wrapper keeps its own default project/env/path unless you override explicitly.
+Universal Auth reads the client ID and client secret from the mode-`0600` host
+file, sends them to Infisical in an HTTPS-only request body over stdin, and passes the
+short-lived access token to the Infisical CLI through its supported
+`INFISICAL_TOKEN` environment channel. Neither secret is placed in process
+arguments. The wrapper removes Infisical credentials before launching the child.
+
+The reviewer identity remains owned by the review agent's deployment and
+owning-repo policy. It is never selected by `contributor-agent`.
+
+### Historical note
+
+Older versions of this guide named `agent-env.sh` and `codex-agent.sh`. Local
+copies existed in the pre-restructure archive, but `bin/*` ignored them and
+they were never Git-tracked or installed by the active repository. Do not
+restore the generic wrapper: it injected the entire `/shared` secret set and
+did not enforce a GitHub role identity.
 
 ## Universal Auth Setup
 
@@ -56,10 +71,12 @@ Joel-only step in web UI:
 
 Per-machine shell steps:
 
+Required host commands: `infisical`, `gh`, `git`, `curl`, and `jq`.
+
 ```bash
 mkdir -p ~/.config/infisical
 chmod 700 ~/.config/infisical
-cat > ~/.config/infisical/ua.env <<'EOF'
+cat > ~/.config/infisical/ua.agent.env <<'EOF'
 INFISICAL_CLIENT_ID=...
 INFISICAL_CLIENT_SECRET=...
 INFISICAL_PROJECT_ID=d73a32d5-f679-47a4-86e6-aad34a1dbd86
@@ -67,29 +84,31 @@ INFISICAL_ENV=prod
 INFISICAL_PATH=/shared
 INFISICAL_DOMAIN=https://app.infisical.com/api
 EOF
-chmod 600 ~/.config/infisical/ua.env
+chmod 600 ~/.config/infisical/ua.agent.env
 ```
 
 Verify:
 
 ```bash
-agent-env.sh -- gh auth status
-agent-env.sh -- gh repo list --limit 5
+contributor-agent -- gh api user --jq .login
 ```
+
+Expected output includes `kehle-contributor-agent`.
 
 ## Machine Checklist
 
 ### `surface-wsl`
 - Install Infisical CLI.
-- Configure `~/.config/infisical/ua.env`.
-- Verify `agent-env.sh -- gh repo list`.
+- Configure `~/.config/infisical/ua.agent.env`.
+- Verify `contributor-agent -- gh api user --jq .login`.
 
 ### `beelink`
 - SSH in as bootstrap user.
 - Install Infisical CLI if missing.
-- If `~/.config/infisical/ua.env` already exists for another project, keep it and use a dedicated file (for example `~/.config/infisical/ua.agent.env`) with `INFISICAL_UA_CONFIG=...`.
+- Keep other project credentials separate; use
+  `~/.config/infisical/ua.agent.env` for the `agent-secrets` machine identity.
 - Configure UA for both `joelkehle` and `agent` users if both run agents.
-- Verify wrapper for the agent runtime user.
+- Verify `contributor-agent` for the agent runtime user.
 
 ### `macmini`
 - Repeat same steps as beelink.
@@ -100,15 +119,15 @@ agent-env.sh -- gh repo list --limit 5
 
 ## Codex / Claude Launch Pattern
 
-Prefer runtime injection, not persistent exports in shell startup files:
+Select the contributor identity explicitly:
 
 ```bash
-agent-env.sh -- codex
-codex-agent.sh
-agent-env.sh -- claude --dangerously-skip-permissions
+contributor-agent -- codex
+contributor-agent -- claude --dangerously-skip-permissions
 ```
 
-If you need convenience aliases, keep them command wrappers only (no long-lived `export GH_TOKEN=...` in `.bashrc`).
+Do not add long-lived `GH_TOKEN` or `GITHUB_TOKEN` exports to shell startup
+files. Outside this wrapper, `gh` continues to use the user's normal login.
 
 ## Privileged Host Checklist (Joel sudo)
 

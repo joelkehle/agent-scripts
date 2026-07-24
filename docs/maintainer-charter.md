@@ -8,8 +8,8 @@ read_when:
 
 # Maintainer Charter
 
-Version: 0.5-draft (2026-07-23). Ratification = Joel merges this file into
-`shared/agent-scripts/docs/`.
+Version: 0.6 (2026-07-23). Amendments become effective when Joel merges them
+into `main`.
 
 **Precedence.** This Charter is subordinate to global, workspace, and repo
 AGENTS safety, authority, and ownership rules. Within maintainer doctrine,
@@ -79,6 +79,29 @@ resource on work anyone can do. Anything Joel writes that is meant to merge
 arrives as a PR through the same pipe as everyone else's and gets the same
 review pass. No side door.
 
+## Completing contributor work
+
+The default is **contributor-owned revision**: the contributor responds to
+review and finishes their own PR. For a human contributor, this preserves the
+learning loop as well as authorship.
+
+The maintainer may instead use **expedited completion** when the review is
+clear, the contributor has had a reasonable opportunity to respond, and the
+remaining work is narrow enough that taking it over avoids a disproportionate
+delay. This is a schedule tool, not a judgment about the contributor.
+
+Expedited completion has four safeguards:
+
+1. Preserve the contributor's commits and authorship in the merged history.
+2. Put maintainer-authored work in a separate, attributed commit.
+3. Explain the intervention and its reason on the public PR record.
+4. For a human contributor, discuss the change afterward so the learning loop
+   still closes.
+
+The maintainer does not silently rewrite a contribution until it passes. If
+expedited completion becomes routine, treat that as a specification, review,
+assignment, or scheduling problem and repair the system.
+
 ## The delegation path
 
 Agent capability is expected to improve in step changes, and this system is
@@ -145,12 +168,21 @@ entry that turns out to be repo-shaped is evicted there with a link.
   reversible where practical, and continuously auditable. *Reason:
   capability will grow in step changes; the system absorbs turns by
   ruling — and stays safe by architecture.*
+- **R8 — Contributor completion modes (2026-07-23).** Contributor-owned
+  revision is the default. The maintainer may expedite a narrow remainder
+  after clear review and a reasonable response opportunity only with preserved
+  contributor history, a separate attributed maintainer commit, a public
+  explanation, and a human debrief when applicable. *Reason: deadlines may
+  change who finishes the last mile without erasing authorship or learning.*
 
 ## Changelog
 
-- 0.5-draft (2026-07-23): designate the contribution-review architecture as
+- 0.6 (2026-07-23): designate the contribution-review architecture as
   the canonical implementation contract for adjudication, review routing, and
   ready-for-Joel packets.
+- 0.5 (2026-07-23): codified contributor-owned revision as the default and a
+  transparent expedited-completion path for narrow remaining work; clarified
+  that merged doctrine is effective rather than perpetually draft.
 - 0.4-draft (2026-07-22): delegation section corrected — delegation level is
   policy, enforcement is architecture; ladder capped at bounded autonomy
   with continuous audit; R7 rewritten accordingly; erroneous 07-23 dates
