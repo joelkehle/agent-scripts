@@ -19,4 +19,5 @@ Current defaults:
 - use `explorer` for read-only discovery
 - use `worker` for bounded execution with disjoint write ownership
 - use `verify` for independent validation on risky changes
-- use `oracle` as fallback when native subagents are unavailable or model diversity is useful
+- use `oracle` as fallback when native subagents are unavailable or model
+  diversity is useful; follow the shared `oracle` skill and `docs/oracle.md`

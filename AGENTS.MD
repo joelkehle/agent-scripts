@@ -67,6 +67,8 @@ conditional docs, skills, hooks, or live discovery:
   contract and owning repo docs.
 - Cross-host or overlapping coding-agent work:
   `docs/shared-agent-coordination.md`.
+- Oracle GPT-5.6 Pro second-model reviews: use the `oracle` skill and
+  `docs/oracle.md`.
 - User-visible UI or walkthroughs: use the `design-walkthrough` skill.
 - Services, ports, auth, HTTP ingress, telemetry, and alerts:
   `docs/service-runtime-policy.md`.

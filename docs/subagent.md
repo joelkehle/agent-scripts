@@ -61,6 +61,10 @@ Use `oracle` when:
 - the task is a one-shot architecture, test-gap, or code-smell review
 - you are stuck after reading the relevant code
 
+For Joel's current Oracle workflow, use the shared `oracle` skill and
+`docs/oracle.md`. The default is GPT-5.6 Pro through the signed-in browser path;
+retain the model-selection evidence and treat the answer as advisory.
+
 ## When Not To Use Subagents
 
 Usually stay local for:

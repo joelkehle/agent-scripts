@@ -119,9 +119,15 @@ Local tool catalog for this machine.
   verify the rendered result.
 
 ## oracle
-- Purpose: bundle a prompt and files for a second-model review.
-- Before first use in a session, run `npx -y @steipete/oracle --help`.
-- Use when stuck, debugging a difficult failure, or seeking independent review.
+- Purpose: run an independent GPT-5.6 Pro review with a prompt and the smallest
+  necessary file set.
+- Canonical workflow: use the shared `oracle` skill and read `docs/oracle.md`.
+- Always use Node 24+ and `npx -y @steipete/oracle@latest`; the unqualified
+  package command has resolved a stale release on Beelink.
+- Default invocation: browser engine, `--model gpt-5-pro`, and the loopback-only
+  Surface Chrome bridge at `--remote-chrome 127.0.0.1:9223`.
+- Treat output as advisory; retain `requested=Pro`, `resolved=Pro`, and
+  `verified=yes` model-selection evidence.
 
 ## gh
 - Purpose: GitHub issues, pull requests, comments, releases, and repository

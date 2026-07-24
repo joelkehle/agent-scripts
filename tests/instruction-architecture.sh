@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 global_agents="$repo_root/AGENTS.MD"
 workspace_agents="$repo_root/workspace-roots/projects/AGENTS.md"
+oracle_doc="$repo_root/docs/oracle.md"
+oracle_skill="$repo_root/workspace-roots/projects/.agents/skills/oracle/SKILL.md"
+tools_doc="$repo_root/tools.md"
 
 fail() {
   printf 'instruction-architecture: %s\n' "$*" >&2
@@ -45,6 +48,7 @@ for router in \
   "docs/bus-discovery.md" \
   "docs/shared-agent-coordination.md" \
   "docs/service-runtime-policy.md" \
+  "docs/oracle.md" \
   "design-walkthrough" \
   "tools.md"; do
   require_text "$global_agents" "$router"
@@ -57,6 +61,18 @@ for stale in \
   "## Session start: surface open loops"; do
   reject_text "$global_agents" "$stale"
 done
+
+for file in "$oracle_doc" "$oracle_skill" "$tools_doc"; do
+  require_text "$file" "@steipete/oracle@latest"
+  require_text "$file" "--model gpt-5-pro"
+  reject_text "$file" "gpt-5.2-pro"
+  reject_text "$file" "npx -y @steipete/oracle --help"
+done
+
+require_text "$oracle_doc" "--remote-chrome 127.0.0.1:9223"
+require_text "$oracle_doc" "requested=Pro"
+require_text "$oracle_doc" "resolved=Pro"
+require_text "$oracle_doc" "verified=yes"
 
 [ "$(grep -c '^## Session Start$' "$global_agents")" -eq 1 ] ||
   fail "global AGENTS must contain exactly one Session Start section"
