@@ -8,13 +8,15 @@ read_when:
 
 # Maintainer Charter
 
-Version: 0.5 (2026-07-23). Amendments become effective when Joel merges them
+Version: 0.6 (2026-07-23). Amendments become effective when Joel merges them
 into `main`.
 
 **Precedence.** This Charter is subordinate to global, workspace, and repo
 AGENTS safety, authority, and ownership rules. Within maintainer doctrine,
 its Rulings govern the Contributor Operating Protocol; if the two disagree,
 the Rulings here win and the Protocol gets fixed.
+`contribution-review-architecture.md` is the canonical implementation
+architecture for R1, R4, and R5 and remains subordinate to these Rulings.
 
 ## Why this exists
 
@@ -175,6 +177,9 @@ entry that turns out to be repo-shaped is evicted there with a link.
 
 ## Changelog
 
+- 0.6 (2026-07-23): designate the contribution-review architecture as
+  the canonical implementation contract for adjudication, review routing, and
+  ready-for-Joel packets.
 - 0.5 (2026-07-23): codified contributor-owned revision as the default and a
   transparent expedited-completion path for narrow remaining work; clarified
   that merged doctrine is effective rather than perpetually draft.
