@@ -72,7 +72,7 @@ The proposal does not confuse:
 | Layer | Stable platform concern | Current slice |
 |---|---|---|
 | Contributor | Human or agent author identity | Intern and coding-agent PRs |
-| Coordination | Observation, routing, retry, audit | Existing intern-manager sweep |
+| Coordination | Observation, routing, retry, audit | Existing contribution-coordinator sweep |
 | Policy | Deterministic reproducible checks | Repo, head, scope, identity, validation |
 | Review | Independent semantic analysis | Existing review runtime plus reasoning session |
 | Write boundary | Guarded attributed transport | Reviewer machine account |

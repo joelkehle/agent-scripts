@@ -3,7 +3,7 @@ summary: "Canonical architecture contract for contribution intake, independent P
 read_when:
   - Designing or changing contribution routing, automated PR review, GitHub machine identities, or the ready-for-Joel queue.
   - Changing the contribution coordinator, policy evaluator, first-pass reviewer, GitHub review poster, or Project Manager integration.
-  - Implementing or reviewing github-pr-review, intern-manager, review-agent, or project-manager behavior.
+  - Implementing or reviewing github-pr-review, contribution-coordinator, review-agent, or project-manager behavior.
   - Deciding whether a new review-related agent, queue, store, label, or bus capability is needed.
 ---
 
@@ -430,7 +430,7 @@ map as follows:
 
 | Logical role | Existing deployable or facility |
 |---|---|
-| Contribution coordinator | `ucla-tdg-intern-manager` |
+| Contribution coordinator | `ucla.contribution-coordinator` |
 | Policy evaluator | deterministic checks in the review pipeline |
 | First-pass reviewer | `ucla-tdg-github-review-agent` plus an independent reasoning session where required |
 | GitHub review poster | guarded GitHub write adapter using `kehle-reviewer-agent` |

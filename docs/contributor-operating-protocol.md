@@ -169,7 +169,7 @@ source, the source wins.
 
 | Agent / identity | Role | Home |
 |---|---|---|
-| `ucla-tdg-intern-manager` | Contribution coordination: GitHub sweep, roster/check-in state, review dispatch, action/outcome log | `ucla-tdg-ip-agents` |
+| `ucla.contribution-coordinator` | Contribution coordination: GitHub sweep, roster/check-in state, review dispatch, action/outcome log | `ucla-tdg-ip-agents` |
 | `ucla-tdg-github-review-agent` | Policy evaluation, first-pass review, and guarded GitHub review posting where configured | `ucla-tdg-ip-agents` |
 | `ucla-tdg-project-manager` | Tasks, deadlines, proposals, escalation runtime | `ucla-tdg-project-agents` |
 | `kehle-contributor-agent` | Dedicated GitHub machine account for agent-authored contributions | GitHub account, not an orchestrator |
