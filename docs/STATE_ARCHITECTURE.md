@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.16 (2026-07-19)
+Version: 1.17 (2026-07-23)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -150,14 +150,15 @@ projection.
   wikis or dashboards may mirror the org chart, but they must cite this file.
   Individual agent repos must not become authoritative for their own manager.
 
-- **ucla-tdg-ip-agents intern-manager GitHub sweep cursor
+- **ucla-tdg-ip-agents contribution-coordinator GitHub sweep cursor
   (`data/intern-manager/github-sweep-cursor.json`, added 2026-06-26):**
-  disposable agent working state for deduping 15-minute intern GitHub sweeps and
-  retrying PR-review dispatch. GitHub remains the source for issues, comments,
-  PRs, and head SHAs; project-manager remains the owner of work nouns once a
-  proposal is accepted. The cursor only records what the intern-manager has
-  observed or already handed to the GitHub review agent. It is safe to delete and
-  rebuild from GitHub plus bus/project-manager receipts.
+  disposable agent working state for deduping 15-minute contribution GitHub
+  sweeps and retrying PR-review dispatch. GitHub remains the source for issues,
+  comments, PRs, and head SHAs; project-manager remains the owner of work nouns
+  once a proposal is accepted. The cursor records only what the
+  contribution-coordinator has observed or already handed to the GitHub review
+  agent. It is safe to delete and rebuild from GitHub plus bus/project-manager
+  receipts.
 
 - **ucla-tdg-email-triage Gmail History attention-event ledger
   (`data/attention-events/`, added 2026-06-27):** disposable agent working state
@@ -170,12 +171,12 @@ projection.
   nouns, or narrative truth. Rows must carry source refs and be safe to delete
   and rebuild from upstream evidence plus watcher reprocessing.
 
-- **ucla-tdg-ip-agents intern-manager PM event log
+- **ucla-tdg-ip-agents contribution-coordinator PM event log
   (`data/intern-manager/pm-events.jsonl` + sibling JSON state files, added
   2026-07-03, JK-SPEC-INTERNPM-001 mission A1):** durable, append-only owner of
-  the intern-manager's own action/outcome history — dispatches sent, dispatch
-  failures, check-ins observed, review replies received, proposals filed, and
-  (as later missions land) nudges, routes, and escalations. Unlike the sweep
+  the contribution-coordinator's own action/outcome history — dispatches sent,
+  dispatch failures, check-ins observed, review replies received, proposals
+  filed, and (as later missions land) nudges, routes, and escalations. Unlike the sweep
   cursor above, this log is NOT disposable: it is the audit trail (spec NFR-2)
   and metrics substrate (PM-MET-1/4), and its failure-and-timing facts are not
   rebuildable from upstream. GitHub remains the source for issues/PRs/comments;
@@ -226,6 +227,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.17 (2026-07-23): rename coordinator runtime references while retaining
+  the legacy `data/intern-manager/` state path and historical
+  `JK-SPEC-INTERNPM-001` identifier.
 - 1.16 (2026-07-19): classify private Langfuse evaluation datasets as
   disposable, redacted evaluation telemetry; forbid them from owning source,
   conversation, workflow, policy, task, trial, or model-selection truth.
@@ -245,14 +249,14 @@ projection.
 - 1.11 (2026-07-13): clarify assistant-db ownership of technology and IP docket
   nouns imported from Inteum, including uncertain funding assertions and source
   deadlines; keep resulting filing-decision work in project-manager.
-- 1.10 (2026-07-03): register the ucla-tdg-ip-agents intern-manager PM event
-  log as the durable, non-disposable owner of PM action/outcome history
-  (JK-SPEC-INTERNPM-001 audit + metrics substrate).
+- 1.10 (2026-07-03): register the ucla-tdg-ip-agents contribution-coordinator
+  (then intern-manager) PM event log as the durable, non-disposable owner of
+  PM action/outcome history (JK-SPEC-INTERNPM-001 audit + metrics substrate).
 - 1.9 (2026-06-27): register email-triage `data/attention-events/` as
   disposable Gmail History watcher working state / interaction projection.
-- 1.8 (2026-06-26): register the ucla-tdg-ip-agents intern-manager GitHub sweep
-  cursor as disposable agent working state for sweep dedup and review dispatch
-  retry.
+- 1.8 (2026-06-26): register the ucla-tdg-ip-agents contribution-coordinator
+  (then intern-manager) GitHub sweep cursor as disposable agent working
+  state for sweep dedup and review dispatch retry.
 - 1.7 (2026-06-16): add the Interactions tier for communication-event
   provenance and invert Source evidence to NAS-owned canonical evidence, with
   vendor clouds demoted to capture devices/caches.

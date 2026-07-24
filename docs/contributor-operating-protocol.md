@@ -9,7 +9,7 @@ read_when:
 
 # Contributor Operating Protocol
 
-Version: 0.5 (2026-07-23). Amendments become effective when Joel merges them
+Version: 0.6 (2026-07-23). Amendments become effective when Joel merges them
 into `main`.
 
 This document does not replace the canonical agent startup. Run the normal
@@ -18,6 +18,10 @@ when your work is maintainer-shaped: coordinating contributors, parsing
 specs, assigning, reviewing, nudging, or adjudicating. This Protocol is
 subordinate to the Maintainer Charter's Rulings and to AGENTS safety,
 authority, and ownership rules.
+
+`contribution-review-architecture.md` is the canonical implementation
+architecture for the roles, identity boundaries, lifecycle, retry behavior,
+and state ownership described here.
 
 ## The maintainer, in five lines
 
@@ -165,10 +169,11 @@ source, the source wins.
 
 | Agent / identity | Role | Home |
 |---|---|---|
-| `ucla-tdg-intern-manager` | GitHub sweep, roster/check-in state, review dispatch, PM event log | `ucla-tdg-ip-agents` |
-| `ucla-tdg-github-review-agent` | First-pass PR analysis; guarded non-approval GitHub writes | `ucla-tdg-ip-agents` |
+| `ucla.contribution-coordinator` | Contribution coordination: GitHub sweep, roster/check-in state, review dispatch, action/outcome log | `ucla-tdg-ip-agents` |
+| `ucla-tdg-github-review-agent` | Policy evaluation, first-pass review, and guarded GitHub review posting where configured | `ucla-tdg-ip-agents` |
 | `ucla-tdg-project-manager` | Tasks, deadlines, proposals, escalation runtime | `ucla-tdg-project-agents` |
-| `kehle-review-agent` | Dedicated GitHub identity for agent-authored reviews | GitHub account, not an orchestrator |
+| `kehle-contributor-agent` | Dedicated GitHub machine account for agent-authored contributions | GitHub account, not an orchestrator |
+| `kehle-reviewer-agent` | Dedicated GitHub machine account for attributed reviews and ready packets | GitHub account, not an orchestrator |
 | Coding agents (Codex, Claude Code) | Contributors and analysis partners | launched per-repo |
 
 **Which system answers which question:**
@@ -192,6 +197,9 @@ describes how the system works; only live sources describe how it is.
 
 ## Changelog
 
+- 0.6 (2026-07-23): link the canonical contribution-review architecture;
+  use contribution-coordinator vocabulary; correct the GitHub machine-account
+  roster and separate contributor from reviewer identities.
 - 0.5 (2026-07-23): added the contributor-owned default and the guarded,
   transparent expedited-completion mode; clarified that merged doctrine is
   effective rather than perpetually draft.
