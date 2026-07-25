@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.18 (2026-07-25)
+Version: 1.19 (2026-07-25)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -30,7 +30,7 @@ projection.
 | Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
 | Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; `life-events` event log for promoted `scope=personal` timeline events | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
 | Source evidence | NAS `/mnt/synology-share1/evidence/<channel>/<id>/` canonical owned copies; Gmail, Krisp, Apple, and other vendor clouds are capture devices and convenience caches | the immutable record: media, transcript, message/export bytes, manifest, hashes, and stable `source_ref` / `evidence_ref` | never copied as truth |
-| Mail synchronization governance | `mail-mirror` append-only, metadata-only synchronization ledger at the future scope-separated namespace `nas:state/mail-mirror/sync-ledger/<scope>/<opaque-account-ref>/` (approved; not operational) | opaque synchronization stream, generation, and epoch IDs; committed IMAP and Gmail History boundaries; synchronization gaps; machine-only capture, reconciliation, metadata-refresh, and gap-resolution obligations; capture attempt/outcome classifications; recovery, freeze, verification, and promotion records; immutable references and locator hashes pointing to canonical evidence | SQLite and other local indexes are rebuildable projections; scheduler state, leases, holders, fences, page progress, and governor-token state are ephemeral or disposable; mail evidence remains owned by the Source evidence tier |
+| Mail synchronization governance | `mail-mirror` append-only, metadata-only synchronization ledger at the future scope-separated namespace `nas:state/mail-mirror/sync-ledger/<scope>/<opaque-account-ref>/` (approved; not operational) | opaque synchronization stream, generation, and epoch IDs; committed IMAP and Gmail History boundaries; synchronization gaps; machine-only capture, reconciliation, metadata-refresh, and gap-resolution obligations, including canonical opaque provider message and thread locator IDs required to execute them; capture attempt/outcome classifications; recovery, freeze, verification, and promotion records; immutable references and locator hashes pointing to canonical evidence | SQLite and other local indexes are rebuildable projections; scheduler state, leases, holders, fences, page progress, and governor-token state are ephemeral or disposable; mail evidence remains owned by the Source evidence tier |
 | Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
 | Agent org governance | `shared/manager/ops/config/agent-org.json` | Joel Inc agent titles, reporting lines, trust level, safety class, and escalation policy | a projection into bus passports, dashboards, docs, or wiki pages |
 | Transport | pinakes bus (UCLA :8080, JK :8081) | agent registration secrets for HMAC identity; no durable workflow facts (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
@@ -103,8 +103,10 @@ projection.
   The payload allowlist is limited to opaque synchronization lineage IDs;
   committed IMAP and Gmail History boundaries; unresolved and resolved gap
   types and status; machine-only capture, reconciliation, metadata-refresh, and
-  gap-resolution obligations; capture intent, attempt, and outcome
-  classification; generation freeze, verification, recovery-required, and
+  gap-resolution obligations; canonical opaque provider message and thread
+  locator IDs required to execute those obligations; capture intent, attempt,
+  and outcome classification; generation freeze, verification,
+  recovery-required, and
   promotion records; and immutable references plus locator hashes pointing to
   canonical evidence. The ledger does not own account or person identity,
   account configuration, human tasks or commitments, subjects, addresses,
@@ -280,6 +282,10 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.19 (2026-07-25): clarify that executable machine synchronization
+  obligations may include canonical opaque provider message and thread locator
+  IDs; this does not authorize message content, account identity, or live
+  provider access.
 - 1.18 (2026-07-25): authorize, but do not operationalize, `mail-mirror` as
   sole appender to the scope-separated append-only synchronization-governance
   ledger under future `nas:state/mail-mirror/sync-ledger/`; keep SQLite
