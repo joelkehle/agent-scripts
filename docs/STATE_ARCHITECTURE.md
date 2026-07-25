@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.19 (2026-07-25)
+Version: 1.20 (2026-07-25)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -28,6 +28,7 @@ projection.
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
 | Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
+| Personal / Joel Inc decision lifecycle | NOUS Decision Ledger, written only through the protected JK `llm-wiki` NOUS server; canonical append-only events in the existing private `llm-wiki` PostgreSQL | `scope=personal` or `scope=joel_inc` decision-time forecasts and recommendations, action selection, verified outcomes, attributable Joel assessments, lessons, corrections/retractions, and the exact values, goals, and evidence bindings used | a Collective Chat link, wiki narrative, policy-evaluation input, dashboard, mutable stream head, or query index |
 | Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; `life-events` event log for promoted `scope=personal` timeline events | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
 | Source evidence | NAS `/mnt/synology-share1/evidence/<channel>/<id>/` canonical owned copies; Gmail, Krisp, Apple, and other vendor clouds are capture devices and convenience caches | the immutable record: media, transcript, message/export bytes, manifest, hashes, and stable `source_ref` / `evidence_ref` | never copied as truth |
 | Mail synchronization governance | `mail-mirror` append-only, metadata-only synchronization ledger at the future scope-separated namespace `nas:state/mail-mirror/sync-ledger/<scope>/<opaque-account-ref>/` (approved; not operational) | opaque synchronization stream, generation, and epoch IDs; committed IMAP and Gmail History boundaries; synchronization gaps; machine-only capture, reconciliation, metadata-refresh, and gap-resolution obligations, including canonical opaque provider message and thread locator IDs required to execute them; capture attempt/outcome classifications; recovery, freeze, verification, and promotion records; immutable references and locator hashes pointing to canonical evidence | SQLite and other local indexes are rebuildable projections; scheduler state, leases, holders, fences, page progress, and governor-token state are ephemeral or disposable; mail evidence remains owned by the Source evidence tier |
@@ -91,6 +92,29 @@ projection.
   `nas:state/life-events/`, then rebuilds projections. Feed, people, geo, and
   undated SQLite projections live on Beelink local SSD only, never on NFS/SMB, and
   are safe to delete and rebuild from the event log.
+- **NOUS Decision Ledger (approved 2026-07-25; H6):** the protected JK
+  `llm-wiki` NOUS server is the sole writer for canonical personal and Joel Inc
+  decision-lifecycle events. The ledger is a separate logical store implemented
+  as additive, append-only tables in the existing private `llm-wiki` PostgreSQL.
+  It accepts only `scope=personal` or `scope=joel_inc`. UCLA-TDG facts and work
+  remain in their UCLA owners; a Joel Inc decision record may carry only typed
+  external-owner references to them.
+
+  The original decision-time question, alternatives, forecast, recommendation,
+  confidence, abstention threshold, expected benefits and harms, affected
+  parties, reversibility, information value, values hash, goals hash, and
+  verified evidence bindings are immutable. Later action, outcome observation,
+  attributable Joel assessment, lesson, correction, and retraction facts append
+  new events. Exact retries are idempotent. Stale or concurrent successors fail
+  closed. Mutable stream heads and query indexes are rebuildable projections;
+  they never replace the event history.
+
+  Ledger events contain typed, server-authorized evidence bindings and external
+  owner references, not source evidence bytes. Every event preserves the exact
+  values and goals document hashes in force. Recording a decision lifecycle does
+  not authorize a task, notification, health or medical action, external write,
+  learned-policy promotion, or change to Joel Inc values or decision doctrine.
+  Those remain governed by their existing owners and approval boundaries.
 - **mail-mirror synchronization-governance ledger (approved 2026-07-25; not
   operational):** `mail-mirror` owns the canonical append-only, metadata-only
   ledger for durable mail synchronization continuity and is its sole appender.
@@ -282,6 +306,11 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.20 (2026-07-25): register the protected `llm-wiki` NOUS Decision Ledger as
+  the append-only owner of personal and Joel Inc decision lifecycles; bind every
+  record to verified evidence plus exact values/goals hashes, keep UCLA facts in
+  UCLA owners, and leave effects, policy promotion, and values changes outside
+  the ledger's authority.
 - 1.19 (2026-07-25): clarify that executable machine synchronization
   obligations may include canonical opaque provider message and thread locator
   IDs; this does not authorize message content, account identity, or live
