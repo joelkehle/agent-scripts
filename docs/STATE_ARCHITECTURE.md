@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.17 (2026-07-23)
+Version: 1.18 (2026-07-25)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -30,6 +30,7 @@ projection.
 | Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
 | Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; `life-events` event log for promoted `scope=personal` timeline events | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
 | Source evidence | NAS `/mnt/synology-share1/evidence/<channel>/<id>/` canonical owned copies; Gmail, Krisp, Apple, and other vendor clouds are capture devices and convenience caches | the immutable record: media, transcript, message/export bytes, manifest, hashes, and stable `source_ref` / `evidence_ref` | never copied as truth |
+| Mail synchronization governance | `mail-mirror` append-only, metadata-only synchronization ledger at the future scope-separated namespace `nas:state/mail-mirror/sync-ledger/<scope>/<opaque-account-ref>/` (approved; not operational) | opaque synchronization stream, generation, and epoch IDs; committed IMAP and Gmail History boundaries; synchronization gaps; machine-only capture, reconciliation, metadata-refresh, and gap-resolution obligations; capture attempt/outcome classifications; recovery, freeze, verification, and promotion records; immutable references and locator hashes pointing to canonical evidence | SQLite and other local indexes are rebuildable projections; scheduler state, leases, holders, fences, page progress, and governor-token state are ephemeral or disposable; mail evidence remains owned by the Source evidence tier |
 | Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
 | Agent org governance | `shared/manager/ops/config/agent-org.json` | Joel Inc agent titles, reporting lines, trust level, safety class, and escalation policy | a projection into bus passports, dashboards, docs, or wiki pages |
 | Transport | pinakes bus (UCLA :8080, JK :8081) | agent registration secrets for HMAC identity; no durable workflow facts (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
@@ -90,6 +91,58 @@ projection.
   `nas:state/life-events/`, then rebuilds projections. Feed, people, geo, and
   undated SQLite projections live on Beelink local SSD only, never on NFS/SMB, and
   are safe to delete and rebuild from the event log.
+- **mail-mirror synchronization-governance ledger (approved 2026-07-25; not
+  operational):** `mail-mirror` owns the canonical append-only, metadata-only
+  ledger for durable mail synchronization continuity and is its sole appender.
+  Its future logical namespace is
+  `nas:state/mail-mirror/sync-ledger/<scope>/<opaque-account-ref>/`. JK and
+  UCLA-TDG use separate `jk/` and `ucla-tdg/` roots, configuration, access
+  controls, account mappings, credentials, and service instances. Records use
+  opaque account references, never an email address as the durable key.
+
+  The payload allowlist is limited to opaque synchronization lineage IDs;
+  committed IMAP and Gmail History boundaries; unresolved and resolved gap
+  types and status; machine-only capture, reconciliation, metadata-refresh, and
+  gap-resolution obligations; capture intent, attempt, and outcome
+  classification; generation freeze, verification, recovery-required, and
+  promotion records; and immutable references plus locator hashes pointing to
+  canonical evidence. The ledger does not own account or person identity,
+  account configuration, human tasks or commitments, subjects, addresses,
+  header values, bodies, attachments, label names or deltas, credentials,
+  OAuth material, secrets, page tokens, raw provider responses or errors, RFC
+  822 bytes, manifests, blobs, evidence hashes as truth, or the evidence
+  observation sequence. Canonical mail evidence remains under the Source
+  evidence tier at `nas:evidence/...`; ledger references never establish
+  evidence validity.
+
+  Each transition is an immutable, versioned, typed record or atomic bundle
+  with a monotonic sequence, predecessor hash, stable idempotency key, record
+  hash, and allowlisted payload. Corrections, resolutions, freezes, and
+  retractions append new records. SQLite is a deletable projection and may lag
+  but never lead the ledger: no SQLite synchronization transition is
+  acknowledged until the corresponding ledger transition is atomically
+  published and durably synced under the configured store. Missing, corrupt,
+  forked, truncated, or unsupported ledger state fails closed as
+  `recovery_required`. After total SQLite loss, transient coordination
+  disappears and governor safety restarts circuit-open with a conservative
+  cooldown.
+
+  Production NAS unavailability fails closed; there is no implicit repo-local
+  or local-SSD fallback. Fixture-only Gate A2 work may use an explicitly
+  configured temporary root with the same layout. This ruling authorizes policy
+  and fixture-only implementation only; it does not make the ledger
+  operational or authorize production NAS writes, live Gmail API or IMAP
+  access, credentials, deployment, provider mutation, automatic recovery, or
+  promotion. The ordering contract is not an RPO=0 claim; production durability
+  requires later NAS, backup, restore, and promotion proof.
+
+  Retain ledger records indefinitely until a separate retention policy is
+  approved. Provider deletion never deletes ledger or evidence automatically.
+  Decommissioning freezes the account stream, records a terminal reason,
+  revokes or detaches credentials, and preserves ledger and evidence. Deletion
+  or cryptographic destruction requires separate destructive-write
+  authorization and a verified retention and backup decision.
+
 - **email-triage document clerk (`data/documents/`, added 2026-06-10, branch
   document-clerk):** content-addressed projection cache of Gmail attachments
   (blobs + meta + extracted text/facts, keyed by sha256). Agent-working-state
@@ -227,6 +280,12 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.18 (2026-07-25): authorize, but do not operationalize, `mail-mirror` as
+  sole appender to the scope-separated append-only synchronization-governance
+  ledger under future `nas:state/mail-mirror/sync-ledger/`; keep SQLite
+  disposable and mail evidence under `nas:evidence/...`; require production
+  NAS failure to fail closed with no implicit fallback; authorize fixture-only
+  implementation only.
 - 1.17 (2026-07-23): rename coordinator runtime references while retaining
   the legacy `data/intern-manager/` state path and historical
   `JK-SPEC-INTERNPM-001` identifier.
