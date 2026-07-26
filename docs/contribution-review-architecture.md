@@ -9,7 +9,7 @@ read_when:
 
 # Contribution Review Architecture Contract
 
-Version: 0.1 (2026-07-23). This contract becomes effective when Joel merges it
+Version: 0.2 (2026-07-26). This contract becomes effective when Joel merges it
 into `main`.
 
 ## Outcome
@@ -18,10 +18,13 @@ One contribution pipe serves human interns, coding agents, and Joel:
 
 ```text
 captured work
+  -> faithful GitHub issue
+  -> conflict-safe claim
+  -> supervised coding mission
   -> contribution PR
   -> independent first-pass review
   -> attributed GitHub evidence
-  -> owner-attention work item
+  -> scope-owned owner-attention record
   -> Joel + AI discussion
   -> Joel adjudication
 ```
@@ -76,8 +79,9 @@ Normative words `MUST`, `MUST NOT`, `SHOULD`, and `MAY` express requirements.
    does not confer review authority.
 5. **GitHub is review truth.** Private receipts and bus messages may support
    work, but review is incomplete until attributed evidence is on the PR.
-6. **Attention is work state.** A ready packet is evidence. A Project Manager
-   work item is the canonical record that Joel owes an action.
+6. **Attention has a scope-owned home.** A ready packet is evidence. GitHub PR
+   events own personal/shared repo-bound engineering attention. UCLA Project
+   Manager owns UCLA attention. Unowned routes fail closed.
 7. **Projections fail closed.** Labels, dashboards, and caches never override a
    live PR head or the canonical packet.
 8. **Retry partial outcomes.** Dispatch, review, posting, and queueing are
@@ -95,6 +99,7 @@ Normative words `MUST`, `MUST NOT`, `SHOULD`, and `MAY` express requirements.
 | **contributor** | Human or agent that authors the proposed change. Preferred term; do not use `worker` for this role. |
 | **human contributor** | Person contributing through the pipe, including an intern. Mentoring and availability rules apply. |
 | **agent contributor** | Coding agent contributing through the pipe under a distinct machine identity. |
+| **lifecycle conductor** | Owns one bounded issue from confirmed claim through supervised mission completion and guarded contributor publication. |
 | **contribution coordinator** | Observes contribution state, checks coverage, dispatches review, retries partial failure, and records coordination outcomes. |
 | **policy evaluator** | Runs deterministic, explainable checks: identity, scope, acceptance metadata, repository rules, and other machine-verifiable policy. |
 | **first-pass reviewer** | Non-author reasoning role that evaluates correctness, safety, architecture, tests, and maintainability. |
@@ -103,14 +108,14 @@ Normative words `MUST`, `MUST NOT`, `SHOULD`, and `MAY` express requirements.
 | **machine account** | GitHub account used by automation. It is an authenticated actor, not an orchestrator or reasoning role. |
 | **authenticated actor** | Identity GitHub records for a write action. |
 | **ready-for-Joel packet** | Commit-anchored review evidence showing that a PR is prepared for adjudication. |
-| **owner-attention work item** | Project Manager state saying Joel owes a defined action, with status, age, escalation, and disposition. |
+| **owner-attention record** | Scope-owned state saying Joel owes a defined action, with exact head, status, age, escalation, and disposition. |
 | **recommended disposition** | Reviewer proposal: merge, request changes, or discuss. Never a decision. |
 | **adjudication** | Joel's final merge or request-changes judgment and its recorded reasoning. |
 | **write receipt** | Evidence of an attempted or completed external write, including actor, target, outcome, and source evidence. |
 | **namespace** | Transport partition or address family. It is not an authorization grant. |
 | **scope** | Server-authoritative business/data authorization attached to identity and enforced on reads and writes. |
 | **bus** | Transport and capability-discovery substrate. It owns no durable workflow fact. |
-| **Project Manager** | Work-noun and owner-attention system. Do not use this term for the contribution coordinator. |
+| **Project Manager** | UCLA work-noun and owner-attention system. Do not use this term for the contribution coordinator. |
 | **coding session** | Bounded Codex or Claude Code execution. Not a long-lived runtime agent. |
 | **subagent** | Temporary delegated coding/review process. Not a contributor class, machine account, or standing service. |
 
@@ -119,6 +124,30 @@ Reserve `review agent` for a deployable name only when necessary; in
 architecture prose, name the logical role.
 
 ## Logical components
+
+### Lifecycle conductor
+
+The lifecycle conductor owns this bounded outer sequence:
+
+```text
+confirmed GitHub issue claim
+  -> idempotent start_agent_mission request
+  -> mission polling and lease recovery
+  -> successful exact-revision ready packet
+  -> guarded contributor-fork publication
+```
+
+The existing `ucla.contribution-coordinator` deployable implements this role;
+no second service is justified. It serializes one active claim per issue from
+the versioned GitHub issue-comment event stream, renews or recovers a bounded
+lease, and records attributable receipts for every requested side effect.
+GitHub remains canonical for issue and claim state. Manager remains canonical
+for mission state.
+
+`start_agent_mission` is the inner local coding conductor. It holds no GitHub
+credential, is not the contribution lifecycle database, and never publishes a
+branch or PR. The lifecycle conductor holds no authority to approve, merge, or
+perform Joel's final request-changes adjudication.
 
 ### Contribution coordinator
 
@@ -131,7 +160,7 @@ The coordinator:
 - dispatches review for an exact `head_sha`;
 - tracks each stage separately and retries incomplete stages;
 - records action/outcome history and exposes operational metrics;
-- requests or updates an owner-attention work item only when Joel owes action;
+- routes owner attention to its scope-owned home only when Joel owes action;
 - escalates uncovered repositories, unavailable reviewers, aged failures, and
   identity-policy violations.
 
@@ -197,7 +226,7 @@ credential possession must not silently exceed the declared safety class.
 
 ### Project Manager
 
-Project Manager owns work nouns, including the owner-attention work item. It:
+Project Manager owns UCLA work nouns, including UCLA owner-attention state. It:
 
 - creates or updates one deduplicated item for the required Joel action;
 - records readiness source, current head, age, priority, and escalation;
@@ -206,6 +235,18 @@ Project Manager owns work nouns, including the owner-attention work item. It:
 
 Project Manager does not review code, post GitHub reviews, or infer readiness
 from a label alone.
+
+### GitHub repo-bound owner attention
+
+For personal/shared repo-bound engineering, an append-only
+`owner-attention.v1` PR event stream is canonical. Events name the exact head,
+source packet, authenticated actor, idempotency key, state transition, and
+superseded event when applicable. Server-ordered reduction yields current
+attention state. The `ready-for-joel` label is only a rebuildable projection.
+
+This ownership does not extend GitHub to non-repository personal work. UCLA
+attention remains in UCLA Project Manager state. A route with no approved
+scope owner fails closed.
 
 ### Adjudicator
 
@@ -244,6 +285,12 @@ Machine-account roles:
 | `kehle-reviewer-agent` | Post attributed first-pass reviews, packets, and guarded reviewer requests | Author product changes or contributor PRs |
 | `joelkehle` | Joel's human contribution and adjudication | Unattended automation |
 
+`kehle-contributor-agent` is the authenticated actor for automated issue
+creation, claim/renew/release/recovery events, assignment projections, and
+contributor-fork publication. `kehle-reviewer-agent` is the authenticated actor
+for attributed review, ready-packet, and personal/shared owner-attention
+events.
+
 Account names are configuration, not schema. Renaming an account updates
 identity policy and runtime configuration; it MUST NOT create a new logical
 role.
@@ -256,31 +303,37 @@ declared live.
 
 The unit of review is `(repository, pull_request, head_sha)`. The lifecycle:
 
-1. **Capture.** Work exists in an issue, spec, incident, or PR with enough
-   context to review.
-2. **Contribute.** The contributor opens or updates a PR.
-3. **Observe.** The coordinator notices a review-eligible state transition.
+1. **Capture.** Faithful work exists in a GitHub issue with requirement IDs,
+   dependencies, acceptance criteria, validation, and non-goals.
+2. **Claim.** A contributor obtains the issue through the conflict-safe,
+   versioned GitHub claim event stream and a bounded lease.
+3. **Conduct.** The lifecycle conductor starts and polls one idempotent
+   `start_agent_mission` request under the owning Manager policy.
+4. **Publish.** Only a successful exact-revision mission packet may reach the
+   guarded contributor adapter, which publishes from the contributor fork as
+   `kehle-contributor-agent`.
+5. **Observe.** The coordinator notices a review-eligible PR transition.
    Draft PRs remain visible but are not ready.
-4. **Authorize.** The coordinator verifies repository coverage, ownership,
+6. **Authorize.** The coordinator verifies repository coverage, ownership,
    scope, target branch, and available independent reviewer.
-5. **Dispatch.** Review is requested for the exact head. A durable action event
+7. **Dispatch.** Review is requested for the exact head. A durable action event
    records success or failure; the disposable cursor supports deduplication.
-6. **Evaluate.** Deterministic policy checks run.
-7. **Review.** An independent first-pass reviewer analyzes the change and local
+8. **Evaluate.** Deterministic policy checks run.
+9. **Review.** An independent first-pass reviewer analyzes the change and local
    validation evidence.
-8. **Respond.** Blocking findings return to the contributor. Non-blocking
+10. **Respond.** Blocking findings return to the contributor. Non-blocking
    coaching remains visible but does not manufacture a blocker.
-9. **Post.** The poster places attributed findings and, when ready, the packet
+11. **Post.** The poster places attributed findings and, when ready, the packet
    on the PR.
-10. **Queue.** Project Manager creates or updates the owner-attention work item
-    for the same head.
-11. **Discuss.** Joel and an AI partner examine the packet and unresolved
+12. **Queue.** The coordinator appends the scope-correct owner-attention event
+    or UCLA Project Manager proposal for the same head.
+13. **Discuss.** Joel and an AI partner examine the packet and unresolved
     judgment.
-12. **Adjudicate.** Joel records and performs the decision.
-13. **Graduate.** Durable architecture or policy decisions move to their
+14. **Adjudicate.** Joel records and performs the decision.
+15. **Graduate.** Durable architecture or policy decisions move to their
     canonical document and are linked from the PR.
 
-A new head invalidates steps 6 through 10 for the old head. The replacement
+A new head invalidates steps 8 through 12 for the old head. The replacement
 cycle explicitly supersedes prior evidence. A draft transition or new blocking
 state likewise suppresses readiness.
 
@@ -307,7 +360,7 @@ Rules:
 - a reviewer-request failure MUST be reported as failure even if review posting
   succeeded;
 - a head is not ready until the review and packet posts succeed and the
-  owner-attention item cites them;
+  scope-owned owner-attention record cites them;
 - retries use stable idempotency keys and MUST NOT duplicate GitHub comments,
   reviews, or PM work items;
 - terminal failures become visible owner-attention work only when Joel must
@@ -350,7 +403,9 @@ the live PR head and fail closed on mismatch.
 |---|---|---|
 | PR, commit, head SHA, review, comment, adjudication record | GitHub | Review is incomplete until evidence is here. |
 | Repo requirements and validation contract | Owning repo | Packet cites them; it does not replace them. |
-| Owner-attention status, age, escalation, disposition | Project Manager | One work item per required action and current head. |
+| UCLA owner-attention status, age, escalation, disposition | UCLA Project Manager | One work item per required action and current head. |
+| Personal/shared repo-bound owner-attention status and disposition | GitHub PR `owner-attention.v1` events | Server-ordered event reduction for the exact head. |
+| Issue claim, lease, release, and recovery | GitHub issue `issue-claim.v1` events | Assignment is a projection; the event reducer is canonical. |
 | Coordinator action/outcome audit | Coordinator's State-Architecture-approved durable log | Stores attempts and outcomes, with GitHub/PM pointers. |
 | Sweep and retry cursor | Coordinator repo-local working state | Disposable and rebuildable. |
 | Agent role, trust, safety class, reporting line | Manager agent-org | Runtime passports and docs are projections. |
@@ -358,19 +413,19 @@ the live PR head and fail closed on mismatch.
 | GitHub authenticated actor | GitHub account/install identity | Runtime config maps actor to allowed role. |
 | Ready label and dashboards | Projection | Safe to delete and rebuild. |
 
-The packet is canonical review evidence; the owner-attention item is canonical
-work state. Neither duplicates the other:
+The packet is canonical review evidence; the scope-owned owner-attention
+record is canonical work state. Neither duplicates the other:
 
 ```text
 packet: what was reviewed and why it is ready
 work item: who owes what action, by when, and with what disposition
 ```
 
-Personal/shared repository attention MUST NOT silently become UCLA work state.
-Every queue upsert carries business scope and resolves the approved
-scope-specific Project Manager owner before writing. If no approved owner
-exists, the coordinator reports an uncovered route; it does not invent a local
-queue.
+Personal/shared repository attention MUST NOT become UCLA work state. Its
+canonical home is the GitHub PR event stream. UCLA attention MUST remain in
+UCLA Project Manager. Non-repository personal attention is outside this
+contract. Every write carries business scope and fails closed when no approved
+owner exists.
 
 ## Human learning and expedited completion
 
@@ -430,11 +485,12 @@ map as follows:
 
 | Logical role | Existing deployable or facility |
 |---|---|
+| Lifecycle conductor | `ucla.contribution-coordinator` |
 | Contribution coordinator | `ucla.contribution-coordinator` |
 | Policy evaluator | deterministic checks in the review pipeline |
 | First-pass reviewer | `ucla-tdg-github-review-agent` plus an independent reasoning session where required |
 | GitHub review poster | guarded GitHub write adapter using `kehle-reviewer-agent` |
-| Project Manager | `ucla-tdg-project-manager` |
+| UCLA Project Manager | `ucla-tdg-project-manager` |
 | Adjudicator | Joel with Codex or Claude Code |
 
 This table is a convenience map, not proof of live availability or complete
@@ -470,7 +526,7 @@ An implementation is incomplete until it proves all four:
 
 An intern opens a ready PR. The coordinator dispatches an independent review.
 Actionable findings return to the intern. After revision, a packet for the new
-head reaches the correct owner-attention queue. Joel adjudicates.
+head reaches the correct scope-owned attention record. Joel adjudicates.
 
 ### Agent-authored PR
 
@@ -488,7 +544,7 @@ does not falsify review evidence.
 
 A change touches namespace, scope, auth, or audit. Deterministic checks and
 substantive review both run. Cross-scope reads and writes fail closed.
-Owner-attention state lands in the approved business scope.
+Owner-attention state lands in the approved scope-owned home.
 
 ## Implementation gates
 
@@ -505,8 +561,9 @@ Before claiming the architecture implemented:
 8. Add local tests for idempotency, new-head invalidation, identity separation,
    partial failure, and cross-scope routing.
 9. Pass each owning repo's documented local gate.
-10. Prove health, metrics, authenticated GitHub actor, GitHub artifacts, and
-    Project Manager work state in the live environment.
+10. Prove health, metrics, authenticated GitHub actors, GitHub artifacts, and
+    scope-correct GitHub or UCLA Project Manager attention state in the live
+    environment.
 
 Documented, implemented, deployed, and proven live remain separate claims.
 
@@ -529,7 +586,6 @@ when it preserves the boundaries above.
 These are intentionally outside this contract:
 
 - the final Keystone host and failover topology;
-- the approved Project Manager owner for personal/shared owner-attention work;
 - the Buzz-derived WP4 identity, signed-event, and transactional-audit design;
 - any future delegation beyond deterministic reversible guardrails.
 
@@ -537,4 +593,8 @@ Until Joel decides them, implementations fail closed rather than infer policy.
 
 ## Changelog
 
+- 0.2 (2026-07-26): add the lifecycle conductor using the existing
+  contribution-coordinator; define GitHub claim events; assign personal/shared
+  repo-bound owner attention to GitHub PR events while retaining UCLA attention
+  in UCLA Project Manager.
 - 0.1 (2026-07-23): initial canonical architecture contract.

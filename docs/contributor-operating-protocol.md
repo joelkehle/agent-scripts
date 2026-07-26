@@ -9,7 +9,7 @@ read_when:
 
 # Contributor Operating Protocol
 
-Version: 0.6 (2026-07-23). Amendments become effective when Joel merges them
+Version: 0.7 (2026-07-26). Amendments become effective when Joel merges them
 into `main`.
 
 This document does not replace the canonical agent startup. Run the normal
@@ -51,11 +51,23 @@ learning needs differ, and mentoring applies to humans.
   contributor should be able to start without a synchronous conversation.
 - **Claims prevent collisions.** Contributors self-select unless the
   assignment policy routes work. A human claims by GitHub assignment or
-  claim comment; a coding agent claims by the same GitHub mechanism plus
-  WWI/AgentCoord registration where the owning repo requires it. Unclaimed
-  work is fair game. An active, unexpired claim is not. A stale claim is
-  advisory: inspect its handoff and current state before recovering or
-  reassigning the work (per `shared-agent-coordination.md`).
+  claim comment. Automated repo work uses the canonical append-only,
+  versioned `issue-claim.v1` GitHub issue-comment event stream; assignment is
+  a projection. GitHub server order serializes claim, renew, release, expire,
+  and recover events. The reducer permits one active lease per issue, rejects
+  an event whose expected prior event does not match, and makes retries
+  idempotent by actor, issue, operation, and request key. A coding agent also
+  registers WWI/AgentCoord state where the owning repo requires it, but that
+  state cannot override GitHub. Unclaimed work is fair game. An active,
+  unexpired claim is not. Recovery requires an expired lease plus a new
+  attributable recovery event; inspect handoff and current state first (per
+  `shared-agent-coordination.md`).
+- **One existing lifecycle conductor owns an automated claim.** The
+  `ucla.contribution-coordinator` deployable moves the bounded issue from
+  confirmed claim through idempotent `start_agent_mission`, polling, successful
+  exact-revision packet, and guarded contributor-fork publication.
+  `start_agent_mission` owns local coding mission state, holds no GitHub
+  credential, and is not the lifecycle database.
 - **PRs are the only unit of delivered repository code or documentation.**
   Deployments, incidents, and operational actions are delivered through
   receipts and runbooks per their owning repo, not necessarily PRs.
@@ -92,6 +104,12 @@ the review is incomplete and the PR is blocked; private delivery to Joel is
 not a substitute. No session or agent posts through Joel's GitHub identity.
 The authorized poster may manage the `ready-for-joel` label only when repo
 policy and the current task authorize that write action.
+
+Owner attention is scope-specific. For personal/shared repo-bound engineering,
+the canonical attention record is the append-only `owner-attention.v1` event
+stream on the PR; its label is only a projection. For UCLA work, the canonical
+record remains UCLA Project Manager. Non-repository personal attention is not
+captured by this GitHub rule. Missing or ambiguous ownership fails closed.
 
 The packet contains, in order:
 
@@ -169,7 +187,7 @@ source, the source wins.
 
 | Agent / identity | Role | Home |
 |---|---|---|
-| `ucla.contribution-coordinator` | Contribution coordination: GitHub sweep, roster/check-in state, review dispatch, action/outcome log | `ucla-tdg-ip-agents` |
+| `ucla.contribution-coordinator` | Lifecycle conduction plus contribution coordination: claims, supervised mission requests, publication, GitHub sweep, review dispatch, action/outcome log | `ucla-tdg-ip-agents` |
 | `ucla-tdg-github-review-agent` | Policy evaluation, first-pass review, and guarded GitHub review posting where configured | `ucla-tdg-ip-agents` |
 | `ucla-tdg-project-manager` | Tasks, deadlines, proposals, escalation runtime | `ucla-tdg-project-agents` |
 | `kehle-contributor-agent` | Dedicated GitHub machine account for agent-authored contributions | GitHub account, not an orchestrator |
@@ -197,6 +215,10 @@ describes how the system works; only live sources describe how it is.
 
 ## Changelog
 
+- 0.7 (2026-07-26): define the GitHub claim event primitive, reuse the
+  contribution-coordinator as lifecycle conductor, and route personal/shared
+  repo-bound attention to GitHub while retaining UCLA attention in Project
+  Manager.
 - 0.6 (2026-07-23): link the canonical contribution-review architecture;
   use contribution-coordinator vocabulary; correct the GitHub machine-account
   roster and separate contributor from reviewer identities.

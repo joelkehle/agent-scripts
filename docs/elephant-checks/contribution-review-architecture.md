@@ -8,9 +8,10 @@ read_when:
 
 # Elephant Check: Contribution Review Architecture
 
-Date: 2026-07-23
+Date: 2026-07-23; amended 2026-07-26
 Status: **PASS TO IMPLEMENTATION, with explicit gates**
 Contract: `docs/contribution-review-architecture.md`
+Specification: `docs/github-native-lifecycle-read-propose-packet.md`
 
 ## 1. Proposal
 
@@ -18,6 +19,7 @@ Create one canonical, cross-repo contribution-review architecture. Preserve one
 pipe for human interns, agent contributors, and Joel while separating:
 
 - contribution coordination;
+- bounded issue lifecycle conduction;
 - deterministic policy evaluation;
 - substantive first-pass review;
 - credentialed GitHub posting;
@@ -46,13 +48,15 @@ This serves both Maintainer Charter missions:
 
 ```text
 captured intent
-  -> contributor and PR
+  -> faithful GitHub issue and conflict-safe claim
+  -> bounded supervised coding mission
+  -> guarded contributor publication and PR
   -> coordinator observation and authorization
   -> deterministic policy evidence
   -> independent substantive review
   -> guarded attributed GitHub write
   -> commit-anchored packet
-  -> scope-correct Project Manager work item
+  -> scope-owned attention record
   -> Joel + AI discussion
   -> Joel adjudication
   -> durable decisions graduate to owning docs
@@ -72,11 +76,12 @@ The proposal does not confuse:
 | Layer | Stable platform concern | Current slice |
 |---|---|---|
 | Contributor | Human or agent author identity | Intern and coding-agent PRs |
+| Lifecycle conduction | Claim, mission request/poll/recovery, publication | Existing contribution-coordinator deployable |
 | Coordination | Observation, routing, retry, audit | Existing contribution-coordinator sweep |
 | Policy | Deterministic reproducible checks | Repo, head, scope, identity, validation |
 | Review | Independent semantic analysis | Existing review runtime plus reasoning session |
 | Write boundary | Guarded attributed transport | Reviewer machine account |
-| Attention | Canonical owner action and aging | Project Manager proposal/work item |
+| Attention | Canonical owner action and aging | GitHub events for personal/shared repo engineering; UCLA Project Manager for UCLA |
 | Adjudication | Joel's accountable decision | Merge/request-changes/discuss |
 | Transport | Capability discovery and delivery | Pinakes bus topology |
 
@@ -88,7 +93,9 @@ changes.
 | State/action | Owner | Classification |
 |---|---|---|
 | PR, head, review, packet, adjudication record | GitHub | canonical source |
-| Owner action, age, escalation, disposition | Project Manager | canonical work noun |
+| Repo issue claim and lease | GitHub `issue-claim.v1` events | canonical source |
+| Personal/shared repo-bound owner action and disposition | GitHub `owner-attention.v1` events | canonical source |
+| UCLA owner action, age, escalation, disposition | UCLA Project Manager | canonical work noun |
 | Coordination action/outcome history | approved coordinator event log | durable audit |
 | Sweep/retry cursor | coordinator repo-local state | disposable projection |
 | Agent authority and reporting | Manager agent-org | canonical governance |
@@ -105,12 +112,14 @@ Dated assessment; not a substitute for a current runtime probe.
 | Capability | Documented | Implemented evidence known at review | Proven live at review |
 |---|---|---|---|
 | Coordinator sweep and dispatch | yes | yes | live registration discovered |
+| Issue lifecycle conductor | now specified on existing deployable | not implemented | not proven |
+| Target-repo Manager mission policies | exact policies specified | three target policies are `null` | not active |
 | Deterministic review checks | partial | yes | live registration discovered |
 | Independent semantic first pass | now required | ad hoc / incomplete in pipeline | not proven |
 | Reviewer-account GitHub posting | partial | own-output posting exists | actor used on prior PRs |
 | Attributed verbatim poster boundary | now required | not proven | not proven |
 | Commit-anchored ready packet | protocol + contract | not proven end to end | not proven |
-| Owner-attention queue ingestion | state owner exists | Project Manager capability exists | exact PR flow not proven |
+| Scope-owned attention ingestion | owners now explicit | UCLA PM capability exists; GitHub event path absent | exact PR flow not proven |
 | Contributor/reviewer account split | now explicit | both accounts exist | enforcement not proven |
 | Single Keystone scoped topology | separate migration work | in progress | not claimed |
 
@@ -158,10 +167,10 @@ remain Joel-gated and update the owning contract.
 
 1. **“Review agent” ambiguity:** split logical reviewer from credentialed
    poster.
-2. **“Project manager” ambiguity:** Project Manager owns work state;
-   contribution coordinator owns review orchestration.
-3. **Packet versus queue:** packet is GitHub evidence; work item is attention
-   state.
+2. **“Project manager” ambiguity:** UCLA Project Manager owns UCLA work state;
+   the contribution coordinator owns lifecycle and review orchestration.
+3. **Packet versus attention:** packet is GitHub evidence; scope-owned events
+   or work items are attention state.
 4. **Identity versus process:** machine accounts authenticate writes; they do
    not create independence by themselves.
 5. **Shared capability versus UCLA runtime:** shared logical architecture;
@@ -184,14 +193,22 @@ remain Joel-gated and update the owning contract.
   addition to deterministic checks.
 - **EC-5 — Poster:** transmit attributed findings verbatim with content hash,
   exact head, idempotency, and guarded credentials.
-- **EC-6 — Partial state:** reviewer request, review post, packet post, and PM
-  upsert report and retry independently.
-- **EC-7 — State:** GitHub and Project Manager retain their distinct canonical
-  facts; labels and cursors stay projections.
+- **EC-6 — Partial state:** claim, mission request, mission poll, publication,
+  reviewer request, review post, packet post, and attention upsert report and
+  retry independently.
+- **EC-7 — State:** GitHub owns claims and personal/shared repo-bound attention;
+  UCLA Project Manager owns UCLA attention; labels and cursors stay
+  projections.
 - **EC-8 — Scope:** route owner attention by business scope and fail closed when
   no approved owner exists.
 - **EC-9 — Proof:** pass local repo gates and live end-to-end probes without
   relying on GitHub Actions.
+- **EC-10 — Executable order:** run the first implementation mission through
+  already enabled `shared-manager`; activate and verify that exact reviewed
+  Manager policy build before starting any target-repository mission.
+- **EC-11 — Activation:** separately authorize every exact reviewed runtime
+  activation. The live canary requires verified current Manager and lifecycle
+  revisions; specification approval grants no deployment authority.
 
 ## 11. Stop rule
 
