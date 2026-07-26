@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.20 (2026-07-25)
+Version: 1.21 (2026-07-26)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -24,7 +24,8 @@ projection.
 | Tier | Authoritative store | Owns | Everything else is |
 |---|---|---|---|
 | Identity and IP docket nouns | `ucla-tdg-assistant-db` — hosted on beelink Postgres + PostgREST `127.0.0.1:8239` since 2026-06-10 (cloud Supabase is a frozen legacy copy pending teardown; do NOT write to it) | people, organizations, agreements, technologies, IP sequences, patent/application matters, interested parties, funding assertions, imported source dates, their IDs and relationships | a cache with a pointer back |
-| Work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds | a proposal *into* it |
+| UCLA work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical UCLA `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds, and owner-attention state | a proposal *into* it |
+| Repository engineering lifecycle | GitHub issues and PRs, including versioned `issue-claim.v1` issue-comment events and `owner-attention.v1` PR events | issue definitions and claim leases for repo engineering; personal/shared repo-bound ready-for-Joel attention and disposition by exact head | assignment, label, dashboard, coordinator cursor, or private receipt projection |
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
 | Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
@@ -60,6 +61,15 @@ projection.
   doing: projects, tasks, proposals). They reference each other by ID only. Neither
   mirrors the other's tables; any project-ish data in assistant-db is a UI
   projection of PM, not a source.
+- **Repository engineering claims and owner attention (added 2026-07-26,
+  JK-SPEC-GHLIFE-001):** GitHub owns issue, commit, PR, posted review, and
+  adjudication facts. A server-ordered, append-only `issue-claim.v1` issue
+  comment stream owns current repo-issue claim and lease state; assignment is a
+  projection. For personal/shared repo-bound engineering, a server-ordered
+  `owner-attention.v1` PR event stream owns exact-head readiness, invalidation,
+  and disposition; `ready-for-joel` is a rebuildable label projection. UCLA
+  owner attention remains in UCLA Project Manager. Non-repository personal
+  attention has no owner under this ruling and must fail closed.
 - **IP docket vs project-manager:** assistant-db owns the imported technology,
   sequence, application, ownership-interest, funding-assertion, and source-deadline
   facts, with Inteum export provenance. Project-manager may consume those facts and
@@ -233,8 +243,9 @@ projection.
   (`data/intern-manager/github-sweep-cursor.json`, added 2026-06-26):**
   disposable agent working state for deduping 15-minute contribution GitHub
   sweeps and retrying PR-review dispatch. GitHub remains the source for issues,
-  comments, PRs, and head SHAs; project-manager remains the owner of work nouns
-  once a proposal is accepted. The cursor records only what the
+  comments, PRs, and head SHAs. GitHub claim events own repo-issue lease state;
+  GitHub PR events own personal/shared repo-bound owner attention; Project
+  Manager owns accepted UCLA work nouns. The cursor records only what the
   contribution-coordinator has observed or already handed to the GitHub review
   agent. It is safe to delete and rebuild from GitHub plus bus/project-manager
   receipts.
@@ -306,6 +317,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.21 (2026-07-26): make GitHub event streams canonical for repo-issue claims
+  and personal/shared repo-bound engineering attention; retain UCLA
+  owner-attention and work nouns in UCLA Project Manager.
 - 1.20 (2026-07-25): register the protected `llm-wiki` NOUS Decision Ledger as
   the append-only owner of personal and Joel Inc decision lifecycles; bind every
   record to verified evidence plus exact values/goals hashes, keep UCLA facts in
