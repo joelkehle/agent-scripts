@@ -1,0 +1,405 @@
+{
+  "schema": "github-lifecycle-manifest.v1",
+  "manifest_version": "1.0.0",
+  "specification": {
+    "spec_id": "JK-SPEC-GHLIFE-001",
+    "title": "GitHub-native lifecycle specification and evidence packet",
+    "source_document": "docs/github-native-lifecycle-read-propose-packet.md",
+    "source_revision": "pending-phase-0-merge",
+    "ratified_on": "2026-07-26",
+    "status": "Approved by Joel for Phase 0 preservation; effective after merge to main."
+  },
+  "notes": [
+    "Rendering this manifest proposes issue payloads only. Creating the issue batch is external write 3 in the packet's separate-authorization ledger.",
+    "source_revision becomes the merged Phase 0 commit SHA cited by GHL-001 through GHL-010.",
+    "GHL-010 declares Requirements: all in the packet; that is expanded here to the explicit requirement list so coverage stays checkable."
+  ],
+  "requirements": [
+    { "id": "GHL-REQ-01", "title": "Faithful issue projection" },
+    { "id": "GHL-REQ-02", "title": "Claims and collision control" },
+    { "id": "GHL-REQ-03", "title": "Mission provenance" },
+    { "id": "GHL-REQ-04", "title": "Bounded lifecycle conducting" },
+    { "id": "GHL-REQ-05", "title": "Contributor-fork publication" },
+    { "id": "GHL-REQ-06", "title": "Exact-head independent review" },
+    { "id": "GHL-REQ-07", "title": "Decision-ready packet and owner attention" },
+    { "id": "GHL-REQ-08", "title": "Joel-only adjudication" },
+    { "id": "GHL-REQ-09", "title": "Durable graduation" },
+    { "id": "GHL-REQ-10", "title": "Repository enrollment" },
+    { "id": "GHL-NFR-01", "title": "Identity and authority" },
+    { "id": "GHL-NFR-02", "title": "Guarded external writes" },
+    { "id": "GHL-NFR-03", "title": "Separation of concerns" },
+    { "id": "GHL-NFR-04", "title": "Observability" }
+  ],
+  "issues": [
+    {
+      "issue_id": "GHL-001",
+      "title": "Bootstrap bounded Manager mission policies",
+      "summary": "From the already mission-enabled Manager project, add bounded mission policies and read-only policy preflight for `shared-agent-scripts`, `ucla-tdg-ip-agents`, and `ucla-tdg-project-agents`.",
+      "owner_repository": "joelkehle/manager",
+      "manager_project": "shared-manager",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-03", "GHL-REQ-04", "GHL-REQ-10", "GHL-NFR-01", "GHL-NFR-03", "GHL-NFR-04"],
+      "depends_on": [],
+      "external_dependencies": ["Merged Phase 0 specification revision"],
+      "acceptance_criteria": [
+        "Add server-owned `allowed_path_prefixes` and `denied_path_prefixes` to `agent_policy.mission_policy`.",
+        "Require every requested bounded scope to be contained by an allowed prefix and no denied prefix; denied prefixes win.",
+        "Add a read-only effective-policy/preflight surface returning build identity, registry hash, project policy hash, connector scope, path policy, validation, identities, budgets, and refusal result without creating a mission.",
+        "Reject unknown fields and invalid/overlapping path policy that would make a deny ineffective.",
+        "Preserve existing Codex-only confinement, distinct contributor/reviewer identity, exact validation-command matching, bounded budgets, and push/deploy refusal.",
+        "Apply the exact target policies for `shared-agent-scripts` (`personal` scope), `ucla-tdg-ip-agents` (`ucla` scope), and `ucla-tdg-project-agents` (`ucla` scope) from the specification's policy table.",
+        "Refuse before creating a mission record or child process: `agent_policy: null`, disabled mission policy, aggregate root, or unknown project.",
+        "Refuse before creating a mission record or child process: `ucla` invocation of `shared-agent-scripts`.",
+        "Refuse before creating a mission record or child process: `personal` invocation of either UCLA repository.",
+        "Refuse before creating a mission record or child process: any unlisted path or denied path, including a migration, live `.env`, data, UI, vendor, or workspace-router path.",
+        "Refuse before creating a mission record or child process: caller-substituted validation command.",
+        "Refuse before creating a mission record or child process: caller-widened time or retry budget.",
+        "Refuse before creating a mission record or child process: non-Codex contributor/reviewer, identity equality, or identity omission.",
+        "Refuse before creating a mission record or child process: `allow_push=true`, `allow_deploy=true`, remote mutation, or credential inheritance.",
+        "Refuse before creating a mission record or child process: malformed path, symlink escape, path overlap that bypasses a deny, or unknown policy field.",
+        "Add table-driven tests for every positive policy and refusal case.",
+        "Document the exact Phase 0 spec revision in the policy change and produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-01`."
+      ],
+      "validation_commands": ["go test ./internal/projectsmcp", "scripts/agent-check.sh"],
+      "non_goals": [
+        "No target-repository implementation.",
+        "No issue/claim/publisher adapter.",
+        "No GitHub credential or external write.",
+        "No deployment, restart, activation, or credential change."
+      ]
+    },
+    {
+      "issue_id": "GHL-002",
+      "title": "Restore substantive review and bound exact-head retries",
+      "summary": "Immediately repair active review-provider compatibility and the unbounded retry loop; improve exact error/retry evidence.",
+      "owner_repository": "kehle-tdg-dev/ucla-tdg-ip-agents",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-06", "GHL-REQ-07", "GHL-NFR-01", "GHL-NFR-02", "GHL-NFR-04"],
+      "depends_on": [],
+      "external_dependencies": ["Verified `ACT-REV-01`"],
+      "acceptance_criteria": [
+        "Remove or conditionally omit unsupported model parameters.",
+        "Classify provider auth, credit, rate, and configuration failures explicitly.",
+        "Preserve request timestamp and retry state after failure.",
+        "Apply documented backoff, attempt ceiling, and age threshold per exact head.",
+        "Emit attempt count, unique-head count, age, error class, and exhausted count.",
+        "Produce one scoped escalation after exhaustion; do not redispatch every sweep indefinitely.",
+        "Prove substantive review and packet eligibility for a current fixture head.",
+        "Preserve reviewer/contributor/poster separation and COMMENT-only writes.",
+        "Update the contribution-review runbook with exact evidence commands.",
+        "Produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-02`."
+      ],
+      "validation_commands": [
+        "go test ./internal/contributioncoordinator ./internal/githubreview",
+        "go test ./..."
+      ],
+      "validation_notes": "Provider integration proof uses a controlled non-GitHub target first.",
+      "non_goals": [
+        "No automatic approval, merge, or final request-changes.",
+        "No new review service.",
+        "No deployment, restart, credential, funding, or live GitHub write."
+      ]
+    },
+    {
+      "issue_id": "GHL-003",
+      "title": "Add a versioned specification-to-issue manifest and validator",
+      "summary": "Versioned spec-to-issue manifest, coverage validator, stable renderer, and write-proposal receipt.",
+      "owner_repository": "joelkehle/agent-scripts",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-01", "GHL-NFR-02", "GHL-NFR-04"],
+      "depends_on": [],
+      "external_dependencies": ["Verified `ACT-REV-02`"],
+      "acceptance_criteria": [
+        "Define a versioned, machine-readable spec and issue-manifest schema.",
+        "Preserve spec/requirement IDs, owners, dependencies, acceptance criteria, validation, non-goals, and write class.",
+        "Detect unknown requirements, missing coverage, cycles, duplicates, and missing mandatory fields.",
+        "Render stable proposed issue titles/bodies without writing GitHub.",
+        "Emit an attributable validation receipt and content hash.",
+        "Include fixtures for this complete issue batch."
+      ],
+      "validation_commands": [
+        "node --test tests/github-lifecycle/spec-issue-manifest.test.js",
+        "npm run agent:check"
+      ],
+      "non_goals": [
+        "No GitHub writes.",
+        "No issue assignment or mission launch.",
+        "No generic project-management database."
+      ]
+    },
+    {
+      "issue_id": "GHL-004",
+      "title": "Add conflict-safe issue and claim adapters",
+      "summary": "GitHub claim reducer plus guarded issue, claim/renew/release/recovery, assignment, and receipt verbs as `kehle-contributor-agent`.",
+      "owner_repository": "kehle-tdg-dev/ucla-tdg-ip-agents",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-01", "GHL-REQ-02", "GHL-NFR-01", "GHL-NFR-02"],
+      "depends_on": ["GHL-003"],
+      "external_dependencies": ["Verified `ACT-REV-02`"],
+      "acceptance_criteria": [
+        "Implement the `github-lifecycle-claim.v1` reducer using GitHub comment server order, predecessor validation, legal transitions, and first-successor wins.",
+        "Provide dry-run and explicitly write-enabled issue-batch verbs.",
+        "Verify repository allowlist, authenticated actor, manifest hash, and existing issue markers before writing.",
+        "Upsert without duplicating issues on replay.",
+        "Implement claim, renew, bind-mission, packet-ready, published, release, and recovery events with stable idempotency keys.",
+        "Authenticate issue, claim/release/recovery, assignment, and marker writes as `kehle-contributor-agent`.",
+        "Confirm reducer ownership and assignment before permitting mission start.",
+        "Enforce policy-bounded lease, renewal, expired-pending-recovery, and terminal-state recovery behavior.",
+        "Detect and record conflicting claims without starting a mission.",
+        "Record exact GitHub object URLs and write receipts.",
+        "Never authenticate as Joel."
+      ],
+      "validation_commands": [
+        "go test ./internal/contributioncoordinator ./internal/githubreview",
+        "go test ./..."
+      ],
+      "validation_notes": "Use a local fake GitHub transport for the full gate. Live GitHub canary remains separately authorized.",
+      "non_goals": [
+        "No coding mission.",
+        "No PR publishing, review, merge, or adjudication.",
+        "No deployment, restart, permission, or credential change.",
+        "No GitHub Actions."
+      ]
+    },
+    {
+      "issue_id": "GHL-005",
+      "title": "Add idempotent claim provenance to Manager missions",
+      "summary": "Add idempotent external mission request and issue/claim provenance while retaining the bootstrap policies.",
+      "owner_repository": "joelkehle/manager",
+      "manager_project": "shared-manager",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-03", "GHL-REQ-04", "GHL-REQ-10", "GHL-NFR-01", "GHL-NFR-03"],
+      "depends_on": ["GHL-001"],
+      "external_dependencies": [],
+      "acceptance_criteria": [
+        "Extend the mission request/receipt contract with issue URL/number, spec revision, requirement IDs, claim generation, lease ID, and stable `mission_request_id`.",
+        "Return the original mission when the same request ID and payload are replayed; reject reuse of that request ID with a different payload.",
+        "Make provenance immutable for a mission generation.",
+        "Reject a mismatched repo, issue, claim, or base SHA.",
+        "Preserve the activated `shared-agent-scripts`, `ucla-tdg-ip-agents`, and `ucla-tdg-project-agents` connector scopes, path policies, validation, identities, budgets, and refusals without widening them.",
+        "Preserve the ban on GitHub credentials, pushes, deploys, and lifecycle state.",
+        "Update the mission contract, runbook, and Elephant Check.",
+        "Produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-03`."
+      ],
+      "validation_commands": ["go test ./internal/projectsmcp", "scripts/agent-check.sh"],
+      "non_goals": [
+        "No GitHub client in Manager.",
+        "No contributor publishing.",
+        "No activation, deployment, or restart.",
+        "No new lifecycle database."
+      ]
+    },
+    {
+      "issue_id": "GHL-006",
+      "title": "Conduct claimed issues through guarded contributor publication",
+      "summary": "Add lifecycle-conductor behavior to the existing contribution coordinator: confirmed claim, mission start/poll/recovery, packet verification, and guarded contributor-fork publication.",
+      "owner_repository": "kehle-tdg-dev/ucla-tdg-ip-agents",
+      "write_class": "propose",
+      "requirements": [
+        "GHL-REQ-02",
+        "GHL-REQ-03",
+        "GHL-REQ-04",
+        "GHL-REQ-05",
+        "GHL-NFR-01",
+        "GHL-NFR-02",
+        "GHL-NFR-03",
+        "GHL-NFR-04"
+      ],
+      "depends_on": ["GHL-004", "GHL-005"],
+      "external_dependencies": [],
+      "acceptance_criteria": [
+        "Add the logical lifecycle-conductor role to the existing `ucla.contribution-coordinator` deployable; create no new service.",
+        "Begin only from a reducer-confirmed claim whose assignment projection matches.",
+        "Call `start_agent_mission` with the stable mission request ID, persist the returned binding as a claim event, and poll only through `check_agent_mission`.",
+        "Renew the claim lease while the mission is active.",
+        "Treat only `ready_for_joel` with a valid immutable packet as success.",
+        "Verify issue/spec/claim lineage, base, clean exact candidate SHA, validation, independent review, and packet integrity before publication.",
+        "Continue safely after conductor restart from GitHub claim events and Manager mission truth.",
+        "Accept only the verified packet's exact candidate SHA.",
+        "Authenticate contained publication as `kehle-contributor-agent`.",
+        "Push only to a policy-owned branch in the configured contributor fork.",
+        "Verify local, remote fork, and PR head SHAs agree.",
+        "Open or update one idempotent PR with full lineage and acceptance metadata.",
+        "Fail closed on actor, repo, base, fork, head, packet, or claim mismatch.",
+        "Emit separate branch-publish and PR-create/update receipts.",
+        "Post a `published` claim event referencing the PR and exact head.",
+        "Keep credentials out of model and mission environments.",
+        "Expose conductor phase, lease age, recovery, mission status, publication status, exact actor, and failure metrics.",
+        "Produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-04`."
+      ],
+      "validation_commands": [
+        "go test ./internal/contributioncoordinator ./internal/githubreview",
+        "go test ./..."
+      ],
+      "validation_notes": "Use fake Manager, Git remote, and GitHub adapters locally. Live mission and publication remain separately authorized.",
+      "non_goals": [
+        "No base-repository branch writes.",
+        "No force-push, merge, review, deploy, or migration.",
+        "No GitHub credential in Manager or a mission child.",
+        "No lifecycle database in either conductor.",
+        "No activation, deployment, restart, or credential change."
+      ]
+    },
+    {
+      "issue_id": "GHL-007",
+      "title": "Add UCLA-only exact-head attention and adjudication contracts",
+      "summary": "UCLA-only versioned owner-attention/adjudication proposal contract, exact-head invalidation, allowlist alignment, and build identity.",
+      "owner_repository": "kehle-tdg-dev/ucla-tdg-project-agents",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-07", "GHL-REQ-08", "GHL-NFR-02", "GHL-NFR-03"],
+      "depends_on": [],
+      "external_dependencies": ["Verified `ACT-REV-02`"],
+      "acceptance_criteria": [
+        "Define versioned `owner-attention.v1` and adjudication-observation proposal payloads.",
+        "Recognize the coordinator's `github_pr_adjudication` action as a no-PM-write proposal action, or replace both sides with one agreed versioned action.",
+        "Dedupe current-head items and preserve historical heads.",
+        "Invalidate/supersede on new head or stale packet.",
+        "Record packet, PR, head, business scope, required Joel action, age, escalation, and disposition.",
+        "Accept UCLA scope only; reject personal/shared owner-attention writes.",
+        "Fail closed when the business-scope owner is absent.",
+        "Report a real build identity in health.",
+        "Produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-05`."
+      ],
+      "validation_commands": [
+        "go test ./internal/projectmanager ./internal/proposalstore",
+        "go test ./...",
+        "go build ./...",
+        "go vet ./..."
+      ],
+      "non_goals": [
+        "No GitHub review or merge.",
+        "No placement of shared/personal work into UCLA state.",
+        "No activation, deployment, or restart.",
+        "No generic daily-priority allocator."
+      ]
+    },
+    {
+      "issue_id": "GHL-008",
+      "title": "Route exact-head attention and observe Joel disposition",
+      "summary": "Scope-route ready packets: GitHub PR events for personal/shared; UCLA PM for UCLA; observe exact-head disposition without adjudicating.",
+      "owner_repository": "kehle-tdg-dev/ucla-tdg-ip-agents",
+      "write_class": "propose",
+      "requirements": [
+        "GHL-REQ-06",
+        "GHL-REQ-07",
+        "GHL-REQ-08",
+        "GHL-REQ-10",
+        "GHL-NFR-01",
+        "GHL-NFR-02",
+        "GHL-NFR-04"
+      ],
+      "depends_on": ["GHL-002", "GHL-006", "GHL-007"],
+      "external_dependencies": [],
+      "acceptance_criteria": [
+        "Resolve business scope from server-owned repository policy.",
+        "For personal/shared repo-bound engineering PRs, post one logical `owner-attention.v1` GitHub event as `kehle-reviewer-agent`; treat the label as a projection.",
+        "For UCLA PRs, upsert one UCLA Project Manager item and cite it from GitHub.",
+        "Preserve packet/post and Project Manager receipts independently.",
+        "Invalidate the previous item when the PR head changes.",
+        "Surface uncovered ownership without inventing a queue.",
+        "Align the coordinator's proposal type/action with Project Manager.",
+        "Observe Joel's exact-head GitHub disposition and resolve/supersede the applicable attention state without performing the disposition.",
+        "Add cross-scope rejection and idempotent replay tests.",
+        "Produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-04`."
+      ],
+      "validation_commands": [
+        "go test ./internal/contributioncoordinator ./internal/githubreview",
+        "go test ./..."
+      ],
+      "non_goals": [
+        "No new Project Manager implementation in this repo.",
+        "No automatic Joel decision.",
+        "No bus-owned workflow state.",
+        "No activation, deployment, restart, or credential change."
+      ]
+    },
+    {
+      "issue_id": "GHL-009",
+      "title": "Observe Joel decisions and propose durable ruling graduation",
+      "summary": "Render a linked canonical-ruling graduation proposal after Joel adjudication; no direct doctrine write.",
+      "owner_repository": "joelkehle/agent-scripts",
+      "write_class": "propose",
+      "requirements": ["GHL-REQ-08", "GHL-REQ-09", "GHL-NFR-01", "GHL-NFR-02", "GHL-NFR-03"],
+      "depends_on": ["GHL-005", "GHL-008"],
+      "external_dependencies": [],
+      "acceptance_criteria": [
+        "Read Joel-authored GitHub adjudication evidence for the exact current head.",
+        "Correlate decision, packet, attention item, and issue lineage.",
+        "Never perform `APPROVE`, merge, or final `REQUEST_CHANGES`.",
+        "Close/supersede attention through a separately authorized guarded adapter.",
+        "When the decision changes durable doctrine, render a proposed follow-up issue identifying the owning canonical document and ruling IDs.",
+        "Route graduation through the same lifecycle.",
+        "Replays create no duplicate decision or graduation proposal."
+      ],
+      "validation_commands": [
+        "node --test tests/github-lifecycle/adjudication-observer.test.js",
+        "npm run agent:check"
+      ],
+      "non_goals": [
+        "No inference that silence is a decision.",
+        "No direct edits to canonical doctrine.",
+        "No autonomous adjudication."
+      ]
+    },
+    {
+      "issue_id": "GHL-010",
+      "title": "Prove the agent-scripts lifecycle pilot",
+      "summary": "Run all local/fake scenarios, then—only under another authorization—one live `agent-scripts` canary against the exact activated revisions.",
+      "owner_repository": "joelkehle/agent-scripts",
+      "write_class": "write",
+      "requirements": [
+        "GHL-REQ-01",
+        "GHL-REQ-02",
+        "GHL-REQ-03",
+        "GHL-REQ-04",
+        "GHL-REQ-05",
+        "GHL-REQ-06",
+        "GHL-REQ-07",
+        "GHL-REQ-08",
+        "GHL-REQ-09",
+        "GHL-REQ-10",
+        "GHL-NFR-01",
+        "GHL-NFR-02",
+        "GHL-NFR-03",
+        "GHL-NFR-04"
+      ],
+      "depends_on": [
+        "GHL-001",
+        "GHL-002",
+        "GHL-003",
+        "GHL-004",
+        "GHL-005",
+        "GHL-006",
+        "GHL-007",
+        "GHL-008",
+        "GHL-009"
+      ],
+      "external_dependencies": [
+        "Historical verified `ACT-REV-01`",
+        "Historical verified `ACT-REV-02`",
+        "Current verified `ACT-REV-03`",
+        "Current verified `ACT-REV-04`"
+      ],
+      "acceptance_criteria": [
+        "Pass `GHL-E2E-01` through `GHL-E2E-12` in local/fake mode.",
+        "Refuse live mode unless exact activated build identities and checkpoint receipts match the approved preflight.",
+        "After another separate canary authorization, create one bounded real issue and serialized claim as `kehle-contributor-agent`.",
+        "Run one supervised coding mission.",
+        "Prove conductor restart recovery while polling or before publication.",
+        "Publish one exact-SHA contributor-fork PR as `kehle-contributor-agent`.",
+        "Obtain an independent current-head review and attributed GitHub packet.",
+        "Post one canonical personal/shared GitHub `owner-attention.v1` event as `kehle-reviewer-agent`; write nothing to UCLA PM.",
+        "Stop for Joel's adjudication.",
+        "Correlate Joel's decision without performing it.",
+        "Produce a complete artifact and write-receipt ledger."
+      ],
+      "validation_commands": ["npm run agent:check"],
+      "validation_notes": "Plus the documented gates from each dependency repository at the exact selected or activated revisions, as applicable.",
+      "non_goals": [
+        "No production deploy or migration.",
+        "No second repository.",
+        "No automated merge or approval."
+      ]
+    }
+  ]
+}

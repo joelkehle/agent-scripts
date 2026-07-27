@@ -1,0 +1,214 @@
+#!/usr/bin/env node
+
+const path = require("node:path");
+
+const {
+  buildJsonSchema,
+  buildValidationReceipt,
+  loadManifest,
+  renderIssue,
+  renderManifest,
+  validateManifest,
+} = require("../lib/github-lifecycle");
+
+const TOOL = "ghl-manifest";
+const TOOL_VERSION = "1.0.0";
+const DEFAULT_MANIFEST = path.join(__dirname, "..", "docs", "github-lifecycle", "jk-spec-ghlife-001.v1.json");
+
+function usage() {
+  console.log(`Usage: ${TOOL} <command> [manifest.json] [options]
+
+Validates and renders a github-lifecycle-manifest.v1 specification-to-issue
+manifest. Rendering is proposal-only; this tool never writes to GitHub.
+
+Commands:
+  validate    Report unknown requirements, missing coverage, cycles, duplicates,
+              and missing mandatory fields
+  render      Print deterministic proposed issue titles and bodies
+  receipt     Print an attributable JSON validation receipt
+  schema      Print the generated JSON Schema for the manifest
+
+Options:
+  --format text|json   Output format (default: text; receipt/schema are json)
+  --issue ID           Render one issue instead of the whole batch
+  --actor NAME         Receipt validator identity (default: $USER)
+  --at TIMESTAMP       Receipt timestamp (default: current time)
+
+Exit codes: 0 ok, 1 validation defects, 2 usage or input error.
+Default manifest: ${path.relative(process.cwd(), DEFAULT_MANIFEST)}`);
+}
+
+function parseArgs(argv) {
+  const out = { format: null, issue: null, actor: null, at: null, manifest: null, help: false };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+
+    if (arg === "-h" || arg === "--help") {
+      out.help = true;
+      continue;
+    }
+
+    if (!arg.startsWith("--")) {
+      if (out.manifest) {
+        throw new Error(`unexpected argument: ${arg}`);
+      }
+
+      out.manifest = arg;
+      continue;
+    }
+
+    const [rawKey, inlineValue] = arg.split(/=(.*)/s, 2);
+    const key = rawKey.replace(/^--/, "");
+    const value = inlineValue !== undefined ? inlineValue : argv[++i];
+
+    if (value === undefined) {
+      throw new Error(`${arg} requires a value`);
+    }
+
+    switch (key) {
+      case "format":
+        out.format = value;
+        break;
+      case "issue":
+        out.issue = value;
+        break;
+      case "actor":
+        out.actor = value;
+        break;
+      case "at":
+        out.at = value;
+        break;
+      default:
+        throw new Error(`unknown argument: ${arg}`);
+    }
+  }
+
+  return out;
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function reportValidation(manifestPath, manifest, validation) {
+  const spec = manifest.specification || {};
+  console.log(`${TOOL}: ${manifestPath}`);
+  console.log(`${TOOL}: spec ${spec.spec_id || "unknown"} at revision ${spec.source_revision || "unknown"}`);
+  console.log(
+    `${TOOL}: ${validation.requirement_coverage.length} requirements, ` +
+      `${Array.isArray(manifest.issues) ? manifest.issues.length : 0} issues`,
+  );
+
+  for (const error of validation.errors) {
+    console.error(`${TOOL}: ${error.code} ${error.path || "<manifest>"}: ${error.message}`);
+  }
+
+  if (validation.ok) {
+    console.log(`${TOOL}: dependency order ${validation.issue_order.join(" -> ")}`);
+    console.log(`${TOOL}: ok`);
+    return 0;
+  }
+
+  console.error(`${TOOL}: ${validation.errors.length} defect(s)`);
+  return 1;
+}
+
+function commandValidate(manifestPath, manifest, args) {
+  const validation = validateManifest(manifest);
+
+  if (args.format === "json") {
+    printJson(validation);
+    return validation.ok ? 0 : 1;
+  }
+
+  return reportValidation(manifestPath, manifest, validation);
+}
+
+function commandRender(manifestPath, manifest, args) {
+  const validation = validateManifest(manifest);
+
+  if (!validation.ok) {
+    console.error(`${TOOL}: refusing to render an invalid manifest`);
+    return reportValidation(manifestPath, manifest, validation);
+  }
+
+  const rendered = args.issue
+    ? { ...renderManifest(manifest), issues: [renderIssue(manifest, args.issue)] }
+    : renderManifest(manifest);
+
+  if (args.format === "json") {
+    printJson(rendered);
+    return 0;
+  }
+
+  console.log(`${TOOL}: ${rendered.write_boundary}`);
+
+  for (const issue of rendered.issues) {
+    console.log("");
+    console.log(`--- ${issue.title}`);
+    console.log("");
+    console.log(issue.body);
+  }
+
+  return 0;
+}
+
+function commandReceipt(manifestPath, manifest, args) {
+  const validation = validateManifest(manifest);
+  const receipt = buildValidationReceipt({
+    manifest,
+    validation,
+    actor: args.actor || process.env.USER || "unknown",
+    tool: TOOL,
+    tool_version: TOOL_VERSION,
+    timestamp: args.at || new Date().toISOString(),
+    source: manifestPath,
+  });
+
+  printJson(receipt);
+
+  return validation.ok ? 0 : 1;
+}
+
+function main() {
+  const [command, ...rest] = process.argv.slice(2);
+
+  if (!command || command === "-h" || command === "--help" || command === "help") {
+    usage();
+    return 0;
+  }
+
+  const args = parseArgs(rest);
+
+  if (args.help) {
+    usage();
+    return 0;
+  }
+
+  if (command === "schema") {
+    printJson(buildJsonSchema());
+    return 0;
+  }
+
+  const manifestPath = args.manifest ? path.resolve(args.manifest) : DEFAULT_MANIFEST;
+  const manifest = loadManifest(manifestPath);
+
+  switch (command) {
+    case "validate":
+      return commandValidate(manifestPath, manifest, args);
+    case "render":
+      return commandRender(manifestPath, manifest, args);
+    case "receipt":
+      return commandReceipt(manifestPath, manifest, args);
+    default:
+      throw new Error(`unknown command: ${command}`);
+  }
+}
+
+try {
+  process.exitCode = main();
+} catch (error) {
+  console.error(`${TOOL}: ${error.message}`);
+  process.exitCode = 2;
+}
