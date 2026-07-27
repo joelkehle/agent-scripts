@@ -124,6 +124,11 @@ The packet contains, in order:
 5. Recommended disposition (merge / request changes / discuss) —
    propose-only; it never creates a GitHub APPROVE event.
 6. Risk, reversibility, and deployment status.
+7. Optional `decision-analysis.v1` block (Architecture: Decision analysis):
+   recommendation with a probability, top falsifiers, reversibility class,
+   kill criteria, and decide-by — hard-budgeted to eight rendered lines,
+   short form for low-stakes reversible changes. Stated confidence feeds the
+   reviewer's calibration record and is never a substitute for evidence.
 
 **Commit anchoring.** Every packet records the exact reviewed `head_sha`,
 validation evidence produced against that SHA, generation time,
