@@ -94,6 +94,13 @@ Local tool catalog for this machine.
 - Location: ~/Projects/shared/agent-scripts/bin/elephant-traceability
 - Examples: `elephant-traceability verify --structure-only`, `elephant-traceability verify`
 
+## ghl-manifest
+- Purpose: validate, render, and receipt a `github-lifecycle-manifest.v1` specification-to-issue manifest; proposal-only and never writes GitHub.
+- Location: ~/Projects/shared/agent-scripts/bin/ghl-manifest
+- Docs: ~/Projects/shared/agent-scripts/docs/github-lifecycle-manifest.md
+- Default manifest: `docs/github-lifecycle/jk-spec-ghlife-001.v1.json`
+- Examples: `ghl-manifest validate`, `ghl-manifest render --issue GHL-003`, `ghl-manifest receipt --actor codex-contributor --at 2026-07-27T00:00:00.000Z`
+
 ## browser-tools
 - Purpose: Chrome DevTools navigation, evaluation, screenshots, inspection, and
   browser lifecycle.
