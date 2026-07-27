@@ -5,14 +5,13 @@
     "spec_id": "JK-SPEC-GHLIFE-001",
     "title": "GitHub-native lifecycle specification and evidence packet",
     "source_document": "docs/github-native-lifecycle-read-propose-packet.md",
-    "source_revision": "pending-phase-0-merge",
+    "source_revision": "ca942ac07abc9e92599c2ebc05c0523d627318b1",
     "ratified_on": "2026-07-26",
     "status": "Approved by Joel for Phase 0 preservation; effective after merge to main."
   },
   "notes": [
     "Rendering this manifest proposes issue payloads only. Creating the issue batch is external write 3 in the packet's separate-authorization ledger.",
-    "source_revision becomes the merged Phase 0 commit SHA cited by GHL-001 through GHL-010.",
-    "GHL-010 declares Requirements: all in the packet; that is expanded here to the explicit requirement list so coverage stays checkable."
+        "GHL-010 declares Requirements: all in the packet; that is expanded here to the explicit requirement list so coverage stays checkable."
   ],
   "requirements": [
     { "id": "GHL-REQ-01", "title": "Faithful issue projection" },
