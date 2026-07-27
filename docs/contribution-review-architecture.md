@@ -103,7 +103,7 @@ Normative words `MUST`, `MUST NOT`, `SHOULD`, and `MAY` express requirements.
 | **contribution coordinator** | Observes contribution state, checks coverage, dispatches review, retries partial failure, and records coordination outcomes. |
 | **policy evaluator** | Runs deterministic, explainable checks: identity, scope, acceptance metadata, repository rules, and other machine-verifiable policy. |
 | **first-pass reviewer** | Non-author reasoning role that evaluates correctness, safety, architecture, tests, and maintainability. |
-| **peer reviewer** | Human or agent providing useful review that does not by itself complete the required first-pass review unless it satisfies this contract. |
+| **peer reviewer** | Human or agent reviewing a peer's contribution. A peer review that satisfies the first-pass review contract completes the required first-pass review; one that does not remains welcome advisory input. See Reviewer equivalence and calibration. |
 | **GitHub review poster** | Narrow credential-bearing role that posts an attributed review or packet without changing its substance. |
 | **machine account** | GitHub account used by automation. It is an authenticated actor, not an orchestrator or reasoning role. |
 | **authenticated actor** | Identity GitHub records for a write action. |
@@ -336,6 +336,35 @@ The unit of review is `(repository, pull_request, head_sha)`. The lifecycle:
 A new head invalidates steps 8 through 12 for the old head. The replacement
 cycle explicitly supersedes prior evidence. A draft transition or new blocking
 state likewise suppresses readiness.
+
+## Reviewer equivalence and calibration
+
+The required first-pass review is a role defined by contract properties, not
+by reviewer species. Any identity — human contributor or agent — completes it
+when its review satisfies the contract: non-author identity, exact-head
+anchoring, and attributed structured findings posted on the PR.
+
+Three properties stay distinct; none of them is human-versus-agent:
+
+- **Guaranteed versus opportunistic.** One reviewer holds the latency
+  guarantee so no PR waits on volunteer availability. The coordinator's
+  dispatched independent reviewer is that floor. When a contract-satisfying
+  review already exists for the exact head, the coordinator records it as
+  completing the requirement and may skip or shadow its own dispatch.
+- **Contract-satisfying versus advisory.** A review that misses any contract
+  property is advisory: visible, answered, and never a substitute for the
+  required review.
+- **Blocking weight earned per identity.** Findings gate a merge mechanically
+  only for reviewer identities whose recorded calibration — findings compared
+  against adjudicated outcomes — has earned blocking authority. An
+  uncalibrated identity's findings are recorded and answered but do not by
+  themselves block. Calibration records are coordination outcomes owned by
+  the contribution coordinator.
+
+Learning invitations survive deduplication. The coordinator may invite a peer
+review — especially from a human contributor — when the requirement is
+already satisfied; developing the reviewer is a goal the review contract does
+not measure. Such invitations never delay the packet or the queue.
 
 ## Retry and partial-state contract
 
@@ -593,6 +622,10 @@ Until Joel decides them, implementations fail closed rather than infer policy.
 
 ## Changelog
 
+- 0.3 (2026-07-27): reviewer equivalence — the required first-pass review is
+  completed by any identity satisfying the contract; blocking weight is
+  calibrated per reviewer identity; the coordinator's dispatched reviewer
+  remains the latency floor; learning invitations survive deduplication.
 - 0.2 (2026-07-26): add the lifecycle conductor using the existing
   contribution-coordinator; define GitHub claim events; assign personal/shared
   repo-bound owner attention to GitHub PR events while retaining UCLA attention

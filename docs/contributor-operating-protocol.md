@@ -90,7 +90,11 @@ Two different questions, two different rules (Charter R3, R4):
   route review automatically by the assignment algorithm. Use a live,
   authorized first-pass reviewer when one is discovered; otherwise perform
   or request read-only analysis, but the review remains incomplete until its
-  attributed findings are posted on the PR.
+  attributed findings are posted on the PR. A peer review — human or agent —
+  that satisfies the first-pass contract for the exact head completes the
+  required review; the coordinator records it rather than dispatching a
+  duplicate. Findings block mechanically only for reviewer identities with
+  earned calibration (Architecture: Reviewer equivalence and calibration).
 
 ## The ready-for-Joel queue
 
