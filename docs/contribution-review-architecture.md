@@ -426,6 +426,34 @@ The packet MUST NOT create a GitHub `APPROVE` event. A `ready-for-joel` label is
 a rebuildable user-interface projection. Consumers compare the packet head to
 the live PR head and fail closed on mismatch.
 
+### Decision analysis (`decision-analysis.v1`)
+
+An optional versioned block that sharpens items 10 and 11 into a scoreable
+bet. When present it contains exactly five fields and renders in at most
+eight lines:
+
+1. `recommendation` with `confidence` — a probability, not an adjective;
+2. `falsifiers` — the one or two concrete observations that would make the
+   recommendation wrong;
+3. `reversibility` — `two_way` or `one_way`, with the undo cost in one
+   clause;
+4. `kill_criteria` — what to watch after merge and the threshold that
+   triggers revert or quit;
+5. `decide_by` — the real cost of waiting, or `none`.
+
+Proportionality: low-stakes reversible changes render the short form —
+recommendation and confidence only. The full block is reserved for one-way
+doors, scope or security changes, and activation-adjacent work. Exceeding
+the budget is a rendering defect, not diligence.
+
+Calibration: stated confidence feeds the reviewer identity's calibration
+record (Reviewer equivalence and calibration) as a forecast scored against
+the adjudicated outcome. Decision quality and outcome quality are scored
+separately: the adjudication observation preserves the context known at
+decision time, so a well-made call with a bad outcome is not recorded as a
+bad call. Confidence never substitutes for the packet's concrete evidence
+and creates no adjudication authority.
+
 ## State ownership
 
 | Fact or artifact | Canonical owner | Notes |
@@ -622,6 +650,11 @@ Until Joel decides them, implementations fail closed rather than infer policy.
 
 ## Changelog
 
+- 0.4 (2026-07-27): decision analysis — optional budgeted
+  `decision-analysis.v1` packet block (probability, falsifiers,
+  reversibility, kill criteria, decide-by) with proportional rendering;
+  confidence feeds per-identity reviewer calibration; decision quality and
+  outcome quality scored separately.
 - 0.3 (2026-07-27): reviewer equivalence — the required first-pass review is
   completed by any identity satisfying the contract; blocking weight is
   calibrated per reviewer identity; the coordinator's dispatched reviewer
