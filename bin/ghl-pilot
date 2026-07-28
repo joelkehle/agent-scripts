@@ -1,0 +1,510 @@
+#!/usr/bin/env node
+
+const fs = require("node:fs");
+const path = require("node:path");
+
+const {
+  COMMAND_STATUSES,
+  EVIDENCE_CLASSES,
+  SCENARIO_STATUSES,
+  buildPilotLedgerReceipt,
+  buildPreflightReceipt,
+  evaluateActivation,
+  loadActivationSpec,
+  loadBuildIdentities,
+  loadScenarioMap,
+  runScenarios,
+  validateActivationSpec,
+  validateBuildIdentities,
+  validateScenarioMap,
+} = require("../lib/github-lifecycle");
+
+const TOOL = "ghl-pilot";
+const TOOL_VERSION = "1.0.0";
+const DOCS = path.join(__dirname, "..", "docs", "github-lifecycle");
+const DEFAULT_MAP = path.join(DOCS, "ghl-e2e-scenarios.v1.json");
+const DEFAULT_SPEC = path.join(DOCS, "ghl-activation-spec.v1.json");
+
+function usage() {
+  console.log(`Usage: ${TOOL} <command> [file] [options]
+
+Runs the checked-in evidence bound to the GHL-E2E acceptance scenarios and
+refuses live mode until the required builds are actually activated. Execution
+is local and offline: it runs only \`go test\` and \`node --test\` in the pinned
+worktrees, reaches no network, writes nothing to GitHub, and authorizes no
+live canary.
+
+Commands:
+  plan        Validate the scenario map and report what each scenario binds to,
+              including every scenario with partial or missing evidence
+  run         Execute each scenario's commands and print the ledger summary
+  ledger      Print an attributable sealed JSON ledger receipt
+  preflight   Compare reported deployed build identity against the required
+              activation spec and refuse live mode unless every build matches
+
+Options:
+  --format text|json    Output format (default: text; ledger is json)
+  --scenario ID         Limit to one scenario; repeatable
+  --allow-drift         Run even when a pinned worktree HEAD has moved, and
+                        record the drift in the ledger
+  --out PATH            Write the full ledger JSON to PATH (run)
+  --from PATH           Seal a previously recorded ledger instead of rerunning
+                        (ledger)
+  --spec PATH           Activation spec (default: ${path.relative(process.cwd(), DEFAULT_SPEC)})
+  --receipt             Print the sealed receipt instead of the report
+                        (preflight)
+  --actor NAME          Receipt actor identity (default: $USER)
+  --at TIMESTAMP        Receipt timestamp (default: current time)
+
+Exit codes: 0 ok, 1 failures, stale revisions, or refused live mode,
+2 usage or input error.
+Default scenario map: ${path.relative(process.cwd(), DEFAULT_MAP)}`);
+}
+
+const BOOLEAN_FLAGS = new Set(["allow-drift", "receipt"]);
+
+function parseArgs(argv) {
+  const out = {
+    format: null,
+    scenarios: [],
+    allowDrift: false,
+    receipt: false,
+    out: null,
+    from: null,
+    spec: null,
+    actor: null,
+    at: null,
+    file: null,
+    help: false,
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+
+    if (arg === "-h" || arg === "--help") {
+      out.help = true;
+      continue;
+    }
+
+    if (!arg.startsWith("--")) {
+      if (out.file) {
+        throw new Error(`unexpected argument: ${arg}`);
+      }
+
+      out.file = arg;
+      continue;
+    }
+
+    const [rawKey, inlineValue] = arg.split(/=(.*)/s, 2);
+    const key = rawKey.replace(/^--/, "");
+
+    if (BOOLEAN_FLAGS.has(key)) {
+      if (inlineValue !== undefined) {
+        throw new Error(`${rawKey} does not take a value`);
+      }
+
+      if (key === "allow-drift") {
+        out.allowDrift = true;
+      } else {
+        out.receipt = true;
+      }
+
+      continue;
+    }
+
+    const value = inlineValue !== undefined ? inlineValue : argv[++i];
+
+    if (value === undefined) {
+      throw new Error(`${arg} requires a value`);
+    }
+
+    switch (key) {
+      case "format":
+        out.format = value;
+        break;
+      case "scenario":
+        out.scenarios.push(value);
+        break;
+      case "out":
+        out.out = value;
+        break;
+      case "from":
+        out.from = value;
+        break;
+      case "spec":
+        out.spec = value;
+        break;
+      case "actor":
+        out.actor = value;
+        break;
+      case "at":
+        out.at = value;
+        break;
+      default:
+        throw new Error(`unknown argument: ${arg}`);
+    }
+  }
+
+  return out;
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function reportErrors(errors, label) {
+  for (const error of errors) {
+    console.error(`${TOOL}: ${error.code} ${error.path || label}: ${error.message}`);
+  }
+
+  console.error(`${TOOL}: ${errors.length} defect(s)`);
+
+  return 1;
+}
+
+function loadValidMap(mapPath) {
+  const map = loadScenarioMap(mapPath);
+  const validation = validateScenarioMap(map);
+
+  return { map, validation };
+}
+
+function printGaps(scenario) {
+  for (const gap of scenario.gaps || []) {
+    console.log(`    gap: ${gap.clause}`);
+    console.log(`         why: ${gap.why}`);
+    console.log(`         would be proven by: ${gap.would_be_proven_by}`);
+  }
+}
+
+function commandPlan(mapPath, args) {
+  const { map, validation } = loadValidMap(mapPath);
+
+  if (args.format === "json") {
+    printJson({ ...validation, map });
+    return validation.ok ? 0 : 1;
+  }
+
+  console.log(`${TOOL}: ${mapPath}`);
+  console.log(`${TOOL}: ${map.schema} ${map.map_version} for ${map.specification.spec_id} at ${map.specification.source_revision}`);
+
+  for (const worktree of map.worktrees) {
+    const policy = worktree.revision_policy === "self" ? "recorded" : "pinned";
+    console.log(`${TOOL}: worktree ${worktree.worktree_id} ${worktree.repository} ${policy} at ${worktree.head_sha}`);
+  }
+
+  const selected = args.scenarios.length > 0 ? new Set(args.scenarios) : null;
+
+  for (const scenario of map.scenarios) {
+    if (selected && !selected.has(scenario.scenario_id)) {
+      continue;
+    }
+
+    console.log("");
+    console.log(`--- ${scenario.scenario_id} ${scenario.title} [${scenario.evidence}]`);
+
+    for (const command of scenario.commands) {
+      console.log(`    ${command.worktree_id}: ${command.argv.join(" ")} (expects ${command.expects_tests} test(s))`);
+    }
+
+    if (scenario.commands.length === 0) {
+      console.log("    no executable evidence");
+    }
+
+    printGaps(scenario);
+  }
+
+  console.log("");
+
+  if (validation.scenarios_partial.length > 0) {
+    console.log(`${TOOL}: partial evidence: ${validation.scenarios_partial.join(", ")}`);
+  }
+
+  if (validation.scenarios_missing_evidence.length > 0) {
+    console.log(`${TOOL}: missing evidence: ${validation.scenarios_missing_evidence.join(", ")}`);
+  }
+
+  if (!validation.ok) {
+    return reportErrors(validation.errors, "<map>");
+  }
+
+  console.log(`${TOOL}: ok`);
+
+  return 0;
+}
+
+function executeRun(mapPath, args) {
+  const { map, validation } = loadValidMap(mapPath);
+
+  if (!validation.ok) {
+    console.error(`${TOOL}: refusing to run an invalid scenario map`);
+    reportErrors(validation.errors, "<map>");
+
+    return { ledger: null, status: 1 };
+  }
+
+  const ledger = runScenarios({
+    map,
+    source: mapPath,
+    allowDrift: args.allowDrift,
+    scenarioIds: args.scenarios,
+    startedAt: args.at || new Date().toISOString(),
+  });
+
+  return { ledger, status: ledger.ok ? 0 : 1 };
+}
+
+function printCommand(command) {
+  const detail = command.detail ? ` — ${command.detail}` : "";
+  console.log(
+    `    ${command.status} ${command.worktree_id}: ${command.tests_passed}/${command.tests_run} passed` +
+      ` in ${command.duration_ms}ms, output ${command.output_sha256.slice(0, 12)}${detail}`,
+  );
+
+  if (command.status !== COMMAND_STATUSES.PASSED && command.failure_excerpt) {
+    for (const line of command.failure_excerpt.trim().split("\n").slice(-8)) {
+      console.log(`        | ${line}`);
+    }
+  }
+}
+
+function commandRun(mapPath, args) {
+  const { ledger, status } = executeRun(mapPath, args);
+
+  if (!ledger) {
+    return status;
+  }
+
+  if (args.out) {
+    fs.writeFileSync(path.resolve(args.out), `${JSON.stringify(ledger, null, 2)}\n`);
+  }
+
+  if (args.format === "json") {
+    printJson(ledger);
+    return status;
+  }
+
+  console.log(`${TOOL}: ${mapPath}`);
+  console.log(`${TOOL}: ${ledger.write_boundary}`);
+
+  for (const worktree of ledger.worktrees) {
+    if (!worktree.pinned) {
+      console.log(`${TOOL}: worktree ${worktree.worktree_id} recorded at ${worktree.observed_head_sha || "unknown"} (not pinned)`);
+      continue;
+    }
+
+    const verdict = worktree.matches ? "matches" : `DOES NOT MATCH (expected ${worktree.expected_head_sha})`;
+    console.log(`${TOOL}: worktree ${worktree.worktree_id} at ${worktree.observed_head_sha || "unknown"} ${verdict}`);
+  }
+
+  if (ledger.options.allow_drift) {
+    console.log(`${TOOL}: --allow-drift in effect; revision drift is recorded, not enforced`);
+  }
+
+  for (const scenario of ledger.scenarios) {
+    console.log("");
+    console.log(`--- ${scenario.scenario_id} ${scenario.title} [${scenario.evidence}] ${scenario.status}`);
+
+    for (const command of scenario.commands) {
+      printCommand(command);
+    }
+
+    if (scenario.status === SCENARIO_STATUSES.STALE_REVISION) {
+      console.log(`    stale worktree(s): ${scenario.stale_worktrees.join(", ")}`);
+    }
+
+    if (scenario.evidence === EVIDENCE_CLASSES.MISSING) {
+      console.log("    no executable evidence exists for this scenario");
+    }
+
+    printGaps(scenario);
+  }
+
+  const counts = ledger.counts;
+  console.log("");
+  console.log(
+    `${TOOL}: ${counts.passed} passed, ${counts.failed} failed, ${counts.stale_revision} stale, ` +
+      `${counts.gap_only} without evidence, ${counts.skipped} skipped`,
+  );
+  console.log(`${TOOL}: ${counts.open_gaps} open gap(s) across ${counts.scenarios_with_gaps} scenario(s)`);
+
+  if (!ledger.ok) {
+    console.error(`${TOOL}: run did not pass`);
+    return 1;
+  }
+
+  console.log(`${TOOL}: ok — passing scenarios prove their listed clauses only; gaps above remain unproven`);
+
+  return 0;
+}
+
+function commandLedger(mapPath, args) {
+  let ledger;
+  let status = 0;
+
+  if (args.from) {
+    const fromPath = path.resolve(args.from);
+
+    try {
+      ledger = JSON.parse(fs.readFileSync(fromPath, "utf8"));
+    } catch (error) {
+      throw new Error(`cannot read ledger ${fromPath}: ${error.message}`);
+    }
+
+    status = ledger.ok ? 0 : 1;
+  } else {
+    const executed = executeRun(mapPath, args);
+
+    if (!executed.ledger) {
+      return executed.status;
+    }
+
+    ledger = executed.ledger;
+    status = executed.status;
+  }
+
+  printJson(
+    buildPilotLedgerReceipt({
+      ledger,
+      actor: args.actor || process.env.USER || "unknown",
+      tool: TOOL,
+      tool_version: TOOL_VERSION,
+      timestamp: args.at || new Date().toISOString(),
+      source: args.from ? path.resolve(args.from) : mapPath,
+    }),
+  );
+
+  return status;
+}
+
+function printPreflight(preflight, specPath, observedPath) {
+  console.log(`${TOOL}: spec ${specPath}`);
+  console.log(`${TOOL}: observed ${observedPath} (${preflight.observed_source}) at ${preflight.observed_at} by ${preflight.observed_by}`);
+  console.log(`${TOOL}: ${preflight.write_boundary}`);
+
+  for (const checkpoint of preflight.checkpoints) {
+    console.log("");
+    console.log(
+      `--- ${checkpoint.checkpoint_id} ${checkpoint.service} ${checkpoint.satisfied ? "satisfied" : "NOT satisfied"}`,
+    );
+    console.log(`    required ${checkpoint.required_commit} containing ${checkpoint.contains_issues.join(", ")}`);
+    console.log(
+      `    observed ${checkpoint.observed_commit || "none"}` +
+        `${checkpoint.observed_dirty ? " dirty" : ""}` +
+        `${checkpoint.observed_activated_at ? ` activated ${checkpoint.observed_activated_at}` : " not activated"}`,
+    );
+
+    for (const refusal of checkpoint.refusals) {
+      console.log(`    refuse: ${refusal.code}: ${refusal.message}`);
+    }
+
+    console.log(`    rollback: ${checkpoint.rollback}`);
+  }
+
+  console.log("");
+
+  if (preflight.live_mode_permitted) {
+    console.log(`${TOOL}: every required build matches exactly; live mode is not refused by this preflight`);
+    console.log(`${TOOL}: this is a precondition only — the canary still requires Joel's separate authorization`);
+    return 0;
+  }
+
+  console.error(`${TOOL}: live mode REFUSED — ${preflight.refusals.length} unmet requirement(s): ${preflight.refusal_codes.join(", ")}`);
+
+  return 1;
+}
+
+function commandPreflight(args) {
+  if (!args.file) {
+    throw new Error("a path to observed build identities is required");
+  }
+
+  const specPath = args.spec ? path.resolve(args.spec) : DEFAULT_SPEC;
+  const observedPath = path.resolve(args.file);
+  const spec = loadActivationSpec(specPath);
+  const observed = loadBuildIdentities(observedPath);
+  const specValidation = validateActivationSpec(spec);
+
+  if (!specValidation.ok) {
+    console.error(`${TOOL}: refusing to evaluate an invalid activation spec`);
+    reportErrors(specValidation.errors, "<spec>");
+
+    return 2;
+  }
+
+  const observedValidation = validateBuildIdentities(observed);
+
+  if (!observedValidation.ok) {
+    console.error(`${TOOL}: refusing to evaluate malformed build identities`);
+    reportErrors(observedValidation.errors, "<observed>");
+
+    return 2;
+  }
+
+  const preflight = evaluateActivation({ spec, observed });
+
+  if (args.receipt) {
+    printJson(
+      buildPreflightReceipt({
+        preflight,
+        spec,
+        observed,
+        actor: args.actor || process.env.USER || "unknown",
+        tool: TOOL,
+        tool_version: TOOL_VERSION,
+        timestamp: args.at || new Date().toISOString(),
+        spec_source: specPath,
+        observed_source: observedPath,
+      }),
+    );
+
+    return preflight.live_mode_permitted ? 0 : 1;
+  }
+
+  if (args.format === "json") {
+    printJson(preflight);
+    return preflight.live_mode_permitted ? 0 : 1;
+  }
+
+  return printPreflight(preflight, specPath, observedPath);
+}
+
+function main() {
+  const [command, ...rest] = process.argv.slice(2);
+
+  if (!command || command === "-h" || command === "--help" || command === "help") {
+    usage();
+    return 0;
+  }
+
+  const args = parseArgs(rest);
+
+  if (args.help) {
+    usage();
+    return 0;
+  }
+
+  if (command === "preflight") {
+    return commandPreflight(args);
+  }
+
+  const mapPath = args.file ? path.resolve(args.file) : DEFAULT_MAP;
+
+  switch (command) {
+    case "plan":
+      return commandPlan(mapPath, args);
+    case "run":
+      return commandRun(mapPath, args);
+    case "ledger":
+      return commandLedger(mapPath, args);
+    default:
+      throw new Error(`unknown command: ${command}`);
+  }
+}
+
+try {
+  process.exitCode = main();
+} catch (error) {
+  console.error(`${TOOL}: ${error.message}`);
+  process.exitCode = 2;
+}

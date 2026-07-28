@@ -1,0 +1,45 @@
+{
+  "schema": "github-lifecycle-activation-spec.v1",
+  "spec_version": "1.0.0",
+  "notes": [
+    "The exact deployed build identities the live canary requires. `ghl-pilot preflight` compares this against what the health endpoints actually report and refuses live mode unless every checkpoint matches exactly.",
+    "`required_commit` is the reviewed revision that must be built and activated. A revision being merged and reviewed is not activation; only a health endpoint reporting that commit, clean and activated, satisfies a checkpoint.",
+    "ACT-REV-01 and ACT-REV-02 are the historical bootstrap and review-repair checkpoints. Their receipts must already be recorded; ACT-REV-03 and ACT-REV-04 supersede them.",
+    "A satisfied preflight is a precondition for the canary, never an authorization for it. Activation and the canary each require Joel's separate approval."
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "ACT-REV-03",
+      "title": "Manager build carrying the bounded mission policies and the lifecycle request surface",
+      "service": "manager",
+      "repository": "joelkehle/manager",
+      "required_commit": "f8747414b011f4a950ab409ef9afa4410e134cd6",
+      "contains_issues": ["GHL-001", "GHL-005"],
+      "requires_receipts": ["ACT-REV-01"],
+      "rollback": "Re-activate the previously running Manager build and confirm its health endpoint reports the prior commit, clean and activated. The lifecycle request surface is additive, so a rollback leaves the operator start_agent_mission path intact; no mission state migration is required.",
+      "smoke_checks": [
+        "preflight_agent_mission returns allowed for each of the three target project IDs and refused for a wrong-scope pair, with the registry and policy hashes matching the reviewed build.",
+        "request_agent_mission refuses shared-manager with the phase-0 message while the operator start path still succeeds.",
+        "check_agent_mission from a foreign connector scope is indistinguishable from an unknown mission id."
+      ],
+      "note": "Production ran a pre-GHL-005 build when this spec was written; the request surface it must carry is absent there."
+    },
+    {
+      "checkpoint_id": "ACT-REV-04",
+      "title": "Contribution coordinator and review build carrying the claim reducer, conductor, and scope routing",
+      "service": "contribution-coordinator",
+      "repository": "joelkehle/ucla-tdg-ip-agents",
+      "required_commit": "d47bc86f079563189aedc65f2a3b6ef0260ab6d2",
+      "contains_issues": ["GHL-002", "GHL-004", "GHL-006", "GHL-008"],
+      "requires_receipts": ["ACT-REV-02"],
+      "rollback": "Re-activate the last known-good coordinator build and confirm its health endpoint reports that commit, clean and activated. Before rolling back, release any open claim so no lease is held by a build that no longer runs; claim and attention state is reconstructed from GitHub events, so no local state is lost.",
+      "smoke_checks": [
+        "The claim reducer reconstructs a known issue's state from its GitHub comments and reports the expected generation and derived state.",
+        "The configured contributor identity resolves to kehle-contributor-agent and the reviewer identity is distinct from it and from the owner.",
+        "A personal-scope attention route records an owner-attention.v1 event on the pull request and makes no UCLA Project Manager call.",
+        "Write paths remain disabled until the canary step that enables them."
+      ],
+      "note": "The deployed build was the GHL-002-only revision when this spec was written, missing GHL-004, GHL-006, and GHL-008."
+    }
+  ]
+}

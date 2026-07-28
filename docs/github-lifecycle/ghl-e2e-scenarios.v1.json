@@ -1,0 +1,703 @@
+{
+  "schema": "github-lifecycle-e2e-scenarios.v1",
+  "map_version": "1.0.0",
+  "specification": {
+    "spec_id": "JK-SPEC-GHLIFE-001",
+    "title": "GitHub-native lifecycle read/propose packet",
+    "source_revision": "c853edb2121f6eb3cc8ff1fb15d05754f8d9216f",
+    "source_document": "docs/github-native-lifecycle-read-propose-packet.md",
+    "scenarios_section": "End-to-end acceptance scenarios"
+  },
+  "notes": [
+    "Each scenario binds to the checked-in tests that actually assert its clauses. Selectors name exact test functions rather than whole packages so a rename or deletion fails loudly instead of shrinking coverage silently.",
+    "Every go_test command declares expects_tests because `go test -run` exits 0 when its regex matches nothing; the runner treats a zero or unexpected count as a failure.",
+    "No command reaches the network. The Go suites use in-process and httptest loopback fakes; the Node suites read checked-in fixtures.",
+    "`evidence: partial` means some clauses of the scenario are proven and the rest are named in `gaps`. It is never a pass for the whole scenario."
+  ],
+  "known_environment_issues": [
+    {
+      "issue_id": "MANAGER-MISSION-HARNESS-HOST",
+      "worktree_id": "manager",
+      "summary": "21 mission-conductor tests in ./internal/projectsmcp fail on this host, so the package-wide suite is not green at the pinned HEAD.",
+      "detail": "Every failure runs through the deterministic fake mission harness, where the targeted validation step reports `test -f result/change.txt` as failed on all three attempts and the mission ends `budget_exhausted` / `repair_budget_exhausted` instead of `ready_for_joel`. The failure is deterministic across runs and was not root-caused here. The scenarios below therefore select the manager tests that genuinely pass at f874741 and name the blocked clauses as gaps rather than running the whole package.",
+      "excluded_tests": [
+        "TestAgentMissionHappyPathReachesReadyPacketEvidenceStage",
+        "TestAgentMissionReadyPacketSurvivesServiceReconstruction",
+        "TestAgentMissionReadyPacketTamperingFailsServiceReconstruction",
+        "TestAgentMissionLegacyCanonicalReadyPacketSurvivesServiceReconstruction",
+        "TestAgentMissionCurrentPacketCannotFallBackToLegacyCanonicalValidation"
+      ]
+    }
+  ],
+  "worktrees": [
+    {
+      "worktree_id": "agent-scripts",
+      "repository": "joelkehle/agent-scripts",
+      "path": "/home/joelkehle/Projects/worktrees/agent-scripts-ghl-010-pilot",
+      "head_sha": "c853edb2121f6eb3cc8ff1fb15d05754f8d9216f",
+      "revision_policy": "self",
+      "contains": ["GHL-003", "GHL-009", "GHL-010"],
+      "note": "Holds this tool and its Node suites, so its revision advances as the pilot is committed. The run records the observed HEAD rather than pinning it."
+    },
+    {
+      "worktree_id": "ip-agents",
+      "repository": "joelkehle/ucla-tdg-ip-agents",
+      "path": "/home/joelkehle/Projects/worktrees/ip-agents-ghl-010-scenarios",
+      "head_sha": "d47bc86f079563189aedc65f2a3b6ef0260ab6d2",
+      "revision_policy": "pinned",
+      "contains": ["GHL-002", "GHL-004", "GHL-006", "GHL-008"],
+      "note": "Contribution coordinator and GitHub review packages. Read-only for this run."
+    },
+    {
+      "worktree_id": "manager",
+      "repository": "joelkehle/manager",
+      "path": "/home/joelkehle/Projects/worktrees/manager-ghl-010-scenarios",
+      "head_sha": "f8747414b011f4a950ab409ef9afa4410e134cd6",
+      "revision_policy": "pinned",
+      "contains": ["GHL-001", "GHL-005"],
+      "note": "Manager mission policy and request surface. Read-only for this run."
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "GHL-E2E-01",
+      "title": "Phase 0 and mission-policy bootstrap",
+      "summary": "GHL-001 adds policies for exactly the three target project IDs, read-only preflight proves scope and refusal cases, and the approved spec manifest still maps every normative requirement to its issue set.",
+      "evidence": "partial",
+      "proves": [
+        "GHL-001 adds mission policies for exactly the three target project IDs and refuses every non-target and wrong-scope pair.",
+        "Read-only preflight proves connector scope, path allow and deny sets, targeted and full validation commands, budgets, contributor and reviewer identities, and stable registry and policy hashes.",
+        "Preflight is genuinely read-only: it creates no mission and no child run, and its catalog entry is marked read-only and fails closed on an unknown field.",
+        "The approved spec manifest still maps every normative requirement to the expected issue set, and an omitted requirement fails validation."
+      ],
+      "gaps": [
+        {
+          "clause": "Before ACT-REV-01, all three project IDs remain non-invokable; only after separately authorized activation may GHL-002 start.",
+          "why": "The only non-invokability assertion is cross-connector-scope (AgentInvokableBy(otherScope) == false). The checked-in registry has mission_policy.enabled = true for all three targets, so no test models a policy that is present but not yet activated.",
+          "would_be_proven_by": "A test that loads a registry with the three policies present and activation withheld, then asserts each project is non-invokable from its own connector scope until the activation flag flips.",
+          "tracked_as": "GHL-E2E-01 activation ordering"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "manager",
+          "kind": "go_test",
+          "label": "mission policy bootstrap and read-only preflight",
+          "argv": [
+            "go",
+            "test",
+            "./internal/projectsmcp",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestPreflightAgentMissionPhase0TargetsAndStableHashes|TestCheckedInPhase0EveryAllowAndDenyPathClass|TestCheckedInRegistryStrictMissionPolicies|TestCheckedInUCLAIPAgentsGHL001Policy|TestPreflightAgentMissionHasNoMissionOrChildSideEffects|TestPreflightAgentMissionCatalogAndClosedProductionDispatch|TestRegistryHashIsStableAcrossHomeExpansion|TestAgentMissionPolicyValidation)$"
+          ],
+          "expects_tests": 8,
+          "proves": ["Mission policy targets, allow and deny path classes, preflight side-effect freedom, and policy validation refusals."]
+        },
+        {
+          "worktree_id": "agent-scripts",
+          "kind": "node_test",
+          "label": "specification-to-issue manifest coverage",
+          "argv": ["node", "--test", "tests/github-lifecycle/spec-issue-manifest.test.js"],
+          "expects_tests": 43,
+          "proves": ["Every normative requirement maps to the expected issue set and an omitted requirement fails validation."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-02",
+      "title": "Claim collision",
+      "summary": "Two claim requests cite the same reducer head and generation; GitHub server order makes exactly one the valid successor and the loser cannot start a mission.",
+      "evidence": "executable",
+      "proves": [
+        "Two claim comments at the same generation both exist, and the reducer picks the earliest server-ordered event as the valid successor.",
+        "The loser is classified conflict_lost, remains visible, and is refused executable ownership so it cannot start a mission.",
+        "Reduction follows GitHub server order rather than input slice order.",
+        "Replaying either request collapses by idempotency key, and a key reused with a different payload is a terminal integrity failure.",
+        "Assignment tracks the reducer winner: the confirmed claimant is assigned, and an adapter that lost the race sets no assignee."
+      ],
+      "gaps": [],
+      "notes": [
+        "Assignment is proven positively for the winner and negatively for the loser. No test exercises a loser that had already set the assignee and must be corrected to the winner; that state is unreachable because assignment follows confirmation."
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "claim collision, server order, and idempotent replay",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestReducerFirstSuccessorWinsCompetingClaims|TestClaimAdapterRecordsLostRaceWithoutStartingAMission|TestReducerUsesServerOrderNotSliceOrder|TestReducerCollapsesDuplicateIdempotencyKey|TestReducerFlagsIdempotencyKeyReusedWithDifferentPayload|TestClaimAdapterReplayDoesNotDuplicate|TestClaimAdapterClaimsAssignsAndConfirmsOwnership)$"
+          ],
+          "expects_tests": 7,
+          "proves": ["Exactly one successor wins, the loser is conflict_lost and mission-blocked, and replays collapse."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-03",
+      "title": "Lease expiry and recovery",
+      "summary": "A conductor stops after binding a mission; the lease expires and a replacement conductor recovers only from proven Manager truth.",
+      "evidence": "executable",
+      "proves": [
+        "An expired lease becomes expired_pending_recovery rather than unclaimed, and executable ownership is refused until recovery.",
+        "Recovery honours Manager truth: an active or paused mission renews the same generation, an exact successful packet with handoff evidence resumes publication, and budget exhaustion releases.",
+        "Manager unavailability or ambiguity produces no takeover: recovery is blocked, owner attention is required, and no new claim comment is written.",
+        "A new generation starts only after terminal unsuccessful or absent mission state is proven, and never against a published generation with an open pull request.",
+        "A replacement conductor constructed after a restart resumes an unrecorded mission request and resumes publication from an existing verified packet without duplicating either.",
+        "Mismatched mission lineage or a candidate SHA disagreeing with Manager blocks recovery."
+      ],
+      "gaps": [],
+      "notes": [
+        "The lease-renewal recovery test reuses the same conductor object; the replacement-conductor framing is proven by the two restart tests in the same selector."
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "lease expiry, Manager-truth recovery, and restart resumption",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestReducerExpiredLeaseBecomesPendingRecovery|TestReducerRenewAfterExpiryRestoresGeneration|TestReducerReleaseOpensTheNextGeneration|TestEvaluateClaimRecoveryHonoursManagerState|TestEvaluateClaimRecoveryBlocksMismatchedLineage|TestEvaluateClaimRecoveryBlocksMismatchedCandidateSHA|TestEvaluateClaimRecoveryStartsNewGenerationOnlyWhenNoMissionRan|TestEvaluateClaimRecoveryProtectsPublishedGeneration|TestEvaluateClaimRecoveryIsNotRequiredForALiveLease|TestConductorRecoversAnExpiredLeaseFromManagerTruth|TestConductorBlocksRecoveryWhenManagerIsUnavailable|TestConductorResumesPublicationAfterRestart|TestConductorResumesAnUnrecordedMissionRequestAfterRestart|TestConductorReleasesATerminalUnsuccessfulMission)$"
+          ],
+          "expects_tests": 14,
+          "proves": ["Expiry, renewal, resumption, release, and the no-takeover rule when Manager is unavailable."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-04",
+      "title": "Lifecycle conductor and mission provenance",
+      "summary": "A confirmed claim starts one idempotent mission request, the coordinator polls and renews, and only a fully verified packet may publish.",
+      "evidence": "partial",
+      "proves": [
+        "The conductor begins only from a confirmed claim and issues exactly one mission request carrying the reducer-derived request id.",
+        "The coordinator polls check_agent_mission as its only read path and renews the claim while the mission is active.",
+        "A replayed mission request is idempotent across a restart and across a different initiator, and a changed payload under the same key is refused.",
+        "The final packet cites claim generation, base SHA, exact candidate SHA, targeted and full local validation commands, and a contributor-independent local reviewer, and packet verification fails closed on twenty-one distinct disagreement and content defects.",
+        "No GitHub credential enters Manager or a mission child: the mission request carries no token or authorization field, and the mission sandbox runs with an explicit credential-free environment.",
+        "The mission request never grants publication authority, and every non-success terminal state blocks publication."
+      ],
+      "gaps": [
+        {
+          "clause": "The final packet cites the issue and the spec revision and its requirements.",
+          "why": "The published pull request body is asserted to contain the spec id JK-SPEC-GHLIFE-001, the issue URL, the mission id, and ACT-REV-04, but no test asserts the spec revision string appears, and requirements are covered only indirectly through the validation-command strings. On the Manager side the fields do not exist at all: the request carries mission_request_id, lease_id, claim_generation, and previous_event_id, with no issue reference, spec revision, or requirements field.",
+          "would_be_proven_by": "A publication test asserting the spec source_revision and each cited requirement id appear verbatim in the pull request body, plus a Manager provenance field carrying them.",
+          "tracked_as": "GHL-E2E-04 packet citation completeness"
+        },
+        {
+          "clause": "Manager records the candidate SHA and a mission polled through to a terminal state.",
+          "why": "The Manager tests that assert a recorded candidate SHA and poll a mission to terminal state run through the fake mission harness and fail on this host (see known_environment_issues MANAGER-MISSION-HARNESS-HOST). Only the coordinator side of the candidate SHA is proven here.",
+          "would_be_proven_by": "Repairing the fake-mission validation step on this host, then adding TestAgentMissionHappyPathReachesReadyPacketEvidenceStage to this selector.",
+          "tracked_as": "MANAGER-MISSION-HARNESS-HOST"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "conductor provenance, packet verification, and credential exclusion",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestConductorBeginsOnlyFromAConfirmedClaim|TestConductorRenewsTheLeaseWhileTheMissionIsActive|TestConductorPublishesTheExactVerifiedCandidate|TestConductorRecordsPacketReadyOnlyForAVerifiedPacket|TestConductorBlocksWhenAReplayedMissionRequestChanged|TestConductorReleasesATerminalUnsuccessfulMission|TestPublicationPullRequestCarriesLineageAndAcceptance|TestVerifyReadyPacketAcceptsAgreeingEvidence|TestVerifyReadyPacketFailsClosed|TestVerifyReadyPacketFailsClosedOnPacketContent|TestMissionRequestCarriesNoCredential|TestBuildMissionRequestCarriesClaimProvenanceVerbatim|TestBuildMissionRequestIsReproducibleAcrossRestarts|TestBuildMissionRequestNeverGrantsPublicationAuthority|TestVerifyMissionLineageFailsClosed)$"
+          ],
+          "expects_tests": 15,
+          "proves": ["One mission request, lease renewal, packet lineage and acceptance, fail-closed verification, and no credential in the mission request."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "reviewer packet contract",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestSubstantiveReviewPostsExactHeadReadyPacket|TestNormalizeSubstantiveReviewRejectsInventedValidationEvidence|TestNormalizeSubstantiveReviewRejectsValidationForDifferentHead)$"
+          ],
+          "expects_tests": 3,
+          "proves": ["The ready packet is head-bound and cannot cite invented or wrong-head validation evidence."]
+        },
+        {
+          "worktree_id": "manager",
+          "kind": "go_test",
+          "label": "idempotent mission request, polling surface, and credential-free child",
+          "argv": [
+            "go",
+            "test",
+            "./internal/projectsmcp",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestRequestAgentMissionRetrySurvivesRestartWithVerbatimProvenance|TestRequestAgentMissionPhase0RefusalLeavesOperatorPathUnchanged|TestRequestAgentMissionDispatchRejectsUnknownFields|TestAgentMissionToolLifecyclePersistsAndReservesProject|TestAgentMissionCheckAndListAreConnectorScopeIsolated|TestAgentMissionToolsAreRegistered|TestAgentMissionExitZeroWithoutReceiptCannotAdvance|TestAgentMissionReadyEvidenceRejectsMissingReview|TestAgentMissionValidationRepairBudgetExhaustionIsExplicit|TestMissionValidationSandboxUsesCredentialFreeEnvironment)$"
+          ],
+          "expects_tests": 10,
+          "proves": ["Verbatim claim provenance across restart, scope-isolated polling, non-success terminal states, and a credential-free mission sandbox."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-05",
+      "title": "Authenticated issue and publication writes",
+      "summary": "Issue, claim, assignment, fork branch, and pull request writes authenticate as kehle-contributor-agent, and the publisher accepts only the successful packet's exact SHA.",
+      "evidence": "executable",
+      "proves": [
+        "Issue creation, claim events, and publication all verify the authenticated actor before writing, and a wrong or human actor is refused with zero comments, zero issue creates, and zero pushes.",
+        "The publisher pushes exactly one policy-prefixed branch to the configured fork at the exact candidate SHA, opens one pull request, and never creates a branch in the base repository.",
+        "Publication fails closed on an unverified packet and on every head or base mismatch, leaving no pull request created.",
+        "Replay creates neither a second issue, logical claim, branch, nor pull request: issue creates stay at one, pull creates stay at one with zero updates, and the claim adapter returns the same comment and event id."
+      ],
+      "gaps": [],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "authenticated writes, exact-SHA publication, and replay safety",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestClaimAdapterRefusesUnexpectedAuthenticatedActor|TestIssueBatchRefusesUnexpectedAuthenticatedActor|TestPublicationRefusesAnActorThatIsNotTheContributor|TestPublicationPushesOnePolicyBranchAndOpensOnePullRequest|TestPublicationIsIdempotentAcrossRestart|TestPublicationFailsClosed|TestIssueBatchCreatesThenReplaysWithoutDuplicating|TestClaimAdapterReplayDoesNotDuplicate)$"
+          ],
+          "expects_tests": 8,
+          "proves": ["Contributor-identity gating before any write, one branch and one pull request at the exact SHA, and idempotent replay."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "write-identity verification",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestVerifyWriteIdentityAcceptsDedicatedActor|TestVerifyWriteIdentityRejectsHumanActor|TestVerifyWriteIdentityRejectsMismatch)$"
+          ],
+          "expects_tests": 3,
+          "proves": ["The dedicated machine actor is accepted and the human actor and mismatches are rejected."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-06",
+      "title": "New-head invalidation",
+      "summary": "A contributor correction creates a new head, the previous packet and attention state go stale, and review is rerun for the new SHA.",
+      "evidence": "executable",
+      "proves": [
+        "A new head supersedes the previous owner-attention item: the new receipt cites the head it supersedes, the reducer advances, and the old head is recorded closed as superseded.",
+        "A packet citing an older head is rejected with zero comments written, both at the router and in the attention contract itself.",
+        "A head that changes mid-review invalidates the packet before posting: nothing is written and the failure carries the current head.",
+        "Review is redispatched exactly once for the new head, with an independent retry budget, and an already-reviewed head is not redispatched.",
+        "A decision recorded against a head that has since moved on is reported stale rather than applicable, so Joel is never presented an old packet as current."
+      ],
+      "gaps": [],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "attention supersession and review redispatch on a new head",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestRouteNewHeadInvalidatesPreviousItem|TestObserveDispositionSupersedesWhenHeadMovedOn|TestRouteRefusesPacketFromAnotherHead|TestAttentionItemRejectsPacketFromAnotherHead|TestDetectSweepChangesRedispatchesNewHead|TestDetectSweepChangesNewHeadResetsRetryCeilings|TestDetectSweepChangesDoesNotRedispatchReviewedHead|TestOpenAttentionTargetsSurviveASupersession)$"
+          ],
+          "expects_tests": 8,
+          "proves": ["Stale packet and attention state on a new head, and exactly one redispatch for the new SHA."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "packet invalidation when the head moves mid-review",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestSubstantiveReviewInvalidatesPacketWhenHeadChangesBeforePost|TestReviewRejectsHeadSHAMismatch)$"
+          ],
+          "expects_tests": 2,
+          "proves": ["A head change before posting invalidates the packet with zero writes."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-07",
+      "title": "Partial failure and bounded retry",
+      "summary": "Simulated failures preserve earlier successful stages, retries do not duplicate artifacts, and exhaustion becomes one visible scoped item.",
+      "evidence": "partial",
+      "proves": [
+        "A failed reviewer request preserves the earlier successful comment write and reports a truthful partial receipt rather than a fabricated success.",
+        "A provider failure surfaces an explicit stable failure class instead of an invented review, and an untrusted class supplied from outside collapses to unknown.",
+        "A Project Manager failure preserves the packet and review receipts already recorded and invents no proposal id, leaving the reply pending retry.",
+        "A failed owner-attention write survives a restart and replays independently exactly once.",
+        "A failed attempt does not advance the completion cursor, so bounded retry stays correct across restarts.",
+        "Attempt and age exhaustion produce exactly one visible scoped item with exact-head evidence, recorded once in the ledger and once in the metric even when reported twice."
+      ],
+      "gaps": [
+        {
+          "clause": "A simulated GitHub review-post failure preserves the stages that already succeeded.",
+          "why": "The review fake exposes an error hook for the reviewer request but none for creating the review itself, so no test makes the review post fail and then asserts earlier successful stages survive.",
+          "would_be_proven_by": "Adding a createErr hook to the review pull-request fake and asserting that a failed review post leaves prior successful stages and their receipts intact.",
+          "tracked_as": "GHL-E2E-07 review-post failure"
+        },
+        {
+          "clause": "A simulated ready-packet-post failure preserves the stages that already succeeded.",
+          "why": "The only packet-post non-success path is the head-changed case, which fails closed with zero writes and so demonstrates nothing about preserving an earlier successful review post. The one stored review_post retryable_failure row is hand-seeded in a store test, not produced by a simulated failure.",
+          "would_be_proven_by": "A test that fails the packet post after a successful review post and asserts the review receipt and its URL survive with the packet stage marked retryable.",
+          "tracked_as": "GHL-E2E-07 packet-post failure"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "stage preservation, bounded retry, and single exhaustion item",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestRoutePreservesPacketReceiptsWhenProjectManagerFails|TestOwnerAttentionFailureSurvivesRestartAndReplaysIndependently|TestRecordReviewDispatchResultPreservesFailedAttemptForBoundedRetry|TestRecordReviewDispatchResultPreservesStableProviderFailureClass|TestRecordReviewDispatchResultRejectsUntrustedProviderFailureClass|TestDetectSweepChangesExhaustsExactHeadAtAttemptCeiling|TestDetectSweepChangesRetriesUncompletedHeadAfterTimeout|TestDetectSweepChangesDoesNotRetryCompletedHeadAfterTimeout|TestCoordinatorEventStoreRecordsOneExactHeadExhaustion|TestCoordinatorEventStoreBoundsUntrustedExhaustionMetricClass|TestCoordinatorEventStoreRecordsDispatchFailureAndRetry|TestCoordinatorEventStorePersistsAndDedupesReviewStages)$"
+          ],
+          "expects_tests": 12,
+          "proves": ["Earlier stages survive downstream failure, retries do not duplicate, and exhaustion is recorded exactly once."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "partial write receipt and explicit provider failure classes",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestReviewReportsPartialWriteWhenReviewerRequestFails|TestSubstantiveProviderFailureClassIsExplicitInReply|TestAnthropicProviderFailuresHaveStableExplicitClasses|TestMissingAnthropicKeyIsConfigurationFailure)$"
+          ],
+          "expects_tests": 4,
+          "proves": ["A failed reviewer request preserves the earlier comment and reports the failure class truthfully."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-08",
+      "title": "Business-scope routing and canonical attention",
+      "summary": "A UCLA pull request routes canonical attention to UCLA Project Manager; a personal engineering pull request records owner-attention.v1 on GitHub and never enters UCLA PM.",
+      "evidence": "partial",
+      "proves": [
+        "A UCLA pull request upserts exactly one Project Manager item and cites it from GitHub in one comment posted by the reviewer identity.",
+        "A personal pull request records a canonical owner-attention.v1 item on its own GitHub pull request with no Project Manager reference and makes zero Project Manager calls.",
+        "The ready label is a projection of the event stream: the reducer reports the label as desired while no label is written, so it is rebuildable.",
+        "An uncovered repository, a missing owner, a recorder declaring the wrong scope, and a recorder naming an unapproved owner all fail closed with zero Project Manager calls and zero comments, and never become pollable targets.",
+        "Scope derivation agrees with the Project Manager's own derivation, and contradictory enrollment is refused at configuration read.",
+        "The canonical attention item carries the full Project Manager contract field set and its packet reference."
+      ],
+      "gaps": [
+        {
+          "clause": "A shared engineering pull request records canonical owner-attention.v1 events on its GitHub pull request.",
+          "why": "At this revision the shared half of the clause is proven only as a refusal: a shared repository is rejected before the GitHub exception is enabled and the Project Manager recorder reports it as an uncovered route. No test shows a shared pull request receiving an owner-attention.v1 event.",
+          "would_be_proven_by": "Enabling the GitHub exception for a shared repository in the attention config fixture and asserting the same canonical event the personal case records.",
+          "tracked_as": "GHL-E2E-08 shared-scope attention"
+        },
+        {
+          "clause": "Non-repo personal work is rejected as outside this GitHub exception.",
+          "why": "The rejection is proven only for an unenrolled repository and for the empty repository string. Neither models work that has no GitHub artifact at all.",
+          "would_be_proven_by": "A routing test for an attention request carrying no repository or pull request reference, asserting it is refused rather than given a GitHub home.",
+          "tracked_as": "GHL-E2E-08 non-repo work"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "scope routing, canonical attention, and fail-closed refusals",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestRouteUCLAUpsertsProjectManagerItemAndCitesItFromGitHub|TestRoutePersonalPostsGitHubEventAndNeverTouchesProjectManager|TestPMProposalRecorderFailsClosedForUncoveredSharedRoute|TestRouteSharedScopeRefusedBeforeGitHubExceptionEnabled|TestAttentionLabelIsAProjectionOfTheEvent|TestRouteUncoveredRepositoryFailsClosedWithoutInventingAQueue|TestRouteRefusesRecorderDeclaringTheWrongScope|TestRouteRefusesRecorderDeclaringAnUnapprovedOwner|TestRouteSkipsGitHubEventForPipelineStates|TestOpenAttentionTargetsExcludeUncoveredRoutes|TestScopePolicyFailsClosedForUncoveredRepositories|TestScopePolicyDeclaredRejectsCrossScopeRoutes|TestScopePolicyResolvesEnrolledRepositories|TestScopePolicyRefusesEnrollmentAgainstDerivedScope|TestScopeForRepoMatchesProjectManagerDerivation|TestAttentionConfigRejectsContradictoryEnrollment|TestAttentionItemCarriesProjectManagerContractFields)$"
+          ],
+          "expects_tests": 17,
+          "proves": ["UCLA routes to Project Manager, personal stays on GitHub, and every uncovered or contradictory scope fails closed."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-09",
+      "title": "Identity enforcement",
+      "summary": "Contributor and reviewer equality fails terminally, actor mismatches fail before writing, and naming the owner for unattended automation fails policy validation.",
+      "evidence": "executable",
+      "proves": [
+        "Contributor and reviewer equality fails terminally: a packet whose reviewer is the contributor, whose review ran inside the contributor's run, or which declares no independent review is refused, and the conductor writes no packet_ready comment.",
+        "A poster actor mismatch fails before writing: a review whose pull request author is the configured actor is a terminal failure with zero created comments.",
+        "An issue, claim, or publisher actor other than kehle-contributor-agent fails before writing, with zero comments, zero issue creates, and zero pushes.",
+        "Posting attention as the contributor or as the owner is refused with zero comments, and a forged authenticated-actor field signed by a different GitHub author is rejected by the reducer.",
+        "Any configuration naming joelkehle for unattended automation fails policy validation, with an error naming unattended automation, and the reviewer credential never falls back to the contributor's."
+      ],
+      "gaps": [],
+      "notes": [
+        "The Manager package carries no evidence for this scenario: its policy validation enforces only that contributor and reviewer identities are non-empty and distinct, with no human-identity deny list. All evidence here is the coordinator's."
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "identity gating across claim, publication, attention, and configuration",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestVerifyReadyPacketFailsClosedOnPacketContent|TestConductorRecordsPacketReadyOnlyForAVerifiedPacket|TestRouteRefusesContributorAndOwnerCredentials|TestClaimAdapterRefusesUnexpectedAuthenticatedActor|TestPublicationRefusesAnActorThatIsNotTheContributor|TestIssueBatchRefusesUnexpectedAuthenticatedActor|TestLifecycleConductorConfigRejectsHumanIdentity|TestLifecycleContributorConfigRejectsUnsafeCombinations|TestLifecycleContributorConfigDefaultsToTheContributorMachineActor|TestAttentionConfigRefusesForbiddenReviewerIdentities|TestAttentionConfigAlwaysForbidsOwnerAndContributorAsPoster|TestAttentionConfigDoesNotInheritContributorCredential|TestReducerRejectsCommentAuthorMismatch|TestReducerRejectsEventsFromOtherAuthors)$"
+          ],
+          "expects_tests": 14,
+          "proves": ["Reviewer independence, actor verification before writing, and refusal of the owner identity for unattended automation."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "poster identity and write-identity probes",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestSubstantiveReviewRejectsContributorPosterIdentity|TestVerifyWriteIdentityRejectsHumanActor|TestVerifyWriteIdentityRejectsMismatch|TestVerifyWriteIdentityRequiresExpectedLogin|TestVerifyWriteIdentityPropagatesProbeFailure)$"
+          ],
+          "expects_tests": 5,
+          "proves": ["The contributor may not post the review, and identity probes fail closed."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-10",
+      "title": "Exact-build activation gate",
+      "summary": "A reviewed but inactive revision cannot satisfy the pilot preflight; the live canary is refused unless the historical receipts exist, the deployed build identity matches ACT-REV-03 and ACT-REV-04 exactly, and rollback is named.",
+      "evidence": "partial",
+      "proves": [
+        "A reviewed but inactive revision cannot satisfy the pilot preflight: the current live state, with the coordinator at the GHL-002-only build and Manager before GHL-005, is refused with structured per-checkpoint reasons and a nonzero exit.",
+        "Live mode is refused unless the historical ACT-REV-01 and ACT-REV-02 receipts are recorded alongside the observed identities.",
+        "A build whose commit does not match the required ACT-REV-03 or ACT-REV-04 commit exactly, which reports dirty, which reports no activation time, or which is absent from the observed identities, is refused.",
+        "Every checkpoint names its rollback, and the activation spec fails validation if it does not.",
+        "A passing preflight is stated as a precondition only and never as authorization for the canary."
+      ],
+      "gaps": [
+        {
+          "clause": "The superseding ACT-REV-03 and ACT-REV-04 builds re-prove their earlier policy and repair guarantees.",
+          "why": "Re-proving a guarantee against a deployed build requires running that build. This preflight is pure and offline: it compares reported identity against the required spec and cannot execute anything on a live service.",
+          "would_be_proven_by": "The conductor running the pinned per-checkpoint suites against the built revision and recording their receipts before activation, then this preflight requiring those receipt ids the way it already requires ACT-REV-01 and ACT-REV-02.",
+          "tracked_as": "GHL-E2E-10 re-proof receipts"
+        },
+        {
+          "clause": "Smoke checks pass and actor and repository scopes are verified against the running service.",
+          "why": "Smoke checks and scope verification are live probes of a running service, which this offline tool refuses to perform. The spec names the smoke checks per checkpoint but nothing here executes them.",
+          "would_be_proven_by": "A separately authorized live preflight step that runs each named smoke check against the activated build and feeds its receipts into this comparison.",
+          "tracked_as": "GHL-E2E-10 live smoke checks"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "agent-scripts",
+          "kind": "node_test",
+          "label": "activation preflight refusal and acceptance",
+          "argv": [
+            "node",
+            "--test",
+            "--test-name-pattern",
+            "live-mode refusal preflight",
+            "tests/github-lifecycle/pilot.test.js"
+          ],
+          "expects_tests": 11,
+          "proves": ["The current live state is refused with structured reasons and only an exactly matching synthetic state is accepted."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-11",
+      "title": "Joel adjudication",
+      "summary": "Automation posts no APPROVE, merge, or final REQUEST_CHANGES; Joel's decision is observed for the exact head, correlated to packet and attention item, and a stale-head decision is rejected.",
+      "evidence": "partial",
+      "proves": [
+        "An owner decision on the exact recorded head becomes an adjudication-observation.v1 that declares no GitHub write, and closes or supersedes the work state; an observation declaring a GitHub write fails validation.",
+        "A merge acknowledges and disposes the item; a close or a request-changes dismisses it.",
+        "A stale-head decision is rejected: the receipt is stale rather than applicable and the decision is recorded as superseded_by_head.",
+        "A decision by any actor other than the owner produces no disposition and leaves the item open.",
+        "Observing a decision writes nothing: zero pull creates, updates, assignments, and issue updates, and the attention client exposes no review-disposition verb at all.",
+        "A changes recommendation from the model posts exactly one COMMENT event and never a REQUEST_CHANGES, and posts no ready packet.",
+        "Replayed observation is idempotent, and the offline observer correlates each decision with its ready packet, owner-attention item, and issue lineage for the same head."
+      ],
+      "gaps": [
+        {
+          "clause": "Automation posts no APPROVE and performs no merge.",
+          "why": "No APPROVE constant and no merge verb exist in the production code, and the attention client is asserted to expose no review-disposition method, but the guarantee rests largely on the absence of code rather than on an assertion over every review outcome.",
+          "would_be_proven_by": "A table test over every review recommendation asserting the emitted event is always COMMENT or nothing, plus a client contract test asserting no merge method exists on any GitHub client used by automation.",
+          "tracked_as": "GHL-E2E-11 negative write proof"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "owner disposition observation without writes",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestObserveDispositionRecordsOwnerMergeOnExactHead|TestObserveDispositionRecordsCloseAndRequestChanges|TestObserveDispositionIgnoresDecisionsByOtherActors|TestObserveDispositionSupersedesWhenHeadMovedOn|TestObserveDispositionReplayIsIdempotent|TestObserveDispositionOnUCLAScopeWritesNoProjectManagerCommand|TestObserveDispositionWithoutAnOpenItemWritesNothing|TestObserveDispositionFailsClosedForUncoveredRepository|TestAttentionClientExposesNoDispositionVerb|TestAttentionObservationMustDeclareNoGitHubWrite|TestOpenAttentionTargetsSurviveAClosedPullRequest)$"
+          ],
+          "expects_tests": 11,
+          "proves": ["Exact-head observation, stale-head rejection, and zero writes by the observer."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "review posts comment only",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestSubstantiveRequestChangesRecommendationPostsCommentOnly|TestReviewFlagsDraftAsSoftIssue)$"
+          ],
+          "expects_tests": 2,
+          "proves": ["A changes recommendation posts one COMMENT and never a REQUEST_CHANGES."]
+        },
+        {
+          "worktree_id": "agent-scripts",
+          "kind": "node_test",
+          "label": "offline adjudication correlation",
+          "argv": ["node", "--test", "tests/github-lifecycle/adjudication-observer.test.js"],
+          "expects_tests": 34,
+          "proves": ["Each decision is correlated to its packet, attention item, and issue lineage for the same head, and a stale head is refused."]
+        }
+      ]
+    },
+    {
+      "scenario_id": "GHL-E2E-12",
+      "title": "Replay and reconstruction",
+      "summary": "After loss of disposable cursors, state is reconstructed from GitHub events and Manager receipts, and replaying the adapters creates no duplicate artifact.",
+      "evidence": "partial",
+      "proves": [
+        "Current state is reconstructed purely from GitHub comment bodies: the reducer walks claim, bind_mission, packet_ready, and published back to generation, mission id, candidate SHA, and pull request URL, and ignores events for other issues.",
+        "Manager truth is projected into mission evidence, and an unavailable Manager never reports availability.",
+        "Replaying each authorized adapter creates no duplicate: one issue, one logical claim, one mission, one pull request, one review, one attention event, and one disposition, with the reducer collapsing duplicates and the ledger deduping stages across a store reopen.",
+        "A pre-existing issue carrying only the manifest marker is adopted rather than duplicated.",
+        "The Manager mission store reconstructs from its journal after a corrupt snapshot, replays a journal ahead of a stale snapshot, refuses a same-revision divergence, and keeps the ready packet immutable."
+      ],
+      "gaps": [
+        {
+          "clause": "The system reconstructs current state from Manager mission receipts end to end.",
+          "why": "The durable store layer is proven, but the tests that restart the service and assert a reconstructed ready_for_joel mission with its candidate SHA and packet reference run through the fake mission harness and fail on this host (see known_environment_issues MANAGER-MISSION-HARNESS-HOST).",
+          "would_be_proven_by": "Repairing the fake-mission validation step, then adding the four reconstruction tests named in known_environment_issues to this selector.",
+          "tracked_as": "MANAGER-MISSION-HARNESS-HOST"
+        },
+        {
+          "clause": "The system reconstructs UCLA Project Manager work state when applicable.",
+          "why": "The Project Manager is a write-only recorder in every fixture; the fakes count calls and expose no read path, so no test reconstructs anything from Project Manager work state.",
+          "would_be_proven_by": "A Project Manager read fake returning recorded work state, with a reconstruction test asserting the UCLA item is recovered without a duplicate upsert.",
+          "tracked_as": "GHL-E2E-12 Project Manager reconstruction"
+        },
+        {
+          "clause": "Replaying all authorized adapters together creates no duplicate logical artifact.",
+          "why": "Idempotency is proven per adapter. No single test replays issue, claim, mission, pull request, review, packet, and attention in one composed scenario.",
+          "would_be_proven_by": "One end-to-end test that walks the full lifecycle, replays every adapter from the reconstructed state, and asserts each artifact count stays at one.",
+          "tracked_as": "GHL-E2E-12 composed replay"
+        }
+      ],
+      "commands": [
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "reconstruction from GitHub events and per-adapter replay safety",
+          "argv": [
+            "go",
+            "test",
+            "./internal/contributioncoordinator",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestReducerWalksClaimToPublication|TestClaimAdapterWalksTheSupervisedLifecycle|TestReducerIgnoresEventsForOtherIssues|TestMissionEvidenceProjectsManagerTruth|TestClaimAdapterReplayDoesNotDuplicate|TestIssueBatchCreatesThenReplaysWithoutDuplicating|TestIssueBatchAdoptsAnIssueCarryingOnlyTheManifestMarker|TestConductorResumesAnUnrecordedMissionRequestAfterRestart|TestConductorResumesPublicationAfterRestart|TestPublicationIsIdempotentAcrossRestart|TestRouteReplayIsIdempotent|TestObserveDispositionReplayIsIdempotent|TestReducerCollapsesDuplicateIdempotencyKey|TestReducerCollapsesConcurrentDuplicateAttentionEvents|TestCoordinatorEventStorePersistsAndDedupesReviewStages)$"
+          ],
+          "expects_tests": 15,
+          "proves": ["State rebuilds from GitHub events alone and every adapter replay is idempotent."]
+        },
+        {
+          "worktree_id": "ip-agents",
+          "kind": "go_test",
+          "label": "review replay does not duplicate",
+          "argv": [
+            "go",
+            "test",
+            "./internal/githubreview",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestReviewDoesNotDuplicateAutomatedReview|TestReviewCompletesReviewerRequestWhenPeerCommentAlreadyExists|TestReviewReportsAlreadyRequestedPeerReviewers)$"
+          ],
+          "expects_tests": 3,
+          "proves": ["An existing review marker suppresses a second write and returns the existing receipt."]
+        },
+        {
+          "worktree_id": "manager",
+          "kind": "go_test",
+          "label": "durable mission store reconstruction and no duplicate replay",
+          "argv": [
+            "go",
+            "test",
+            "./internal/projectsmcp",
+            "-count=1",
+            "-v",
+            "-run",
+            "^(TestRequestAgentMissionRetrySurvivesRestartWithVerbatimProvenance|TestAgentMissionStoreRecoversSnapshotFromJournal|TestAgentMissionStoreReplaysJournalAheadOfValidSnapshot|TestAgentMissionStoreRejectsSameRevisionDivergence|TestAgentMissionStoreWritesImmutableSecureReadyPacket|TestAgentMissionStoreRejectsNonContiguousJournalWithoutRewritingEvidence|TestServerDurableSessionSurvivesRestart)$"
+          ],
+          "expects_tests": 7,
+          "proves": ["Journal-based reconstruction, refusal of divergence, and a replayed request yielding exactly one mission."]
+        }
+      ]
+    }
+  ]
+}
