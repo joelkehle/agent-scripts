@@ -1,0 +1,57 @@
+{
+  "schema": "github-lifecycle-adjudication-evidence.v1",
+  "bundle_version": "1.0.0",
+  "owner_login": "joelkehle",
+  "collection": {
+    "collected_at": "2026-07-27T09:00:00.000Z",
+    "collected_by": "kehle-reviewer-agent",
+    "source": "fixture",
+    "note": "A ready pull request with owner prose but no decision; silence is not a decision."
+  },
+  "notes": [
+    "Recorded evidence only. Live collection belongs to the deployed contribution coordinator."
+  ],
+  "pull_requests": [
+    {
+      "repository": "joelkehle/agent-scripts",
+      "pull_number": 45,
+      "url": "https://github.com/joelkehle/agent-scripts/pull/45",
+      "current_head_sha": "878840811183a51149c729761d5dba4e76e0e455",
+      "state": "open",
+      "business_scope": "personal",
+      "lineage": {
+        "repository": "joelkehle/agent-scripts",
+        "issue_number": 10,
+        "issue_id": "GHL-010",
+        "spec_id": "JK-SPEC-GHLIFE-001",
+        "source_revision": "ca942ac07abc9e92599c2ebc05c0523d627318b1",
+        "requirements": [
+          "GHL-REQ-08"
+        ]
+      },
+      "comments": [
+        {
+          "comment_id": 9501,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-27T07:01:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/45#issuecomment-9501",
+          "body": "<!-- ready-for-joel.v1 head_sha=878840811183a51149c729761d5dba4e76e0e455 -->\n```json\n{\n  \"marker\": \"ready-for-joel.v1\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 45,\n  \"head_sha\": \"878840811183a51149c729761d5dba4e76e0e455\",\n  \"generated_at\": \"2026-07-27T07:00:00.000Z\",\n  \"contributor_identity\": \"kehle-contributor-agent\",\n  \"reviewer_identity\": \"kehle-reviewer-agent\",\n  \"poster_identity\": \"kehle-reviewer-agent\",\n  \"reviewer_independent\": true,\n  \"change_summary\": \"Adds the pilot canary harness.\",\n  \"findings\": [],\n  \"acceptance_criteria_status\": \"met\",\n  \"validation_evidence\": [\n    {\n      \"command\": \"npm run agent:check\",\n      \"head_sha\": \"878840811183a51149c729761d5dba4e76e0e455\",\n      \"outcome\": \"pass\"\n    }\n  ],\n  \"unresolved_judgment_calls\": [],\n  \"recommended_disposition\": \"discuss\",\n  \"risk\": \"low\",\n  \"reversibility\": \"two_way\",\n  \"deployment_status\": \"not_deployed\",\n  \"reviewer_attribution\": \"kehle-reviewer-agent\",\n  \"payload_hash\": \"535be9396235206892a0b69fdf67971189c223015e0708151722d5aa664d5e38\"\n}\n```\n"
+        },
+        {
+          "comment_id": 9502,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-27T07:02:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/45#issuecomment-9502",
+          "body": "<!-- owner-attention.v1 item_key=joelkehle/agent-scripts#45@878840811183 idempotency_key=591a8b9a4f23f6c35c8184e38468c5c3e2888367719381c8fcea64b3845bce03 head_sha=878840811183a51149c729761d5dba4e76e0e455 state=open -->\n```json\n{\n  \"schema\": \"owner-attention.v1\",\n  \"item_key\": \"joelkehle/agent-scripts#45@878840811183\",\n  \"business_scope\": \"personal\",\n  \"repo\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 45,\n  \"pr_url\": \"https://github.com/joelkehle/agent-scripts/pull/45\",\n  \"head_sha\": \"878840811183a51149c729761d5dba4e76e0e455\",\n  \"packet\": {\n    \"marker\": \"ready-for-joel.v1\",\n    \"head_sha\": \"878840811183a51149c729761d5dba4e76e0e455\",\n    \"payload_hash\": \"535be9396235206892a0b69fdf67971189c223015e0708151722d5aa664d5e38\",\n    \"recommended_disposition\": \"discuss\",\n    \"posted\": true,\n    \"reviewer_identity\": \"kehle-reviewer-agent\",\n    \"poster_identity\": \"kehle-reviewer-agent\",\n    \"contributor_identity\": \"kehle-contributor-agent\",\n    \"reviewer_independent\": true\n  },\n  \"required_action\": \"adjudicate the ready pull request\",\n  \"state\": \"open\",\n  \"ready_at\": \"2026-07-27T07:02:00.000Z\",\n  \"age_days\": 0,\n  \"escalation\": {\n    \"level\": \"none\",\n    \"age_days\": 0\n  },\n  \"surface\": \"github\",\n  \"proposed_action\": \"adjudicate\",\n  \"posted_by\": \"kehle-reviewer-agent\",\n  \"event_id\": \"b23200e363076d93f535750d1e41dcf3\",\n  \"idempotency_key\": \"591a8b9a4f23f6c35c8184e38468c5c3e2888367719381c8fcea64b3845bce03\",\n  \"label\": {\n    \"name\": \"ready-for-joel\",\n    \"desired\": true\n  },\n  \"receipts\": {\n    \"packet_posted\": true,\n    \"review_posted\": true,\n    \"payload_hash\": \"535be9396235206892a0b69fdf67971189c223015e0708151722d5aa664d5e38\"\n  }\n}\n```\n"
+        },
+        {
+          "comment_id": 9503,
+          "author": "joelkehle",
+          "created_at": "2026-07-27T07:45:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/45#issuecomment-9503",
+          "body": "Reading this tonight. Leaning merge but I want to see the canary refusal path first."
+        }
+      ]
+    }
+  ]
+}
