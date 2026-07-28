@@ -11,23 +11,65 @@
   },
   "notes": [
     "Rendering this manifest proposes issue payloads only. Creating the issue batch is external write 3 in the packet's separate-authorization ledger.",
-        "GHL-010 declares Requirements: all in the packet; that is expanded here to the explicit requirement list so coverage stays checkable."
+    "GHL-010 declares Requirements: all in the packet; that is expanded here to the explicit requirement list so coverage stays checkable."
   ],
   "requirements": [
-    { "id": "GHL-REQ-01", "title": "Faithful issue projection" },
-    { "id": "GHL-REQ-02", "title": "Claims and collision control" },
-    { "id": "GHL-REQ-03", "title": "Mission provenance" },
-    { "id": "GHL-REQ-04", "title": "Bounded lifecycle conducting" },
-    { "id": "GHL-REQ-05", "title": "Contributor-fork publication" },
-    { "id": "GHL-REQ-06", "title": "Exact-head independent review" },
-    { "id": "GHL-REQ-07", "title": "Decision-ready packet and owner attention" },
-    { "id": "GHL-REQ-08", "title": "Joel-only adjudication" },
-    { "id": "GHL-REQ-09", "title": "Durable graduation" },
-    { "id": "GHL-REQ-10", "title": "Repository enrollment" },
-    { "id": "GHL-NFR-01", "title": "Identity and authority" },
-    { "id": "GHL-NFR-02", "title": "Guarded external writes" },
-    { "id": "GHL-NFR-03", "title": "Separation of concerns" },
-    { "id": "GHL-NFR-04", "title": "Observability" }
+    {
+      "id": "GHL-REQ-01",
+      "title": "Faithful issue projection"
+    },
+    {
+      "id": "GHL-REQ-02",
+      "title": "Claims and collision control"
+    },
+    {
+      "id": "GHL-REQ-03",
+      "title": "Mission provenance"
+    },
+    {
+      "id": "GHL-REQ-04",
+      "title": "Bounded lifecycle conducting"
+    },
+    {
+      "id": "GHL-REQ-05",
+      "title": "Contributor-fork publication"
+    },
+    {
+      "id": "GHL-REQ-06",
+      "title": "Exact-head independent review"
+    },
+    {
+      "id": "GHL-REQ-07",
+      "title": "Decision-ready packet and owner attention"
+    },
+    {
+      "id": "GHL-REQ-08",
+      "title": "Joel-only adjudication"
+    },
+    {
+      "id": "GHL-REQ-09",
+      "title": "Durable graduation"
+    },
+    {
+      "id": "GHL-REQ-10",
+      "title": "Repository enrollment"
+    },
+    {
+      "id": "GHL-NFR-01",
+      "title": "Identity and authority"
+    },
+    {
+      "id": "GHL-NFR-02",
+      "title": "Guarded external writes"
+    },
+    {
+      "id": "GHL-NFR-03",
+      "title": "Separation of concerns"
+    },
+    {
+      "id": "GHL-NFR-04",
+      "title": "Observability"
+    }
   ],
   "issues": [
     {
@@ -37,9 +79,18 @@
       "owner_repository": "joelkehle/manager",
       "manager_project": "shared-manager",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-03", "GHL-REQ-04", "GHL-REQ-10", "GHL-NFR-01", "GHL-NFR-03", "GHL-NFR-04"],
+      "requirements": [
+        "GHL-REQ-03",
+        "GHL-REQ-04",
+        "GHL-REQ-10",
+        "GHL-NFR-01",
+        "GHL-NFR-03",
+        "GHL-NFR-04"
+      ],
       "depends_on": [],
-      "external_dependencies": ["Merged Phase 0 specification revision"],
+      "external_dependencies": [
+        "Merged Phase 0 specification revision"
+      ],
       "acceptance_criteria": [
         "Add server-owned `allowed_path_prefixes` and `denied_path_prefixes` to `agent_policy.mission_policy`.",
         "Require every requested bounded scope to be contained by an allowed prefix and no denied prefix; denied prefixes win.",
@@ -59,7 +110,10 @@
         "Add table-driven tests for every positive policy and refusal case.",
         "Document the exact Phase 0 spec revision in the policy change and produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-01`."
       ],
-      "validation_commands": ["go test ./internal/projectsmcp", "scripts/agent-check.sh"],
+      "validation_commands": [
+        "go test ./internal/projectsmcp",
+        "scripts/agent-check.sh"
+      ],
       "non_goals": [
         "No target-repository implementation.",
         "No issue/claim/publisher adapter.",
@@ -73,9 +127,17 @@
       "summary": "Immediately repair active review-provider compatibility and the unbounded retry loop; improve exact error/retry evidence.",
       "owner_repository": "kehle-tdg-dev/ucla-tdg-ip-agents",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-06", "GHL-REQ-07", "GHL-NFR-01", "GHL-NFR-02", "GHL-NFR-04"],
+      "requirements": [
+        "GHL-REQ-06",
+        "GHL-REQ-07",
+        "GHL-NFR-01",
+        "GHL-NFR-02",
+        "GHL-NFR-04"
+      ],
       "depends_on": [],
-      "external_dependencies": ["Verified `ACT-REV-01`"],
+      "external_dependencies": [
+        "Verified `ACT-REV-01`"
+      ],
       "acceptance_criteria": [
         "Remove or conditionally omit unsupported model parameters.",
         "Classify provider auth, credit, rate, and configuration failures explicitly.",
@@ -105,9 +167,15 @@
       "summary": "Versioned spec-to-issue manifest, coverage validator, stable renderer, and write-proposal receipt.",
       "owner_repository": "joelkehle/agent-scripts",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-01", "GHL-NFR-02", "GHL-NFR-04"],
+      "requirements": [
+        "GHL-REQ-01",
+        "GHL-NFR-02",
+        "GHL-NFR-04"
+      ],
       "depends_on": [],
-      "external_dependencies": ["Verified `ACT-REV-02`"],
+      "external_dependencies": [
+        "Verified `ACT-REV-02`"
+      ],
       "acceptance_criteria": [
         "Define a versioned, machine-readable spec and issue-manifest schema.",
         "Preserve spec/requirement IDs, owners, dependencies, acceptance criteria, validation, non-goals, and write class.",
@@ -132,9 +200,18 @@
       "summary": "GitHub claim reducer plus guarded issue, claim/renew/release/recovery, assignment, and receipt verbs as `kehle-contributor-agent`.",
       "owner_repository": "kehle-tdg-dev/ucla-tdg-ip-agents",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-01", "GHL-REQ-02", "GHL-NFR-01", "GHL-NFR-02"],
-      "depends_on": ["GHL-003"],
-      "external_dependencies": ["Verified `ACT-REV-02`"],
+      "requirements": [
+        "GHL-REQ-01",
+        "GHL-REQ-02",
+        "GHL-NFR-01",
+        "GHL-NFR-02"
+      ],
+      "depends_on": [
+        "GHL-003"
+      ],
+      "external_dependencies": [
+        "Verified `ACT-REV-02`"
+      ],
       "acceptance_criteria": [
         "Implement the `github-lifecycle-claim.v1` reducer using GitHub comment server order, predecessor validation, legal transitions, and first-successor wins.",
         "Provide dry-run and explicitly write-enabled issue-batch verbs.",
@@ -167,8 +244,16 @@
       "owner_repository": "joelkehle/manager",
       "manager_project": "shared-manager",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-03", "GHL-REQ-04", "GHL-REQ-10", "GHL-NFR-01", "GHL-NFR-03"],
-      "depends_on": ["GHL-001"],
+      "requirements": [
+        "GHL-REQ-03",
+        "GHL-REQ-04",
+        "GHL-REQ-10",
+        "GHL-NFR-01",
+        "GHL-NFR-03"
+      ],
+      "depends_on": [
+        "GHL-001"
+      ],
       "external_dependencies": [],
       "acceptance_criteria": [
         "Extend the mission request/receipt contract with issue URL/number, spec revision, requirement IDs, claim generation, lease ID, and stable `mission_request_id`.",
@@ -180,7 +265,10 @@
         "Update the mission contract, runbook, and Elephant Check.",
         "Produce a reviewed exact revision eligible for, but not authorized for, `ACT-REV-03`."
       ],
-      "validation_commands": ["go test ./internal/projectsmcp", "scripts/agent-check.sh"],
+      "validation_commands": [
+        "go test ./internal/projectsmcp",
+        "scripts/agent-check.sh"
+      ],
       "non_goals": [
         "No GitHub client in Manager.",
         "No contributor publishing.",
@@ -204,7 +292,10 @@
         "GHL-NFR-03",
         "GHL-NFR-04"
       ],
-      "depends_on": ["GHL-004", "GHL-005"],
+      "depends_on": [
+        "GHL-004",
+        "GHL-005"
+      ],
       "external_dependencies": [],
       "acceptance_criteria": [
         "Add the logical lifecycle-conductor role to the existing `ucla.contribution-coordinator` deployable; create no new service.",
@@ -245,9 +336,16 @@
       "summary": "UCLA-only versioned owner-attention/adjudication proposal contract, exact-head invalidation, allowlist alignment, and build identity.",
       "owner_repository": "kehle-tdg-dev/ucla-tdg-project-agents",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-07", "GHL-REQ-08", "GHL-NFR-02", "GHL-NFR-03"],
+      "requirements": [
+        "GHL-REQ-07",
+        "GHL-REQ-08",
+        "GHL-NFR-02",
+        "GHL-NFR-03"
+      ],
       "depends_on": [],
-      "external_dependencies": ["Verified `ACT-REV-02`"],
+      "external_dependencies": [
+        "Verified `ACT-REV-02`"
+      ],
       "acceptance_criteria": [
         "Define versioned `owner-attention.v1` and adjudication-observation proposal payloads.",
         "Recognize the coordinator's `github_pr_adjudication` action as a no-PM-write proposal action, or replace both sides with one agreed versioned action.",
@@ -287,7 +385,11 @@
         "GHL-NFR-02",
         "GHL-NFR-04"
       ],
-      "depends_on": ["GHL-002", "GHL-006", "GHL-007"],
+      "depends_on": [
+        "GHL-002",
+        "GHL-006",
+        "GHL-007"
+      ],
       "external_dependencies": [],
       "acceptance_criteria": [
         "Resolve business scope from server-owned repository policy.",
@@ -318,8 +420,17 @@
       "summary": "Render a linked canonical-ruling graduation proposal after Joel adjudication; no direct doctrine write.",
       "owner_repository": "joelkehle/agent-scripts",
       "write_class": "propose",
-      "requirements": ["GHL-REQ-08", "GHL-REQ-09", "GHL-NFR-01", "GHL-NFR-02", "GHL-NFR-03"],
-      "depends_on": ["GHL-005", "GHL-008"],
+      "requirements": [
+        "GHL-REQ-08",
+        "GHL-REQ-09",
+        "GHL-NFR-01",
+        "GHL-NFR-02",
+        "GHL-NFR-03"
+      ],
+      "depends_on": [
+        "GHL-005",
+        "GHL-008"
+      ],
       "external_dependencies": [],
       "acceptance_criteria": [
         "Read Joel-authored GitHub adjudication evidence for the exact current head.",
@@ -343,7 +454,7 @@
     {
       "issue_id": "GHL-010",
       "title": "Prove the agent-scripts lifecycle pilot",
-      "summary": "Run all local/fake scenarios, then—only under another authorization—one live `agent-scripts` canary against the exact activated revisions.",
+      "summary": "Run all local/fake scenarios, then\u2014only under another authorization\u2014one live `agent-scripts` canary against the exact activated revisions.",
       "owner_repository": "joelkehle/agent-scripts",
       "write_class": "write",
       "requirements": [
@@ -392,12 +503,42 @@
         "Correlate Joel's decision without performing it.",
         "Produce a complete artifact and write-receipt ledger."
       ],
-      "validation_commands": ["npm run agent:check"],
+      "validation_commands": [
+        "npm run agent:check"
+      ],
       "validation_notes": "Plus the documented gates from each dependency repository at the exact selected or activated revisions, as applicable.",
       "non_goals": [
         "No production deploy or migration.",
         "No second repository.",
         "No automated merge or approval."
+      ]
+    },
+    {
+      "issue_id": "GHL-013",
+      "title": "Adopt the budgeted plain-terms lead block in packets and contributor doctrine",
+      "summary": "Every PR body, ready-for-joel packet, and report to Joel leads with a budgeted plain-English block so adjudication happens at the altitude where the owner's judgment is strongest. Doctrine amendment only; mandated by Joel 2026-07-27 (agent-scripts issue #18).",
+      "owner_repository": "joelkehle/agent-scripts",
+      "write_class": "propose",
+      "requirements": [
+        "GHL-REQ-07"
+      ],
+      "depends_on": [],
+      "external_dependencies": [],
+      "acceptance_criteria": [
+        "Amend the contributor operating protocol so the packet contract requires an \"In plain terms\" lead block: three to five jargon-free sentences covering what changes in the world, what could go wrong, how undoable the change is, and the one thing to read if only one.",
+        "Amend the contribution review architecture with the plain-terms layer, its rationale, and its named failure modes: the plain layer must never replace the technical record, must inform rather than persuade, and must never omit what could go wrong.",
+        "State the proportionality rule: one-way-door decisions get the full decision-analysis.v1 treatment; small two-way doors get the minimum budget.",
+        "Record changelog entries in each amended document.",
+        "Keep the amendment documentation-only; no schema, validator, or renderer changes."
+      ],
+      "validation_commands": [
+        "node --test tests/github-lifecycle/spec-issue-manifest.test.js",
+        "npm run agent:check"
+      ],
+      "non_goals": [
+        "No schema or validator enforcement of the block (a later issue graduates it into the packet schema and policy evaluator).",
+        "No GitHub writes by this issue's tooling.",
+        "No rewriting of already-merged PR bodies."
       ]
     }
   ]
