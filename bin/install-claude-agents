@@ -18,9 +18,24 @@ src_dir="$(cd -P "$(dirname "$self")/../claude/agents" && pwd)"
 dst_dir="${CLAUDE_AGENTS_DIR:-$HOME/.claude/agents}"
 mkdir -p "$dst_dir"
 
+# Only git-tracked definitions are installable: a stray untracked file in
+# claude/agents/ must not become a globally resolved agent. Fails closed if
+# the tracked set cannot be enumerated.
+repo_dir="$(cd -P "$src_dir/../.." && pwd)"
+tracked=$(git -C "$repo_dir" ls-files 'claude/agents/*.md' 2>/dev/null) || tracked=""
+if [ -z "$tracked" ]; then
+  printf 'install-claude-agents: cannot enumerate tracked agent definitions in %s; refusing\n' "$repo_dir" >&2
+  exit 1
+fi
+is_tracked() { printf '%s\n' "$tracked" | grep -qxF "claude/agents/$1"; }
+
 status=0
 for src in "$src_dir"/*.md; do
   name=$(basename "$src")
+  if ! is_tracked "$name"; then
+    printf 'install-claude-agents: skipping untracked %s\n' "$name" >&2
+    continue
+  fi
   dst="$dst_dir/$name"
   if [ -L "$dst" ]; then
     ln -sfn "$src" "$dst"

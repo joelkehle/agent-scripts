@@ -32,6 +32,12 @@ if [ "${CSUB_TEST_GRANDCHILD:-0}" = "1" ]; then
   sleep 60 &
   printf 'GRANDPID<%s>\n' "$!" >> "$CSUB_TEST_ARGS"
 fi
+if [ "${CSUB_TEST_SETSID_GC:-0}" = "1" ]; then
+  python3 -c 'import os, sys
+os.setsid()
+os.execvp("sleep", ["sleep", "60"])' &
+  printf 'SETSIDGC<%s>\n' "$!" >> "$CSUB_TEST_ARGS"
+fi
 printf 'STDIN<%s>\n' "$(cat)" >> "$CSUB_TEST_ARGS"
 [ "${CSUB_TEST_TRAP_TERM:-0}" = "1" ] && trap '' TERM
 sleep "${CSUB_TEST_SLEEP:-0}"
@@ -43,7 +49,13 @@ for a in "$@"; do
 done
 [ -n "$out" ] && printf 'FAKE-MSG\n' > "$out"
 # Real codex prints a usage summary for exec briefs but not for reviews.
-[ "$is_review" = "0" ] && printf 'tokens used\n4,321\n'
+if [ "$is_review" = "0" ]; then
+  if [ "${CSUB_TEST_TOKENS_GARBAGE:-0}" = "1" ]; then
+    printf 'tokens used\nnot-a-number\n'
+  else
+    printf 'tokens used\n4,321\n'
+  fi
+fi
 exit "${CSUB_TEST_EXIT:-0}"
 SHIM
 chmod +x "$tmp/bin/codex"
@@ -109,16 +121,24 @@ done
 grep -qxF -e '--' "$CSUB_TEST_ARGS" && fail "-R -B must not pass a positional"
 check_receipt mode=review outcome=completed tokens=null || fail "review receipt must be completed with null tokens"
 
-"$csub" -R -U -C "$workdir" 'focus on tests' >/dev/null 2>&1
+"$csub" -R -U -C "$workdir" >/dev/null 2>&1
 has_arg '--uncommitted' || fail "-U scope not passed"
-has_arg '--' || fail "-R -U with instructions lost the option terminator"
-has_arg 'focus on tests' || fail "-R -U lost the instructions argument"
 
-set +e
-"$csub" -R -B main -C "$workdir" 'notes' >/dev/null 2>"$tmp/r-err"; rc=$?
-set -e
-[ "$rc" -eq 2 ] || fail "-R -B with instructions not rejected (got $rc)"
-grep -q 'rejects custom instructions' "$tmp/r-err" || fail "instruction-rejection message missing"
+# codex accepts instructions only on UNSCOPED reviews (verified live: every
+# scoped variant rejects a prompt despite the CLI help advertising one).
+"$csub" -R -C "$workdir" 'focus on tests' >/dev/null 2>&1
+has_arg 'review' || fail "unscoped review with instructions did not run review"
+has_arg '--' || fail "unscoped review with instructions lost the option terminator"
+has_arg 'focus on tests' || fail "unscoped review lost the instructions argument"
+
+for scoped in "-B main" "-K abc123" "-U"; do
+  set +e
+  # shellcheck disable=SC2086
+  "$csub" -R $scoped -C "$workdir" 'notes' >/dev/null 2>"$tmp/r-err"; rc=$?
+  set -e
+  [ "$rc" -eq 2 ] || fail "-R $scoped with instructions not rejected (got $rc)"
+  grep -q 'rejects custom instructions' "$tmp/r-err" || fail "instruction-rejection message missing for $scoped"
+done
 set +e
 "$csub" -R -B main -K abc123 -C "$workdir" >/dev/null 2>&1; rc=$?
 set -e
@@ -176,18 +196,22 @@ set -e
 [ "$rc" -eq 124 ] || fail "timeout with non-positive grace fallback failed (got $rc)"
 grep -q 'non-positive CSUB_KILL_GRACE' "$tmp/grace0-err" || fail "non-positive grace warning missing"
 
-# --- 10. watchdog timeout: group-killed, unknown usage, grandchild dead ------
+# --- 10. watchdog timeout: tree-killed, unknown usage, escapees dead ---------
 rm -f "$CSUB_TEST_ARGS"
 set +e
-CSUB_TEST_GRANDCHILD=1 CSUB_TEST_SLEEP=5 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
+CSUB_TEST_GRANDCHILD=1 CSUB_TEST_SETSID_GC=1 CSUB_TEST_SLEEP=5 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
 rc=$?
 set -e
 [ "$rc" -eq 124 ] || fail "timeout did not produce exit 124 (got $rc)"
 check_receipt outcome=timeout tokens=null exit=124 || fail "timeout receipt wrong"
 grand_pid=$(sed -n 's/^GRANDPID<\([0-9]*\)>$/\1/p' "$CSUB_TEST_ARGS")
+setsid_pid=$(sed -n 's/^SETSIDGC<\([0-9]*\)>$/\1/p' "$CSUB_TEST_ARGS")
 [ -n "$grand_pid" ] || fail "grandchild pid not captured"
+[ -n "$setsid_pid" ] || fail "setsid grandchild pid not captured"
 for _ in $(seq 1 30); do kill -0 "$grand_pid" 2>/dev/null || break; sleep 0.1; done
 kill -0 "$grand_pid" 2>/dev/null && fail "grandchild survived group timeout kill"
+for _ in $(seq 1 30); do kill -0 "$setsid_pid" 2>/dev/null || break; sleep 0.1; done
+kill -0 "$setsid_pid" 2>/dev/null && fail "setsid-detached grandchild survived tree kill"
 
 # --- 11. TERM-resistant child is still KILLed at the bound -------------------
 start_ts=$(date +%s)
@@ -229,6 +253,27 @@ fi
 # --- 14. failed child records outcome=failed ---------------------------------
 CSUB_TEST_EXIT=7 "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1 && fail "nonzero child exit not propagated"
 check_receipt outcome=failed exit=7 || fail "failed-run receipt wrong"
+
+# --- 14a. SIGINT works even for background invocations (inherited-ignore) ----
+rm -f "$CSUB_TEST_ARGS"
+set +e
+CSUB_TEST_SLEEP=30 "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1 &
+csub_pid=$!
+for _ in $(seq 1 50); do [ -s "$CSUB_TEST_ARGS" ] && grep -q 'STDIN<' "$CSUB_TEST_ARGS" && break; sleep 0.1; done
+kill -INT "$csub_pid"
+wait "$csub_pid"
+rc=$?
+set -e
+[ "$rc" -eq 130 ] || fail "background SIGINT did not produce exit 130 (got $rc)"
+check_receipt outcome=signaled exit=130 || fail "SIGINT receipt wrong"
+
+# --- 14b. malformed token summary never drops the receipt --------------------
+CSUB_TEST_TOKENS_GARBAGE=1 "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1
+check_receipt outcome=completed tokens=null exit=0 || fail "garbage token summary dropped or corrupted the receipt"
+
+# --- 14c. successful runs emit no job-control noise on stderr ----------------
+"$csub" -C "$workdir" 'test brief' >/dev/null 2>"$tmp/noise"
+grep -Eq 'Killed|csub-wd|csub-esc' "$tmp/noise" && fail "stderr contains job-control noise: $(cat "$tmp/noise")"
 
 # --- 15. Elephant guard: canonical invariants, fail closed -------------------
 eledir="$tmp/elephant-repo"
@@ -324,6 +369,17 @@ for name in grunt.md mech.md; do
   [ -L "$agents_dst/$name" ] || fail "installer did not link $name via shim"
   cmp -s "$agents_dst/$name" "$repo/claude/agents/$name" || fail "shim-installed $name diverges from tracked copy"
 done
+
+# --- 18a. untracked agent definitions are never installed --------------------
+rogue="$repo/claude/agents/zz-rogue-test.md"
+printf -- '---\nname: rogue\n---\nrogue\n' > "$rogue"
+rogue_dst="$tmp/rogue-agents"
+CLAUDE_AGENTS_DIR="$rogue_dst" "$repo/bin/install-claude-agents" >/dev/null 2>"$tmp/rogue-err" && rogue_rc=0 || rogue_rc=$?
+rm -f "$rogue"
+[ "$rogue_rc" -eq 0 ] || fail "installer failed with an untracked file present"
+[ ! -e "$rogue_dst/zz-rogue-test.md" ] || fail "untracked agent definition was installed"
+grep -q 'skipping untracked zz-rogue-test.md' "$tmp/rogue-err" || fail "untracked-skip message missing"
+[ -L "$rogue_dst/grunt.md" ] || fail "tracked agents not installed alongside rogue skip"
 
 # --- 19. bootstrap installs agents, and works through its own shim -----------
 boot_agents="$tmp/boot-agents"

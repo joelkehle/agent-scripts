@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+# Re-exec once through python3 to reset SIGINT/SIGHUP to default: background
+# invocations inherit them ignored from non-interactive shells, which would
+# silently defeat the documented signal exits (129/130). Skipped when python3
+# is absent — the prerequisite check below reports that properly.
+if [ -z "${CSUB_SIGRESET:-}" ] && command -v python3 >/dev/null 2>&1; then
+  CSUB_SIGRESET=1 exec python3 -c '
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal(signal.SIGHUP, signal.SIG_DFL)
+os.execvp(sys.argv[1], sys.argv[1:])' "$0" "$@"
+fi
 set -euo pipefail
 umask 077
 
@@ -9,21 +20,20 @@ umask 077
 #
 # Prerequisites (fail closed): codex-cli >= MIN_CODEX_VERSION (the isolation
 # pin set is only validated there) and python3 (JSON receipts, version
-# compare, canonical Elephant validation, process-group supervision).
+# compare, canonical Elephant validation, process supervision).
 #
-# Execution is supervised in-process: the Codex child runs as the leader of
-# its own process group (os.setsid), a watchdog escalates TERM -> KILL for
-# the whole group at the wall-clock bound, INT/TERM/HUP traps terminate the
-# group and still append a receipt, and an EXIT trap reaps the watchdog and
-# escalation helpers so nothing survives csub.
+# Containment contract: termination (timeout or signal) TERM->KILLs the
+# child's process group PLUS every live descendant reachable through the
+# process tree at kill time. A subprocess that detaches into a new session
+# AND outlives its parent before the kill escapes — csub bounds cooperative
+# and ordinarily-misbehaving children, not adversarial ones.
 #
 # State: ${CSUB_LOG_DIR:-~/.local/state/csub} is csub-owned (registered in
 # docs/STATE_ARCHITECTURE.md). csub-*.log / csub-*.last.md are disposable,
 # pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting.
 # Each receipt carries "outcome": completed | timeout | signaled | failed.
-# "tokens" is null when Codex did not report usage — expected for review
-# mode (codex exec review prints no usage summary) and for interrupted runs;
-# use "outcome" to tell those apart.
+# "tokens" is null when Codex did not report parseable usage — expected for
+# review mode and interrupted runs; "outcome" tells those apart.
 
 FAST_MODEL="gpt-5.6-terra"; FAST_EFFORT="medium"
 DEEP_MODEL="gpt-5.6-sol";   DEEP_EFFORT="high"
@@ -36,7 +46,7 @@ SETSID_PY=$'import os, sys\nos.setsid()\nos.execvp(sys.argv[1], sys.argv[1:])'
 usage() {
   cat >&2 <<'EOF'
 Usage: csub [-D] [-w] [-C DIR] [-T SECS] [-t] "brief"
-       csub -R [-U ["instructions"] | -B BASE | -K SHA] [-C DIR] [-T SECS] [-t]
+       csub -R [-U | -B BASE | -K SHA] [-C DIR] [-T SECS] [-t] ["instructions"]
 Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
 
   -D        deep mode: gpt-5.6-sol at high reasoning, for review/verification
@@ -53,12 +63,14 @@ Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
   -B BASE   (with -R) review changes against base branch BASE
   -K SHA    (with -R) review the changes introduced by commit SHA
   -U        (with -R) review staged, unstaged, and untracked changes
-            Scopes are mutually exclusive. Custom instructions are accepted
-            with -U or with no scope; codex rejects them with -B/-K.
+            Scopes are mutually exclusive. codex accepts custom instructions
+            only on unscoped reviews; csub rejects instructions with any of
+            -B/-K/-U.
   -C DIR    working root for the task (default: current directory)
   -T SECS   wall-clock timeout, positive integer seconds (default 1200).
-            TERM to the child's process group at the bound, KILL after
-            CSUB_KILL_GRACE (default 20s; invalid values fall back to 20).
+            TERM to the child's group and live descendants at the bound,
+            KILL after CSUB_KILL_GRACE (default 20s; invalid values fall
+            back to 20). See the containment contract in the header.
   -t        tee the full event log to stdout while running
 
 The brief must be fully self-contained: goal, files owned, whether edits are
@@ -74,20 +86,15 @@ EOF
 deep=false write=false review=false tee_log=false workdir="$PWD"
 timeout_secs=$DEFAULT_TIMEOUT
 review_scope=()
-scope_kind=""
 scope_count=0
-add_scope() {
-  scope_kind=$1
-  scope_count=$((scope_count + 1))
-}
 while getopts ':DwRB:K:UC:T:t' opt; do
   case "$opt" in
     D) deep=true ;;
     w) write=true ;;
     R) review=true ;;
-    B) review_scope+=(--base "$OPTARG"); add_scope base ;;
-    K) review_scope+=(--commit "$OPTARG"); add_scope commit ;;
-    U) review_scope+=(--uncommitted); add_scope uncommitted ;;
+    B) review_scope+=(--base "$OPTARG"); scope_count=$((scope_count + 1)) ;;
+    K) review_scope+=(--commit "$OPTARG"); scope_count=$((scope_count + 1)) ;;
+    U) review_scope+=(--uncommitted); scope_count=$((scope_count + 1)) ;;
     C) workdir=$OPTARG ;;
     T) timeout_secs=$OPTARG ;;
     t) tee_log=true ;;
@@ -101,9 +108,8 @@ if $review; then
   [ "$scope_count" -le 1 ] || { printf 'csub: -B, -K, and -U are mutually exclusive (codex exec review accepts one scope)\n' >&2; exit 2; }
   [ "$#" -le 1 ] || usage
   brief="${1-}"
-  if [ -n "$brief" ] && { [ "$scope_kind" = base ] || [ "$scope_kind" = commit ]; }; then
-    printf 'csub: codex exec review rejects custom instructions with -%s; use -U or drop the instructions\n' \
-      "$([ "$scope_kind" = base ] && echo B || echo K)" >&2
+  if [ -n "$brief" ] && [ "$scope_count" -gt 0 ]; then
+    printf 'csub: codex exec review rejects custom instructions with any scope flag; use an unscoped review for instructions\n' >&2
     exit 2
   fi
 else
@@ -299,8 +305,8 @@ stdin_src=/dev/null
 start=$(date +%s)
 receipt_done=false
 write_receipt() {
-  # $1 = exit status, $2 = outcome. Empty tokens (Codex reported no usage)
-  # becomes null; "outcome" distinguishes interrupted runs from review runs.
+  # $1 = exit status, $2 = outcome. Unparseable or absent usage becomes
+  # tokens:null — the receipt itself is always written.
   $receipt_done && return 0
   receipt_done=true
   local duration tokens
@@ -310,11 +316,12 @@ write_receipt() {
 import datetime, json, sys
 
 a = sys.argv
+tokens = a[7].strip()
 print(json.dumps({
     "ts": datetime.datetime.now().astimezone().isoformat(),
     "mode": a[1], "model": a[2], "effort": a[3], "sandbox": a[4],
     "dir": a[5], "secs": int(a[6]),
-    "tokens": int(a[7]) if a[7] else None,
+    "tokens": int(tokens) if tokens.isdigit() else None,
     "exit": int(a[8]), "outcome": a[9], "log": a[10],
 }))' "$mode" "$model" "$effort" "$sandbox" "$workdir" \
     "$duration" "$tokens" "$1" "$2" "$log_file" >> "$receipts" 2>/dev/null || true
@@ -327,28 +334,53 @@ helper_pids=()
 signal_exit=""
 timeout_flag="$state_dir/$stamp.timedout"
 
-# Group-wide kill: the child and watchdog are process-group leaders
-# (os.setsid), so a negative-pid kill reaches their entire trees. Falls back
-# to a single-pid kill if the group is already gone.
-kill_group() {
-  kill -s "$1" -- "-$2" 2>/dev/null || kill -s "$1" "$2" 2>/dev/null || true
+# kill_tree SIG PID: signal the pid's process group plus every live
+# descendant found by walking the process tree (catches subprocesses that
+# left the group via setsid while their parent is still alive — see the
+# containment contract). Exported so the watchdog and escalation helpers
+# (bash children) use the same logic.
+kill_tree() {
+  local sig=$1 root=$2 all queue next p kids
+  all=$(ps -Ao pid=,ppid= 2>/dev/null) || all=""
+  queue=$root
+  local victims=$root
+  while [ -n "$queue" ]; do
+    next=""
+    for p in $queue; do
+      kids=$(printf '%s\n' "$all" | awk -v pp="$p" '$2 == pp { print $1 }')
+      if [ -n "$kids" ]; then
+        next="$next $kids"
+        victims="$victims $kids"
+      fi
+    done
+    queue=$next
+  done
+  kill -s "$sig" -- "-$root" 2>/dev/null || true
+  for p in $victims; do
+    kill -s "$sig" "$p" 2>/dev/null || true
+  done
 }
+export -f kill_tree
 
 cleanup() {
   local p
   for p in ${watchdog_pid:-} ${tail_pid:-} ${helper_pids[@]+"${helper_pids[@]}"}; do
-    kill_group KILL "$p"
+    kill_tree KILL "$p"
+    wait "$p" 2>/dev/null || true
   done
-  [ -n "${child_pid:-}" ] && kill_group KILL "$child_pid"
+  if [ -n "${child_pid:-}" ]; then
+    kill_tree KILL "$child_pid"
+    wait "$child_pid" 2>/dev/null || true
+  fi
   rm -f "$timeout_flag" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 terminate_child() {
   [ -n "$child_pid" ] || return 0
-  kill_group TERM "$child_pid"
+  kill_tree TERM "$child_pid"
   CSUB_ESC_G="$KILL_GRACE" CSUB_ESC_C="$child_pid" \
-    python3 -c "$SETSID_PY" bash -c 'sleep "$CSUB_ESC_G"; kill -s KILL -- "-$CSUB_ESC_C" 2>/dev/null' csub-esc 2>/dev/null &
+    python3 -c "$SETSID_PY" bash -c 'sleep "$CSUB_ESC_G"; kill_tree KILL "$CSUB_ESC_C"' csub-esc 2>/dev/null &
   helper_pids+=($!)
 }
 
@@ -368,16 +400,16 @@ if $tee_log; then
   tail_pid=$!
 fi
 
-# Watchdog (own process group, reaped by cleanup): TERM to the child's group
+# Watchdog (own process group, reaped by cleanup): TERM to the child's tree
 # at the bound, KILL after the grace period. The flag file records that the
 # bound fired so the exit can be reported as 124.
 CSUB_WD_T="$timeout_secs" CSUB_WD_G="$KILL_GRACE" CSUB_WD_C="$child_pid" CSUB_WD_F="$timeout_flag" \
   python3 -c "$SETSID_PY" bash -c '
     sleep "$CSUB_WD_T"
     touch "$CSUB_WD_F" 2>/dev/null
-    kill -s TERM -- "-$CSUB_WD_C" 2>/dev/null
+    kill_tree TERM "$CSUB_WD_C"
     sleep "$CSUB_WD_G"
-    kill -s KILL -- "-$CSUB_WD_C" 2>/dev/null
+    kill_tree KILL "$CSUB_WD_C"
   ' csub-wd 2>/dev/null &
 watchdog_pid=$!
 
@@ -387,8 +419,14 @@ while :; do
   kill -0 "$child_pid" 2>/dev/null || break
 done
 
-kill_group KILL "$watchdog_pid"
-[ -n "$tail_pid" ] && { kill "$tail_pid" 2>/dev/null || true; }
+# Reap the watchdog (and tail) explicitly so job-signal diagnostics like
+# "Killed ... csub-wd" never leak into csub's own stderr.
+kill_tree KILL "$watchdog_pid"
+wait "$watchdog_pid" 2>/dev/null || true
+if [ -n "$tail_pid" ]; then
+  kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
+fi
 
 outcome=completed
 if [ -e "$timeout_flag" ]; then

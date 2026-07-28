@@ -142,7 +142,10 @@ Rules:
   capability makes Codex eligible under that capability's read/propose/write
   class.
 - `csub` is single-shot and bounded: isolation pins disable MCP servers,
-  apps/plugins, web search, and child subagents; default read-only +
+  apps/plugins, web search, and child subagents. Containment covers the
+  child's process group plus live descendants at kill time — it bounds
+  misbehaving children, not adversarial ones that detach and orphan
+  themselves. Default read-only +
   ephemeral; `-w` grants workspace-write with network off, gated by the
   canonical Elephant validation (`lib/elephant`) — allowed only when the
   marker is absent or its deactivation is committed to HEAD, failing closed

@@ -63,7 +63,9 @@ projection.
   projections of Codex's own session records — safe to delete, auto-pruned
   after 14 days. `receipts.jsonl` is the authoritative append-only record of
   csub usage accounting (timestamp, mode, model, effort, sandbox, duration,
-  tokens, exit, log pointer). It owns no work nouns and nothing rebuilds from
+  tokens, exit, outcome — completed/timeout/signaled/failed — and log
+  pointer; tokens is null when Codex reported no parseable usage, with
+  outcome distinguishing interruption). It owns no work nouns and nothing rebuilds from
   it; loss is acceptable accounting loss, so no rebuild path is required.
   Nothing else may write to this directory.
 
