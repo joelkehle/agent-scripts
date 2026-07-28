@@ -318,8 +318,10 @@ write_receipt() {
   # accept only a sane bounded integer (last match wins — the genuine footer
   # follows any model text); oversized or non-numeric candidates degrade to
   # null, never losing the receipt.
+  # ...and an interrupted or failed run never printed the genuine footer, so
+  # any marker present is model text: parse only completed non-review runs.
   local tokens=""
-  if [ "$mode" != review ]; then
+  if [ "$mode" != review ] && [ "$2" = completed ]; then
     tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); if ($0 ~ /^[0-9]{1,12}$/) t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
   fi
   python3 -c '

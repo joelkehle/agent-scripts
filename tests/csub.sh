@@ -40,6 +40,9 @@ os.execvp("sleep", ["sleep", "60"])' &
   printf 'SETSIDGC<%s>\n' "$!" >> "$CSUB_TEST_ARGS"
 fi
 printf 'STDIN<%s>\n' "$(cat)" >> "$CSUB_TEST_ARGS"
+# Forged marker emitted BEFORE the work finishes: an interrupted run's log
+# then contains a well-formed token line that csub must refuse to account.
+[ "${CSUB_TEST_EARLY_TOKENS:-0}" = "1" ] && printf 'tokens used\n123\n'
 [ "${CSUB_TEST_TRAP_TERM:-0}" = "1" ] && trap '' TERM
 sleep "${CSUB_TEST_SLEEP:-0}"
 prev="" out="" is_review=0
@@ -218,7 +221,7 @@ grep -q 'non-positive CSUB_KILL_GRACE' "$tmp/grace0-err" || fail "non-positive g
 # --- 10. watchdog timeout: tree-killed, unknown usage, escapees dead ---------
 rm -f "$CSUB_TEST_ARGS"
 set +e
-CSUB_TEST_GRANDCHILD=1 CSUB_TEST_SETSID_GC=1 CSUB_TEST_SLEEP=5 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
+CSUB_TEST_GRANDCHILD=1 CSUB_TEST_SETSID_GC=1 CSUB_TEST_EARLY_TOKENS=1 CSUB_TEST_SLEEP=5 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
 rc=$?
 set -e
 [ "$rc" -eq 124 ] || fail "timeout did not produce exit 124 (got $rc)"
