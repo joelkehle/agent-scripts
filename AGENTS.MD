@@ -104,6 +104,9 @@ an unbuilt recruitment/vendor need.
   read before editing; preserve unrelated changes.
 - Subagents are allowed only when parallel read, disjoint writes, or independent
   verification materially reduce risk or time. Read `docs/subagent.md` first.
+- Pick the cheapest capable tier: `grunt` (Haiku) or `mech` (Sonnet) custom
+  agents, or `csub` Codex delegation for verifiable mechanical fan-out.
+  Ladder and rules: `docs/subagent.md` → Model Tiers And Cost.
 - Prefer existing bus agents, shared packages, and repo patterns before new
   services or dependencies.
 - For a new dependency, check current maintenance, releases, and adoption.

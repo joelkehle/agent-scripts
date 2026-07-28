@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# csub — delegate a self-contained mechanical task to Codex (codex exec).
+# Billing lands on the OpenAI plan, not Claude weekly limits. The caller owns
+# verification of the result; see agent-scripts docs/subagent.md.
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: csub [-m MODEL] [-C DIR] [-s SANDBOX] [-t] "brief"
+Delegate a self-contained, verifiable, repo-bound task to Codex.
+
+  -m MODEL    codex model override (default: codex config default)
+  -C DIR      working root for the task (default: current directory)
+  -s SANDBOX  read-only | workspace-write | danger-full-access
+              (default: workspace-write)
+  -t          tee the full event log to stdout while running
+              (default: log to file, print only the final message)
+
+The brief must be fully self-contained: goal, files owned, whether edits are
+allowed, checks to run, expected output shape. Pass "-" to read it from stdin.
+Prints Codex's final message on stdout; the full event log path on stderr.
+Exit code is codex exec's.
+EOF
+  exit 2
+}
+
+model="" workdir="$PWD" sandbox="workspace-write" tee_log=false
+while getopts ':m:C:s:t' opt; do
+  case "$opt" in
+    m) model=$OPTARG ;;
+    C) workdir=$OPTARG ;;
+    s) sandbox=$OPTARG ;;
+    t) tee_log=true ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+[ "$#" -eq 1 ] || usage
+brief=$1
+
+command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
+
+state_dir="${CSUB_LOG_DIR:-$HOME/.local/state/csub}"
+mkdir -p "$state_dir"
+stamp="$(date +%Y%m%dT%H%M%S)-$$"
+log_file="$state_dir/$stamp.log"
+msg_file="$state_dir/$stamp.last.md"
+
+args=(exec --sandbox "$sandbox" -C "$workdir" --output-last-message "$msg_file")
+[ -n "$model" ] && args+=(-m "$model")
+
+# codex exec appends piped stdin to the prompt; lanes call csub with non-tty
+# stdin, so close it unless the brief itself comes from stdin ("-").
+stdin_src=/dev/null
+[ "$brief" = "-" ] && stdin_src=/dev/stdin
+
+status=0
+if $tee_log; then
+  codex "${args[@]}" "$brief" <"$stdin_src" 2>&1 | tee "$log_file" || status=$?
+else
+  codex "${args[@]}" "$brief" <"$stdin_src" >"$log_file" 2>&1 || status=$?
+fi
+
+if [ -s "$msg_file" ]; then
+  cat "$msg_file"
+else
+  printf 'csub: no final message captured (codex exit %d); log tail:\n' "$status" >&2
+  tail -n 20 "$log_file" >&2 2>/dev/null || true
+fi
+printf 'csub: log %s\n' "$log_file" >&2
+exit "$status"
