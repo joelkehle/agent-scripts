@@ -13,16 +13,21 @@
       "title": "Manager build carrying the bounded mission policies and the lifecycle request surface",
       "service": "manager",
       "repository": "joelkehle/manager",
-      "required_commit": "f8747414b011f4a950ab409ef9afa4410e134cd6",
-      "contains_issues": ["GHL-001", "GHL-005"],
-      "requires_receipts": ["ACT-REV-01"],
+      "required_commit": "c5329aa5419da2a0a0d5277af913b19836438768",
+      "contains_issues": [
+        "GHL-001",
+        "GHL-005"
+      ],
+      "requires_receipts": [
+        "ACT-REV-01"
+      ],
       "rollback": "Re-activate the previously running Manager build and confirm its health endpoint reports the prior commit, clean and activated. The lifecycle request surface is additive, so a rollback leaves the operator start_agent_mission path intact; no mission state migration is required.",
       "smoke_checks": [
         "preflight_agent_mission returns allowed for each of the three target project IDs and refused for a wrong-scope pair, with the registry and policy hashes matching the reviewed build.",
         "request_agent_mission refuses shared-manager with the phase-0 message while the operator start path still succeeds.",
         "check_agent_mission from a foreign connector scope is indistinguishable from an unknown mission id."
       ],
-      "note": "Production ran a pre-GHL-005 build when this spec was written; the request surface it must carry is absent there."
+      "note": "Activated and verified 2026-07-27/28 (harness lane): production runs c5329aa5419da2a0a0d5277af913b19836438768; the GHL-005 merge 39a7959 is a verified ancestor; delta to f874741 is docs plus one ops config file with zero Go changes. Completion evidence and idempotency note: joelkehle/manager issue #7 (closed 2026-07-28T01:57Z, comment 5099033541); status doc commit f2e06ee. Rollback pairing staged: d695bc24 binary with ce25675 registry."
     },
     {
       "checkpoint_id": "ACT-REV-04",
@@ -30,8 +35,15 @@
       "service": "contribution-coordinator",
       "repository": "joelkehle/ucla-tdg-ip-agents",
       "required_commit": "d47bc86f079563189aedc65f2a3b6ef0260ab6d2",
-      "contains_issues": ["GHL-002", "GHL-004", "GHL-006", "GHL-008"],
-      "requires_receipts": ["ACT-REV-02"],
+      "contains_issues": [
+        "GHL-002",
+        "GHL-004",
+        "GHL-006",
+        "GHL-008"
+      ],
+      "requires_receipts": [
+        "ACT-REV-02"
+      ],
       "rollback": "Re-activate the last known-good coordinator build and confirm its health endpoint reports that commit, clean and activated. Before rolling back, release any open claim so no lease is held by a build that no longer runs; claim and attention state is reconstructed from GitHub events, so no local state is lost.",
       "smoke_checks": [
         "The claim reducer reconstructs a known issue's state from its GitHub comments and reports the expected generation and derived state.",

@@ -14,7 +14,7 @@
     },
     {
       "service": "manager",
-      "commit": "f8747414b011f4a950ab409ef9afa4410e134cd6",
+      "commit": "c5329aa5419da2a0a0d5277af913b19836438768",
       "dirty": false,
       "activated_at": "2026-08-01T11:00:00Z",
       "endpoint": "http://beelink:8080/health"
