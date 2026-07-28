@@ -99,6 +99,11 @@ do
   link_file "$script_dir/$tool" "$tool"
 done
 
+# Install the tracked Claude Code agent definitions for the invoking user
+# (symlinks into ~/.claude/agents). Runs unprivileged on purpose: the target
+# is per-user state, not the prefix.
+run "$script_dir/install-claude-agents"
+
 for external in claude codex wwi anchor; do
   candidate=""
   for candidate_path in \

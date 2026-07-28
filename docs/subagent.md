@@ -126,7 +126,7 @@ the scarce one. Route by role and cost, not by provider loyalty:
 | Cross-file implementation or debugging | `csub` (Terra/medium; `-w` to write) |
 | Review, verification, oracle second opinion | `csub -D` (Sol/high, read-only) |
 | Hard bounded fix needing deep reasoning | `csub -D -w` (bounded deep-write) |
-| Branch/commit review | `codex exec review` |
+| Branch/commit review | `csub -R` (`-B` base, `-K` commit, `-U` uncommitted) |
 | Claude-session context or Claude-only connector | Claude subagent |
 | Final integration and Joel-facing judgment | lead, never delegated |
 
@@ -145,16 +145,20 @@ Rules:
   apps/plugins, web search, and child subagents; default read-only +
   ephemeral; `-w` grants workspace-write with network off, gated by the
   canonical Elephant validation (`lib/elephant`) — allowed only when the
-  marker is absent or deactivated-and-committed, failing closed on active,
-  malformed, or uncommitted contract states (use an isolated worktree). Default
-  wall-clock timeout 20 min. Usage receipts (model, effort, duration, tokens)
-  append to `~/.local/state/csub/receipts.jsonl`; logs are csub-owned state,
-  pruned after 14 days.
+  marker is absent or its deactivation is committed to HEAD, failing closed
+  on active, malformed, staged-only, or untracked contract states (use an
+  isolated worktree). `csub -R` runs `codex exec review` under the same pins
+  and receipts. Execution is supervised: default wall-clock timeout 20 min
+  with TERM→KILL escalation, and cancellation of csub terminates the child
+  and still writes a receipt. Usage receipts (model, effort, duration,
+  tokens; null tokens = interrupted before Codex reported usage) append to
+  `~/.local/state/csub/receipts.jsonl`; logs are csub-owned state, pruned
+  after 14 days.
 - Long-horizon unsupervised lead work is never delegated to either provider.
   Bounded briefs, lead verification, no resume/background children.
 - `grunt` and `mech` are tracked in this repo (`claude/agents/`) and installed
-  as symlinks by `bin/install-claude-agents`. The installer refuses to
-  overwrite divergent local files.
+  as symlinks by `bin/install-claude-agents`, which `agent-env-install` runs
+  during bootstrap. The installer refuses to overwrite divergent local files.
 
 Billing: `csub` lands on the OpenAI plan, preserving Claude weekly limits.
 Under weekly-limit pressure, prefer `csub` for eligible fan-out and keep

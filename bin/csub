@@ -8,8 +8,13 @@ umask 077
 # caller owns verification.
 #
 # Prerequisites (fail closed): codex-cli >= MIN_CODEX_VERSION (the isolation
-# pin set is only validated there), python3 (JSON receipts, version compare,
-# canonical Elephant validation), and timeout/gtimeout.
+# pin set is only validated there) and python3 (JSON receipts, version
+# compare, canonical Elephant validation).
+#
+# Execution is supervised in-process: the Codex child runs in the background
+# under a watchdog that escalates TERM -> KILL at the wall-clock bound, and
+# INT/TERM/HUP traps terminate the child and still append a receipt. No
+# external timeout(1) dependency.
 #
 # State: ${CSUB_LOG_DIR:-~/.local/state/csub} is csub-owned (registered in
 # docs/STATE_ARCHITECTURE.md). csub-*.log / csub-*.last.md are disposable,
@@ -19,12 +24,14 @@ umask 077
 FAST_MODEL="gpt-5.6-terra"; FAST_EFFORT="medium"
 DEEP_MODEL="gpt-5.6-sol";   DEEP_EFFORT="high"
 DEFAULT_TIMEOUT=1200
+KILL_GRACE="${CSUB_KILL_GRACE:-20}"
 RETAIN_DAYS=14
 MIN_CODEX_VERSION="0.145.0"
 
 usage() {
   cat >&2 <<'EOF'
 Usage: csub [-D] [-w] [-C DIR] [-T SECS] [-t] "brief"
+       csub -R [-B BASE | -K SHA | -U] [-C DIR] [-T SECS] [-t] ["instructions"]
 Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
 
   -D        deep mode: gpt-5.6-sol at high reasoning, for review/verification
@@ -32,28 +39,41 @@ Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
             Read-only unless -w is also given (bounded deep-write).
   -w        workspace-write sandbox (network stays off). Refused unless the
             canonical Elephant check passes: marker absent, or deactivated
-            and committed. Active, malformed, uncommitted-deactivation, or
-            otherwise invalid contract states fail closed — run write work in
-            an isolated worktree.
+            with that deactivation committed to HEAD. Active, staged-only or
+            untracked deactivation, malformed, or otherwise invalid contract
+            states fail closed — run write work in an isolated worktree.
+  -R        review mode: codex exec review under the same pins, receipts,
+            and timeout (gpt-5.6-sol at high, always read-only; instructions
+            argument optional). Incompatible with -w.
+  -B BASE   (with -R) review changes against base branch BASE
+  -K SHA    (with -R) review the changes introduced by commit SHA
+  -U        (with -R) review staged, unstaged, and untracked changes
   -C DIR    working root for the task (default: current directory)
-  -T SECS   wall-clock timeout, positive integer seconds (default 1200)
+  -T SECS   wall-clock timeout, positive integer seconds (default 1200).
+            TERM at the bound, KILL after ${CSUB_KILL_GRACE:-20}s more.
   -t        tee the full event log to stdout while running
 
 The brief must be fully self-contained: goal, files owned, whether edits are
 allowed, checks to run, expected output shape. Pass "-" to read it from stdin.
 Prints Codex's final message on stdout; log and receipt paths on stderr.
-Exit codes: codex's (124 = wall-clock timeout), 3 = Elephant guard refusal,
-4 = unsupported codex version, 127 = missing prerequisite.
+Exit codes: codex's (124 = wall-clock timeout, 129/130/143 = csub signaled),
+3 = Elephant guard refusal, 4 = unsupported codex version, 127 = missing
+prerequisite.
 EOF
   exit 2
 }
 
-deep=false write=false tee_log=false workdir="$PWD"
+deep=false write=false review=false tee_log=false workdir="$PWD"
 timeout_secs=$DEFAULT_TIMEOUT
-while getopts ':DwC:T:t' opt; do
+review_scope=()
+while getopts ':DwRB:K:UC:T:t' opt; do
   case "$opt" in
     D) deep=true ;;
     w) write=true ;;
+    R) review=true ;;
+    B) review_scope+=(--base "$OPTARG") ;;
+    K) review_scope+=(--commit "$OPTARG") ;;
+    U) review_scope+=(--uncommitted) ;;
     C) workdir=$OPTARG ;;
     T) timeout_secs=$OPTARG ;;
     t) tee_log=true ;;
@@ -61,8 +81,16 @@ while getopts ':DwC:T:t' opt; do
   esac
 done
 shift $((OPTIND - 1))
-[ "$#" -eq 1 ] || usage
-brief=$1
+
+if $review; then
+  $write && { printf 'csub: -R is read-only; -w is not allowed with review mode\n' >&2; exit 2; }
+  [ "$#" -le 1 ] || usage
+  brief="${1-}"
+else
+  [ ${#review_scope[@]} -eq 0 ] || { printf 'csub: -B/-K/-U require -R\n' >&2; exit 2; }
+  [ "$#" -eq 1 ] || usage
+  brief=$1
+fi
 
 case "$timeout_secs" in
   ''|*[!0-9]*)
@@ -108,26 +136,26 @@ if [ "$version_ok" != "ok" ]; then
   exit 4
 fi
 
-# Portable wall-clock bound (macOS ships no coreutils timeout; Homebrew names
-# it gtimeout — same resolution as tests/agent-loop-tools.sh).
-if command -v timeout >/dev/null 2>&1; then timeout_cmd="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then timeout_cmd="gtimeout"
-else printf 'csub: timeout/gtimeout not found; refusing unbounded execution\n' >&2; exit 127
+if $review; then
+  model=$DEEP_MODEL effort=$DEEP_EFFORT sandbox=read-only mode=review
+else
+  model=$FAST_MODEL effort=$FAST_EFFORT sandbox=read-only
+  if $deep; then model=$DEEP_MODEL; effort=$DEEP_EFFORT; fi
+  if $write; then sandbox=workspace-write; fi
+  mode=fast
+  $deep && mode=deep
+  $write && mode="$mode-write"
 fi
-
-model=$FAST_MODEL effort=$FAST_EFFORT sandbox=read-only
-if $deep; then model=$DEEP_MODEL; effort=$DEEP_EFFORT; fi
-if $write; then sandbox=workspace-write; fi
-mode=fast
-$deep && mode=deep
-$write && mode="$mode-write"
 
 # Elephant guard: reuse the canonical loader (lib/elephant), which fails
 # closed on unsupported schema, invalid JSON, stale/missing contract fields,
-# and uncommitted deactivation. Writes proceed only when the marker is absent
-# or provably deactivated-and-committed.
+# and worktree-vs-index deactivation drift. csub additionally requires an
+# inactive marker to be committed to HEAD: a staged-only or untracked
+# deactivation still refuses writes. Writes proceed only when the marker is
+# absent or provably deactivated-and-committed.
 if $write; then
   verdict=$(python3 - "$repo_root/lib" "$workdir" 2>/dev/null <<'PY'
+import subprocess
 import sys
 from pathlib import Path
 
@@ -135,7 +163,7 @@ sys.path.insert(0, sys.argv[1])
 workdir = Path(sys.argv[2])
 try:
     from elephant.elephant_traceability import (
-        TraceabilityError, git_root, load_active_marker,
+        ACTIVE_MARKER, TraceabilityError, git_root, load_active_marker,
     )
 except Exception:
     print("lib-unavailable")
@@ -156,7 +184,28 @@ except TraceabilityError as exc:
 except Exception:
     print("invalid: unexpected error loading marker")
     sys.exit(0)
-print("active" if active is not None else "inactive")
+if active is not None:
+    print("active")
+    sys.exit(0)
+marker_path = root / ACTIVE_MARKER
+if marker_path.exists():
+    # Deactivated marker present: the deactivation must exist in HEAD, not
+    # merely in the worktree or index.
+    in_head = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"HEAD:{ACTIVE_MARKER}"],
+        check=False, capture_output=True,
+    )
+    if in_head.returncode != 0:
+        print("invalid: Elephant marker present but never committed")
+        sys.exit(0)
+    same_as_head = subprocess.run(
+        ["git", "-C", str(root), "diff", "--quiet", "HEAD", "--", str(ACTIVE_MARKER)],
+        check=False,
+    )
+    if same_as_head.returncode != 0:
+        print("invalid: Elephant deactivation is not committed to HEAD")
+        sys.exit(0)
+print("inactive")
 PY
   ) || verdict=""
   case "$verdict" in
@@ -198,27 +247,33 @@ args=(exec --ephemeral --ignore-user-config
   -c features.apps=false -c features.plugins=false -c features.tool_suggest=false
   --output-last-message "$msg_file")
 $write && args+=(-c sandbox_workspace_write.network_access=false)
+if $review; then
+  args+=(review)
+  [ ${#review_scope[@]} -gt 0 ] && args+=("${review_scope[@]}")
+fi
+# "--" terminates codex option parsing so hyphen-leading briefs are prompts,
+# never flags. Review mode may run without instructions.
+if [ -n "${brief-}" ] || ! $review; then
+  args+=(-- "$brief")
+fi
 
 # codex exec appends piped stdin to the prompt; lanes call csub with non-tty
 # stdin, so close it unless the brief itself comes from stdin ("-").
 stdin_src=/dev/null
-[ "$brief" = "-" ] && stdin_src=/dev/stdin
+[ "${brief-}" = "-" ] && stdin_src=/dev/stdin
 
-# "--" terminates codex option parsing so hyphen-leading briefs are prompts,
-# never flags.
 start=$(date +%s)
-status=0
-if $tee_log; then
-  "$timeout_cmd" "$timeout_secs" codex "${args[@]}" -- "$brief" <"$stdin_src" 2>&1 | tee "$log_file" || status=$?
-else
-  "$timeout_cmd" "$timeout_secs" codex "${args[@]}" -- "$brief" <"$stdin_src" >"$log_file" 2>&1 || status=$?
-fi
-duration=$(( $(date +%s) - start ))
-# Empty means Codex never reported usage (interrupt/timeout): record null,
-# not zero, so accounting can distinguish unknown spend from a free run.
-tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
-
-python3 -c '
+receipt_done=false
+write_receipt() {
+  # Empty tokens means Codex never reported usage (interrupt/timeout): record
+  # null, not zero, so accounting can distinguish unknown spend from a free
+  # run.
+  $receipt_done && return 0
+  receipt_done=true
+  local duration tokens
+  duration=$(( $(date +%s) - start ))
+  tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
+  python3 -c '
 import datetime, json, sys
 
 a = sys.argv
@@ -229,7 +284,64 @@ print(json.dumps({
     "tokens": int(a[7]) if a[7] else None,
     "exit": int(a[8]), "log": a[9],
 }))' "$mode" "$model" "$effort" "$sandbox" "$workdir" \
-  "$duration" "$tokens" "$status" "$log_file" >> "$receipts"
+    "$duration" "$tokens" "$1" "$log_file" >> "$receipts" 2>/dev/null || true
+}
+
+child_pid=""
+tail_pid=""
+signal_exit=""
+timeout_flag="$state_dir/$stamp.timedout"
+
+terminate_child() {
+  [ -n "$child_pid" ] || return 0
+  kill -TERM "$child_pid" 2>/dev/null || true
+  ( sleep "$KILL_GRACE"; kill -KILL "$child_pid" 2>/dev/null ) &
+}
+
+on_signal() {
+  signal_exit=$1
+  terminate_child
+}
+trap 'on_signal 129' HUP
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
+
+codex "${args[@]}" <"$stdin_src" >"$log_file" 2>&1 &
+child_pid=$!
+
+if $tee_log; then
+  tail -n +1 -f "$log_file" &
+  tail_pid=$!
+fi
+
+# Watchdog: TERM at the bound, KILL after the grace period. The flag file
+# records that the bound fired so the exit can be reported as 124.
+(
+  sleep "$timeout_secs"
+  touch "$timeout_flag" 2>/dev/null
+  kill -TERM "$child_pid" 2>/dev/null
+  sleep "$KILL_GRACE"
+  kill -KILL "$child_pid" 2>/dev/null
+) 2>/dev/null &
+watchdog_pid=$!
+
+status=0
+while :; do
+  if wait "$child_pid" 2>/dev/null; then status=0; else status=$?; fi
+  kill -0 "$child_pid" 2>/dev/null || break
+done
+
+kill "$watchdog_pid" 2>/dev/null || true
+[ -n "$tail_pid" ] && { kill "$tail_pid" 2>/dev/null || true; }
+
+if [ -e "$timeout_flag" ]; then
+  rm -f "$timeout_flag"
+  status=124
+elif [ -n "$signal_exit" ]; then
+  status=$signal_exit
+fi
+
+write_receipt "$status"
 
 if [ -s "$msg_file" ]; then
   cat "$msg_file"
@@ -237,6 +349,7 @@ else
   {
     printf 'csub: no final message (exit %d' "$status"
     [ "$status" -eq 124 ] && printf ', wall-clock timeout after %ss' "$timeout_secs"
+    [ -n "$signal_exit" ] && printf ', interrupted by signal'
     printf '); log tail:\n'
     tail -n 20 "$log_file" 2>/dev/null || true
   } >&2
