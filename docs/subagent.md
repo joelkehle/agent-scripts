@@ -151,9 +151,10 @@ Rules:
   and receipts. Execution is supervised: default wall-clock timeout 20 min
   with TERM→KILL escalation, and cancellation of csub terminates the child
   and still writes a receipt. Usage receipts (model, effort, duration,
-  tokens; null tokens = interrupted before Codex reported usage) append to
-  `~/.local/state/csub/receipts.jsonl`; logs are csub-owned state, pruned
-  after 14 days.
+  tokens, outcome: completed/timeout/signaled/failed) append to
+  `~/.local/state/csub/receipts.jsonl`; tokens is null whenever Codex did
+  not report usage — expected for review mode, and for interrupted runs the
+  outcome field says so. Logs are csub-owned state, pruned after 14 days.
 - Long-horizon unsupervised lead work is never delegated to either provider.
   Bounded briefs, lead verification, no resume/background children.
 - `grunt` and `mech` are tracked in this repo (`claude/agents/`) and installed

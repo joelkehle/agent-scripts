@@ -9,29 +9,34 @@ umask 077
 #
 # Prerequisites (fail closed): codex-cli >= MIN_CODEX_VERSION (the isolation
 # pin set is only validated there) and python3 (JSON receipts, version
-# compare, canonical Elephant validation).
+# compare, canonical Elephant validation, process-group supervision).
 #
-# Execution is supervised in-process: the Codex child runs in the background
-# under a watchdog that escalates TERM -> KILL at the wall-clock bound, and
-# INT/TERM/HUP traps terminate the child and still append a receipt. No
-# external timeout(1) dependency.
+# Execution is supervised in-process: the Codex child runs as the leader of
+# its own process group (os.setsid), a watchdog escalates TERM -> KILL for
+# the whole group at the wall-clock bound, INT/TERM/HUP traps terminate the
+# group and still append a receipt, and an EXIT trap reaps the watchdog and
+# escalation helpers so nothing survives csub.
 #
 # State: ${CSUB_LOG_DIR:-~/.local/state/csub} is csub-owned (registered in
 # docs/STATE_ARCHITECTURE.md). csub-*.log / csub-*.last.md are disposable,
-# pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting
-# (tokens is null when the run ended before Codex reported usage).
+# pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting.
+# Each receipt carries "outcome": completed | timeout | signaled | failed.
+# "tokens" is null when Codex did not report usage — expected for review
+# mode (codex exec review prints no usage summary) and for interrupted runs;
+# use "outcome" to tell those apart.
 
 FAST_MODEL="gpt-5.6-terra"; FAST_EFFORT="medium"
 DEEP_MODEL="gpt-5.6-sol";   DEEP_EFFORT="high"
 DEFAULT_TIMEOUT=1200
-KILL_GRACE="${CSUB_KILL_GRACE:-20}"
+DEFAULT_KILL_GRACE=20
 RETAIN_DAYS=14
 MIN_CODEX_VERSION="0.145.0"
+SETSID_PY=$'import os, sys\nos.setsid()\nos.execvp(sys.argv[1], sys.argv[1:])'
 
 usage() {
   cat >&2 <<'EOF'
 Usage: csub [-D] [-w] [-C DIR] [-T SECS] [-t] "brief"
-       csub -R [-B BASE | -K SHA | -U] [-C DIR] [-T SECS] [-t] ["instructions"]
+       csub -R [-U ["instructions"] | -B BASE | -K SHA] [-C DIR] [-T SECS] [-t]
 Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
 
   -D        deep mode: gpt-5.6-sol at high reasoning, for review/verification
@@ -43,14 +48,17 @@ Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
             untracked deactivation, malformed, or otherwise invalid contract
             states fail closed — run write work in an isolated worktree.
   -R        review mode: codex exec review under the same pins, receipts,
-            and timeout (gpt-5.6-sol at high, always read-only; instructions
-            argument optional). Incompatible with -w.
+            and timeout (gpt-5.6-sol at high, always read-only).
+            Incompatible with -w.
   -B BASE   (with -R) review changes against base branch BASE
   -K SHA    (with -R) review the changes introduced by commit SHA
   -U        (with -R) review staged, unstaged, and untracked changes
+            Scopes are mutually exclusive. Custom instructions are accepted
+            with -U or with no scope; codex rejects them with -B/-K.
   -C DIR    working root for the task (default: current directory)
   -T SECS   wall-clock timeout, positive integer seconds (default 1200).
-            TERM at the bound, KILL after ${CSUB_KILL_GRACE:-20}s more.
+            TERM to the child's process group at the bound, KILL after
+            CSUB_KILL_GRACE (default 20s; invalid values fall back to 20).
   -t        tee the full event log to stdout while running
 
 The brief must be fully self-contained: goal, files owned, whether edits are
@@ -66,14 +74,20 @@ EOF
 deep=false write=false review=false tee_log=false workdir="$PWD"
 timeout_secs=$DEFAULT_TIMEOUT
 review_scope=()
+scope_kind=""
+scope_count=0
+add_scope() {
+  scope_kind=$1
+  scope_count=$((scope_count + 1))
+}
 while getopts ':DwRB:K:UC:T:t' opt; do
   case "$opt" in
     D) deep=true ;;
     w) write=true ;;
     R) review=true ;;
-    B) review_scope+=(--base "$OPTARG") ;;
-    K) review_scope+=(--commit "$OPTARG") ;;
-    U) review_scope+=(--uncommitted) ;;
+    B) review_scope+=(--base "$OPTARG"); add_scope base ;;
+    K) review_scope+=(--commit "$OPTARG"); add_scope commit ;;
+    U) review_scope+=(--uncommitted); add_scope uncommitted ;;
     C) workdir=$OPTARG ;;
     T) timeout_secs=$OPTARG ;;
     t) tee_log=true ;;
@@ -84,10 +98,16 @@ shift $((OPTIND - 1))
 
 if $review; then
   $write && { printf 'csub: -R is read-only; -w is not allowed with review mode\n' >&2; exit 2; }
+  [ "$scope_count" -le 1 ] || { printf 'csub: -B, -K, and -U are mutually exclusive (codex exec review accepts one scope)\n' >&2; exit 2; }
   [ "$#" -le 1 ] || usage
   brief="${1-}"
+  if [ -n "$brief" ] && { [ "$scope_kind" = base ] || [ "$scope_kind" = commit ]; }; then
+    printf 'csub: codex exec review rejects custom instructions with -%s; use -U or drop the instructions\n' \
+      "$([ "$scope_kind" = base ] && echo B || echo K)" >&2
+    exit 2
+  fi
 else
-  [ ${#review_scope[@]} -eq 0 ] || { printf 'csub: -B/-K/-U require -R\n' >&2; exit 2; }
+  [ "$scope_count" -eq 0 ] || { printf 'csub: -B/-K/-U require -R\n' >&2; exit 2; }
   [ "$#" -eq 1 ] || usage
   brief=$1
 fi
@@ -102,8 +122,22 @@ if [ "$timeout_secs" -lt 1 ]; then
   exit 2
 fi
 
+# The kill-after grace must itself be a sane positive integer, or an invalid
+# environment value would silently defeat forced termination.
+KILL_GRACE="${CSUB_KILL_GRACE:-$DEFAULT_KILL_GRACE}"
+case "$KILL_GRACE" in
+  ''|*[!0-9]*)
+    printf 'csub: ignoring invalid CSUB_KILL_GRACE "%s"; using %ss\n' "$KILL_GRACE" "$DEFAULT_KILL_GRACE" >&2
+    KILL_GRACE=$DEFAULT_KILL_GRACE ;;
+  *)
+    if [ "$KILL_GRACE" -lt 1 ]; then
+      printf 'csub: ignoring non-positive CSUB_KILL_GRACE "%s"; using %ss\n' "$KILL_GRACE" "$DEFAULT_KILL_GRACE" >&2
+      KILL_GRACE=$DEFAULT_KILL_GRACE
+    fi ;;
+esac
+
 command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
-command -v python3 >/dev/null 2>&1 || { printf 'csub: python3 not found (required for receipts, version compare, Elephant validation)\n' >&2; exit 127; }
+command -v python3 >/dev/null 2>&1 || { printf 'csub: python3 not found (required for receipts, version compare, Elephant validation, supervision)\n' >&2; exit 127; }
 
 # Resolve the real script location through installer shims (agent-env-install
 # links this file into a prefix), so the repo's lib/ stays reachable.
@@ -265,9 +299,8 @@ stdin_src=/dev/null
 start=$(date +%s)
 receipt_done=false
 write_receipt() {
-  # Empty tokens means Codex never reported usage (interrupt/timeout): record
-  # null, not zero, so accounting can distinguish unknown spend from a free
-  # run.
+  # $1 = exit status, $2 = outcome. Empty tokens (Codex reported no usage)
+  # becomes null; "outcome" distinguishes interrupted runs from review runs.
   $receipt_done && return 0
   receipt_done=true
   local duration tokens
@@ -282,20 +315,41 @@ print(json.dumps({
     "mode": a[1], "model": a[2], "effort": a[3], "sandbox": a[4],
     "dir": a[5], "secs": int(a[6]),
     "tokens": int(a[7]) if a[7] else None,
-    "exit": int(a[8]), "log": a[9],
+    "exit": int(a[8]), "outcome": a[9], "log": a[10],
 }))' "$mode" "$model" "$effort" "$sandbox" "$workdir" \
-    "$duration" "$tokens" "$1" "$log_file" >> "$receipts" 2>/dev/null || true
+    "$duration" "$tokens" "$1" "$2" "$log_file" >> "$receipts" 2>/dev/null || true
 }
 
 child_pid=""
+watchdog_pid=""
 tail_pid=""
+helper_pids=()
 signal_exit=""
 timeout_flag="$state_dir/$stamp.timedout"
 
+# Group-wide kill: the child and watchdog are process-group leaders
+# (os.setsid), so a negative-pid kill reaches their entire trees. Falls back
+# to a single-pid kill if the group is already gone.
+kill_group() {
+  kill -s "$1" -- "-$2" 2>/dev/null || kill -s "$1" "$2" 2>/dev/null || true
+}
+
+cleanup() {
+  local p
+  for p in ${watchdog_pid:-} ${tail_pid:-} ${helper_pids[@]+"${helper_pids[@]}"}; do
+    kill_group KILL "$p"
+  done
+  [ -n "${child_pid:-}" ] && kill_group KILL "$child_pid"
+  rm -f "$timeout_flag" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 terminate_child() {
   [ -n "$child_pid" ] || return 0
-  kill -TERM "$child_pid" 2>/dev/null || true
-  ( sleep "$KILL_GRACE"; kill -KILL "$child_pid" 2>/dev/null ) &
+  kill_group TERM "$child_pid"
+  CSUB_ESC_G="$KILL_GRACE" CSUB_ESC_C="$child_pid" \
+    python3 -c "$SETSID_PY" bash -c 'sleep "$CSUB_ESC_G"; kill -s KILL -- "-$CSUB_ESC_C" 2>/dev/null' csub-esc 2>/dev/null &
+  helper_pids+=($!)
 }
 
 on_signal() {
@@ -306,7 +360,7 @@ trap 'on_signal 129' HUP
 trap 'on_signal 130' INT
 trap 'on_signal 143' TERM
 
-codex "${args[@]}" <"$stdin_src" >"$log_file" 2>&1 &
+python3 -c "$SETSID_PY" codex "${args[@]}" <"$stdin_src" >"$log_file" 2>&1 &
 child_pid=$!
 
 if $tee_log; then
@@ -314,15 +368,17 @@ if $tee_log; then
   tail_pid=$!
 fi
 
-# Watchdog: TERM at the bound, KILL after the grace period. The flag file
-# records that the bound fired so the exit can be reported as 124.
-(
-  sleep "$timeout_secs"
-  touch "$timeout_flag" 2>/dev/null
-  kill -TERM "$child_pid" 2>/dev/null
-  sleep "$KILL_GRACE"
-  kill -KILL "$child_pid" 2>/dev/null
-) 2>/dev/null &
+# Watchdog (own process group, reaped by cleanup): TERM to the child's group
+# at the bound, KILL after the grace period. The flag file records that the
+# bound fired so the exit can be reported as 124.
+CSUB_WD_T="$timeout_secs" CSUB_WD_G="$KILL_GRACE" CSUB_WD_C="$child_pid" CSUB_WD_F="$timeout_flag" \
+  python3 -c "$SETSID_PY" bash -c '
+    sleep "$CSUB_WD_T"
+    touch "$CSUB_WD_F" 2>/dev/null
+    kill -s TERM -- "-$CSUB_WD_C" 2>/dev/null
+    sleep "$CSUB_WD_G"
+    kill -s KILL -- "-$CSUB_WD_C" 2>/dev/null
+  ' csub-wd 2>/dev/null &
 watchdog_pid=$!
 
 status=0
@@ -331,17 +387,22 @@ while :; do
   kill -0 "$child_pid" 2>/dev/null || break
 done
 
-kill "$watchdog_pid" 2>/dev/null || true
+kill_group KILL "$watchdog_pid"
 [ -n "$tail_pid" ] && { kill "$tail_pid" 2>/dev/null || true; }
 
+outcome=completed
 if [ -e "$timeout_flag" ]; then
   rm -f "$timeout_flag"
   status=124
+  outcome=timeout
 elif [ -n "$signal_exit" ]; then
   status=$signal_exit
+  outcome=signaled
+elif [ "$status" -ne 0 ]; then
+  outcome=failed
 fi
 
-write_receipt "$status"
+write_receipt "$status" "$outcome"
 
 if [ -s "$msg_file" ]; then
   cat "$msg_file"
