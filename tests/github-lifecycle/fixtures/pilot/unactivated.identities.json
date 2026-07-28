@@ -7,7 +7,7 @@
   "services": [
     {
       "service": "contribution-coordinator",
-      "commit": "d47bc86f079563189aedc65f2a3b6ef0260ab6d2",
+      "commit": "4bf52e38a7ad6add66edd30a388e514f6954ce43",
       "dirty": true,
       "activated_at": "2026-08-01T11:30:00Z"
     },

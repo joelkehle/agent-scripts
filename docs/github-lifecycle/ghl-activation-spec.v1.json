@@ -34,7 +34,7 @@
       "title": "Contribution coordinator and review build carrying the claim reducer, conductor, and scope routing",
       "service": "contribution-coordinator",
       "repository": "joelkehle/ucla-tdg-ip-agents",
-      "required_commit": "d47bc86f079563189aedc65f2a3b6ef0260ab6d2",
+      "required_commit": "4bf52e38a7ad6add66edd30a388e514f6954ce43",
       "contains_issues": [
         "GHL-002",
         "GHL-004",
@@ -51,7 +51,7 @@
         "A personal-scope attention route records an owner-attention.v1 event on the pull request and makes no UCLA Project Manager call.",
         "Write paths remain disabled until the canary step that enables them."
       ],
-      "note": "The deployed build was the GHL-002-only revision when this spec was written, missing GHL-004, GHL-006, and GHL-008."
+      "note": "Pinned 2026-07-28 to the GHL-FUP-04 merge (kehle-tdg-dev/ucla-tdg-ip-agents PR #41, merged 2026-07-28T20:33Z). Beyond GHL-002/004/006/008 this build carries GHL-FUP-03 (#38, production contributor git client and policy-routed retry) and GHL-FUP-04 (#40, production Manager mission client and conductor wiring); the conductor gate defaults off, so activation of this commit alone changes no write behavior. The GHL-010 e2e gauntlet ran at ancestor d47bc86f079563189aedc65f2a3b6ef0260ab6d2; the delta to this pin is FUP-03/FUP-04 plus their tests, verified by the coordinator package suite under -race at head a1e24ac (PR #41 comment 5109353946). The deployed build remains 4fc77c8 (rollback target) until this checkpoint is activated."
     }
   ]
 }
