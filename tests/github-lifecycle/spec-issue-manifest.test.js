@@ -102,13 +102,13 @@ after(() => {
   }
 });
 
-describe("ratified GHL-001..GHL-010 fixture", () => {
-  it("contains the complete ten-issue batch with its requirement set", () => {
+describe("ratified GHL-001..GHL-010 batch plus the GHL-013 doctrine amendment", () => {
+  it("contains the complete issue batch with its requirement set", () => {
     const manifest = batch();
 
     assert.deepEqual(
       manifest.issues.map((issue) => issue.issue_id),
-      ["GHL-001", "GHL-002", "GHL-003", "GHL-004", "GHL-005", "GHL-006", "GHL-007", "GHL-008", "GHL-009", "GHL-010"],
+      ["GHL-001", "GHL-002", "GHL-003", "GHL-004", "GHL-005", "GHL-006", "GHL-007", "GHL-008", "GHL-009", "GHL-010", "GHL-013"],
     );
     assert.equal(manifest.specification.spec_id, "JK-SPEC-GHLIFE-001");
     assert.equal(manifest.requirements.length, 14);
@@ -132,7 +132,7 @@ describe("ratified GHL-001..GHL-010 fixture", () => {
     assert.deepEqual(validation.errors, []);
     assert.equal(validation.ok, true);
     assert.deepEqual(validation.uncovered_requirements, []);
-    assert.equal(validation.issue_order.length, 10);
+    assert.equal(validation.issue_order.length, 11);
     assert.ok(validation.issue_order.indexOf("GHL-003") < validation.issue_order.indexOf("GHL-004"));
     assert.ok(validation.issue_order.indexOf("GHL-005") < validation.issue_order.indexOf("GHL-006"));
     assert.equal(validation.issue_order.at(-1), "GHL-010");
@@ -428,7 +428,7 @@ describe("validation receipt", () => {
     assert.equal(receipt.validator.actor, "codex-contributor");
     assert.equal(receipt.validator.write_class, "read");
     assert.equal(receipt.subject.spec_id, "JK-SPEC-GHLIFE-001");
-    assert.equal(receipt.subject.issue_count, 10);
+    assert.equal(receipt.subject.issue_count, 11);
     assert.match(receipt.input.content_sha256, /^[0-9a-f]{64}$/);
     assert.equal(receipt.outcome.ok, true);
     assert.deepEqual(receipt.outcome.defect_codes, []);
