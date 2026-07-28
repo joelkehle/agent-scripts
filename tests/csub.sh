@@ -301,6 +301,10 @@ check_receipt outcome=completed tokens=null exit=0 || fail "garbage token summar
 "$csub" -C "$workdir" 'test brief' >/dev/null 2>"$tmp/noise"
 grep -Eq 'Killed|csub-wd|csub-esc' "$tmp/noise" && fail "stderr contains job-control noise: $(cat "$tmp/noise")"
 
+# --- 14f. phased-kill decision function: deterministic identity simulation ---
+CSUB_PHASED_SELFTEST=1 "$csub" 2>/dev/null | grep -qx 'PHASED-SELFTEST-OK' \
+  || fail "kill_phased selftest failed (recycled-PID identity gating)"
+
 # --- 14d. receipt-write failure surfaces as exit 5 ---------------------------
 r5dir="$tmp/receipt-fail-state"
 mkdir -p "$r5dir/receipts.jsonl"   # a directory: appends will fail, logs still fine
@@ -373,6 +377,16 @@ run_w; [ "$rc" -eq 3 ] || fail "valid active marker did not refuse -w (got $rc)"
 grep -q 'active Elephant marker' "$tmp/ele-err" || fail "active-governance message missing"
 
 "$csub" -C "$eledir" 'test brief' >/dev/null 2>&1 || fail "read-only must not be blocked by marker"
+
+# staged deletion of a committed marker: refused until the removal is committed
+git -C "$eledir" add .codex/elephant-active.json
+git -C "$eledir" -c user.email=t@t -c user.name=t commit -qm commit-active-marker
+run_w; [ "$rc" -eq 3 ] || fail "committed active marker did not refuse -w (got $rc)"
+git -C "$eledir" rm -q .codex/elephant-active.json
+run_w; [ "$rc" -eq 3 ] || fail "staged marker deletion did not refuse -w (got $rc)"
+grep -q 'commit the removal first' "$tmp/ele-err" || fail "staged-deletion refusal message missing"
+git -C "$eledir" -c user.email=t@t -c user.name=t commit -qm remove-marker
+"$csub" -w -C "$eledir" 'test brief' >/dev/null 2>&1 || fail "committed marker removal must not block -w"
 
 nogit="$tmp/nogit"
 mkdir -p "$nogit"

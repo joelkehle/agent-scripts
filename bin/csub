@@ -84,6 +84,153 @@ EOF
   exit 2
 }
 
+# kill_tree SIG PID: signal the pid's process group plus every live
+# descendant found by walking the process tree (catches subprocesses that
+# left the group via setsid while their parent is still alive — see the
+# containment contract). Exported so the watchdog and escalation helpers
+# (bash children) use the same logic.
+kill_tree() {
+  local sig=$1 root=$2 all queue next p kids
+  all=$(ps -Ao pid=,ppid= 2>/dev/null) || all=""
+  queue=$root
+  local victims=$root
+  while [ -n "$queue" ]; do
+    next=""
+    for p in $queue; do
+      kids=$(printf '%s\n' "$all" | awk -v pp="$p" '$2 == pp { print $1 }')
+      if [ -n "$kids" ]; then
+        next="$next $kids"
+        victims="$victims $kids"
+      fi
+    done
+    queue=$next
+  done
+  kill -s "$sig" -- "-$root" 2>/dev/null || true
+  for p in $victims; do
+    kill -s "$sig" "$p" 2>/dev/null || true
+  done
+}
+export -f kill_tree
+
+# kill_phased ROOT GRACE: two-phase TERM -> KILL. The victim set (pid +
+# start time) is snapshotted at TERM. Every DELAYED signal is identity
+# gated: the group-wide KILL and the fresh survivor walk run only when the
+# root still carries its saved identity, and saved victims are re-verified
+# by start time — a recycled PID (root or descendant) is never signaled.
+# `kill_phased --selftest` deterministically exercises the phase-2 decision
+# function (no real processes) and prints PHASED-SELFTEST-OK.
+kill_phased() {
+  python3 - "$@" <<'PY'
+import os, signal, subprocess, sys, time
+
+def snapshot():
+    try:
+        out = subprocess.run(["ps", "-Ao", "pid=,ppid=,lstart="],
+                             capture_output=True, text=True).stdout
+    except Exception:
+        return {}, {}
+    ids, kids = {}, {}
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        ids[pid] = parts[2]
+        kids.setdefault(ppid, []).append(pid)
+    return ids, kids
+
+def walk(start, ids, kids):
+    seen = {}
+    queue = [start]
+    while queue:
+        p = queue.pop()
+        if p in seen:
+            continue
+        seen[p] = ids.get(p)
+        queue.extend(kids.get(p, []))
+    return seen
+
+def phase2_targets(root, victims, ids2, kids2):
+    """Identity-gated phase-2 plan: (allow_group_kill, {pid: start})."""
+    root_same = (
+        root in ids2
+        and victims.get(root) is not None
+        and ids2.get(root) == victims.get(root)
+    )
+    targets = {}
+    if root_same:
+        targets.update(walk(root, ids2, kids2))
+    for p, start in victims.items():
+        if p not in targets and start is not None and ids2.get(p) == start:
+            targets[p] = start
+    return root_same, targets
+
+def sig(pid, s):
+    try:
+        os.kill(pid, s)
+    except Exception:
+        pass
+
+if sys.argv[1] == "--selftest":
+    # Recycled root (saved start A, now B) with a fresh child: neither may
+    # be signaled; the identity-preserved orphan still must be.
+    victims = {100: "A", 150: "A2"}
+    ids2 = {100: "B", 200: "B2", 150: "A2"}
+    kids2 = {100: [200]}
+    do_group, targets = phase2_targets(100, victims, ids2, kids2)
+    assert not do_group, "group kill allowed on recycled root"
+    assert 100 not in targets and 200 not in targets, "recycled root or its child targeted"
+    assert 150 in targets, "identity-preserved orphan missed"
+    # Healthy root: same identity — group kill allowed; fresh descendant and
+    # preserved orphan all targeted.
+    victims = {100: "A", 150: "A2"}
+    ids2 = {100: "A", 300: "C", 150: "A2"}
+    kids2 = {100: [300]}
+    do_group, targets = phase2_targets(100, victims, ids2, kids2)
+    assert do_group and 100 in targets and 300 in targets and 150 in targets
+    # Vanished (not recycled) root: no group kill; orphans still targeted.
+    do_group, targets = phase2_targets(100, {100: "A", 150: "A2"}, {150: "A2"}, {})
+    assert not do_group and 150 in targets and 100 not in targets
+    print("PHASED-SELFTEST-OK")
+    sys.exit(0)
+
+root, grace = int(sys.argv[1]), int(sys.argv[2])
+
+ids, kids = snapshot()
+victims = walk(root, ids, kids)
+try:
+    os.killpg(root, signal.SIGTERM)
+except Exception:
+    pass
+for p in victims:
+    sig(p, signal.SIGTERM)
+
+time.sleep(grace)
+
+ids2, kids2 = snapshot()
+do_group, targets = phase2_targets(root, victims, ids2, kids2)
+if do_group:
+    try:
+        os.killpg(root, signal.SIGKILL)
+    except Exception:
+        pass
+for p in targets:
+    sig(p, signal.SIGKILL)
+PY
+}
+export -f kill_phased
+
+# Deterministic supervision regression entry (used by tests/csub.sh): runs
+# before argument parsing so it needs no brief, codex, or repo.
+if [ "${CSUB_PHASED_SELFTEST:-}" = "1" ]; then
+  command -v python3 >/dev/null 2>&1 || exit 127
+  kill_phased --selftest
+  exit $?
+fi
+
 deep=false write=false review=false tee_log=false workdir="$PWD"
 timeout_secs=$DEFAULT_TIMEOUT
 review_scope=()
@@ -253,6 +400,17 @@ if marker_path.exists():
     if same_as_head.returncode != 0:
         print("invalid: Elephant deactivation is not committed to HEAD")
         sys.exit(0)
+else:
+    # Worktree file absent: if the marker still exists in HEAD, its removal
+    # (e.g. git rm, staged or not) is an uncommitted governance change —
+    # fail closed until the removal is committed.
+    in_head = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"HEAD:{ACTIVE_MARKER}"],
+        check=False, capture_output=True,
+    )
+    if in_head.returncode == 0:
+        print("invalid: Elephant marker exists in HEAD but is missing from the worktree; commit the removal first")
+        sys.exit(0)
 print("inactive")
 PY
   ) || verdict=""
@@ -357,108 +515,6 @@ tail_pid=""
 helper_pids=()
 signal_exit=""
 timeout_flag="$state_dir/$stamp.timedout"
-
-# kill_tree SIG PID: signal the pid's process group plus every live
-# descendant found by walking the process tree (catches subprocesses that
-# left the group via setsid while their parent is still alive — see the
-# containment contract). Exported so the watchdog and escalation helpers
-# (bash children) use the same logic.
-kill_tree() {
-  local sig=$1 root=$2 all queue next p kids
-  all=$(ps -Ao pid=,ppid= 2>/dev/null) || all=""
-  queue=$root
-  local victims=$root
-  while [ -n "$queue" ]; do
-    next=""
-    for p in $queue; do
-      kids=$(printf '%s\n' "$all" | awk -v pp="$p" '$2 == pp { print $1 }')
-      if [ -n "$kids" ]; then
-        next="$next $kids"
-        victims="$victims $kids"
-      fi
-    done
-    queue=$next
-  done
-  kill -s "$sig" -- "-$root" 2>/dev/null || true
-  for p in $victims; do
-    kill -s "$sig" "$p" 2>/dev/null || true
-  done
-}
-export -f kill_tree
-
-# kill_phased ROOT GRACE: two-phase TERM -> KILL with identity preservation.
-# The victim set (pid + start time) is snapshotted at TERM time, so a
-# descendant whose parent died of TERM and which re-parented to init is
-# still KILLed after the grace period — but only when its start time still
-# matches, so a recycled PID is never signaled. Fresh descendants spawned
-# during the grace are picked up by a second walk.
-kill_phased() {
-  python3 - "$1" "$2" <<'PY'
-import os, signal, subprocess, sys, time
-
-root, grace = int(sys.argv[1]), int(sys.argv[2])
-
-def snapshot():
-    try:
-        out = subprocess.run(["ps", "-Ao", "pid=,ppid=,lstart="],
-                             capture_output=True, text=True).stdout
-    except Exception:
-        return {}, {}
-    ids, kids = {}, {}
-    for line in out.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) < 3:
-            continue
-        try:
-            pid, ppid = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        ids[pid] = parts[2]
-        kids.setdefault(ppid, []).append(pid)
-    return ids, kids
-
-def walk(start, ids, kids):
-    seen = {}
-    queue = [start]
-    while queue:
-        p = queue.pop()
-        if p in seen:
-            continue
-        seen[p] = ids.get(p)
-        queue.extend(kids.get(p, []))
-    return seen
-
-def sig(pid, s):
-    try:
-        os.kill(pid, s)
-    except Exception:
-        pass
-
-ids, kids = snapshot()
-victims = walk(root, ids, kids)
-try:
-    os.killpg(root, signal.SIGTERM)
-except Exception:
-    pass
-for p in victims:
-    sig(p, signal.SIGTERM)
-
-time.sleep(grace)
-
-ids2, kids2 = snapshot()
-survivors = walk(root, ids2, kids2)
-try:
-    os.killpg(root, signal.SIGKILL)
-except Exception:
-    pass
-for p in survivors:
-    sig(p, signal.SIGKILL)
-for p, start in victims.items():
-    if p not in survivors and start is not None and ids2.get(p) == start:
-        sig(p, signal.SIGKILL)
-PY
-}
-export -f kill_phased
 
 # reap_with_deadline PID SECS: give a helper whose phased kill may still be
 # in flight up to SECS to finish its KILL phase, then force-reap. Aborting a
