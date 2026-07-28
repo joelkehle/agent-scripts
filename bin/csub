@@ -7,13 +7,14 @@ umask 077
 # Routing. Billing lands on the OpenAI plan, not Claude weekly limits. The
 # caller owns verification.
 #
-# Supported-version contract: the isolation pin set is validated against
-# codex-cli >= MIN_CODEX_VERSION (agents.enabled changed shape across
-# versions); csub fails closed on older or unknown versions.
+# Prerequisites (fail closed): codex-cli >= MIN_CODEX_VERSION (the isolation
+# pin set is only validated there), python3 (JSON receipts, version compare,
+# canonical Elephant validation), and timeout/gtimeout.
 #
 # State: ${CSUB_LOG_DIR:-~/.local/state/csub} is csub-owned (registered in
 # docs/STATE_ARCHITECTURE.md). csub-*.log / csub-*.last.md are disposable,
-# pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting.
+# pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting
+# (tokens is null when the run ended before Codex reported usage).
 
 FAST_MODEL="gpt-5.6-terra"; FAST_EFFORT="medium"
 DEEP_MODEL="gpt-5.6-sol";   DEEP_EFFORT="high"
@@ -29,11 +30,13 @@ Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
   -D        deep mode: gpt-5.6-sol at high reasoning, for review/verification
             and hard bounded fixes (default: gpt-5.6-terra at medium).
             Read-only unless -w is also given (bounded deep-write).
-  -w        workspace-write sandbox (network stays off). Refused when the
-            target worktree carries an Elephant marker that is active,
-            malformed, or unreadable — run in an isolated worktree.
+  -w        workspace-write sandbox (network stays off). Refused unless the
+            canonical Elephant check passes: marker absent, or deactivated
+            and committed. Active, malformed, uncommitted-deactivation, or
+            otherwise invalid contract states fail closed — run write work in
+            an isolated worktree.
   -C DIR    working root for the task (default: current directory)
-  -T SECS   wall-clock timeout (default 1200)
+  -T SECS   wall-clock timeout, positive integer seconds (default 1200)
   -t        tee the full event log to stdout while running
 
 The brief must be fully self-contained: goal, files owned, whether edits are
@@ -61,13 +64,46 @@ shift $((OPTIND - 1))
 [ "$#" -eq 1 ] || usage
 brief=$1
 
-command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
+case "$timeout_secs" in
+  ''|*[!0-9]*)
+    printf 'csub: -T requires a positive integer of seconds (got "%s")\n' "$timeout_secs" >&2
+    exit 2 ;;
+esac
+if [ "$timeout_secs" -lt 1 ]; then
+  printf 'csub: -T 0 would disable the wall-clock bound; refusing\n' >&2
+  exit 2
+fi
 
-# Supported-version contract (fail closed: pins are only validated >= MIN).
+command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
+command -v python3 >/dev/null 2>&1 || { printf 'csub: python3 not found (required for receipts, version compare, Elephant validation)\n' >&2; exit 127; }
+
+# Resolve the real script location through installer shims (agent-env-install
+# links this file into a prefix), so the repo's lib/ stays reachable.
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+repo_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+
+# Supported-version contract: fail closed below MIN, and a prerelease of the
+# floor (e.g. 0.145.0-alpha.4) does not meet the floor.
 codex_version=$(codex --version 2>/dev/null | awk '{print $2}')
-if [ -z "$codex_version" ] ||
-   [ "$(printf '%s\n%s\n' "$MIN_CODEX_VERSION" "$codex_version" | sort -V | head -1)" != "$MIN_CODEX_VERSION" ]; then
-  printf 'csub: unsupported codex-cli version "%s" (need >= %s); isolation pins are not validated below that\n' \
+version_ok=$(python3 -c '
+import re, sys
+
+def parse(v):
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?", v)
+    if not m:
+        return None
+    return (int(m[1]), int(m[2]), int(m[3]), 1 if m[4] is None else 0, m[4] or "")
+
+cur, floor = parse(sys.argv[1]), parse(sys.argv[2])
+print("ok" if cur is not None and floor is not None and cur >= floor else "old")
+' "${codex_version:-}" "$MIN_CODEX_VERSION" 2>/dev/null) || version_ok=old
+if [ "$version_ok" != "ok" ]; then
+  printf 'csub: unsupported codex-cli version "%s" (need >= %s, prereleases of the floor excluded); isolation pins are not validated below that\n' \
     "${codex_version:-unknown}" "$MIN_CODEX_VERSION" >&2
   exit 4
 fi
@@ -86,41 +122,59 @@ mode=fast
 $deep && mode=deep
 $write && mode="$mode-write"
 
-# Elephant guard: never grant write access inside a worktree governed by an
-# Elephant marker unless the marker parses as valid JSON with active != true.
-# Fail closed on malformed or unreadable markers, matching the canonical
-# Elephant loader. Isolated-worktree coordination means running csub -w in a
-# worktree whose marker is absent or provably inactive.
+# Elephant guard: reuse the canonical loader (lib/elephant), which fails
+# closed on unsupported schema, invalid JSON, stale/missing contract fields,
+# and uncommitted deactivation. Writes proceed only when the marker is absent
+# or provably deactivated-and-committed.
 if $write; then
-  repo_root=$(git -C "$workdir" rev-parse --show-toplevel 2>/dev/null || true)
-  if [ -n "$repo_root" ]; then
-    while IFS= read -r marker; do
-      verdict=$(python3 - "$marker" 2>/dev/null <<'PY'
-import json, sys
+  verdict=$(python3 - "$repo_root/lib" "$workdir" 2>/dev/null <<'PY'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+workdir = Path(sys.argv[2])
 try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
+    from elephant.elephant_traceability import (
+        TraceabilityError, git_root, load_active_marker,
+    )
 except Exception:
-    print("unreadable")
+    print("lib-unavailable")
     sys.exit(0)
-print("active" if data.get("active") is True else "inactive")
+try:
+    root = git_root(workdir)
+except TraceabilityError:
+    print("norepo")
+    sys.exit(0)
+except Exception:
+    print("invalid: git root resolution failed")
+    sys.exit(0)
+try:
+    active = load_active_marker(root)
+except TraceabilityError as exc:
+    print(f"invalid: {exc}")
+    sys.exit(0)
+except Exception:
+    print("invalid: unexpected error loading marker")
+    sys.exit(0)
+print("active" if active is not None else "inactive")
 PY
-      ) || verdict=unreadable
-      [ -n "$verdict" ] || verdict=unreadable
-      case "$verdict" in
-        inactive) ;;
-        active)
-          printf 'csub: refusing -w: active Elephant marker at %s\n' "$marker" >&2
-          printf 'csub: run write work in an isolated worktree without an active marker\n' >&2
-          exit 3
-          ;;
-        *)
-          printf 'csub: refusing -w: Elephant marker at %s is malformed or unreadable (failing closed)\n' "$marker" >&2
-          exit 3
-          ;;
-      esac
-    done < <(find "$repo_root" -maxdepth 3 -name elephant-active.json 2>/dev/null)
-  fi
+  ) || verdict=""
+  case "$verdict" in
+    inactive|norepo) ;;
+    active)
+      printf 'csub: refusing -w: worktree is governed by an active Elephant marker\n' >&2
+      printf 'csub: run write work in an isolated worktree without an active marker\n' >&2
+      exit 3
+      ;;
+    invalid:*)
+      printf 'csub: refusing -w (failing closed): %s\n' "${verdict#invalid: }" >&2
+      exit 3
+      ;;
+    *)
+      printf 'csub: refusing -w (failing closed): canonical Elephant validation unavailable (%s)\n' "${verdict:-no verdict}" >&2
+      exit 3
+      ;;
+  esac
 fi
 
 state_dir="${CSUB_LOG_DIR:-$HOME/.local/state/csub}"
@@ -160,25 +214,22 @@ else
   "$timeout_cmd" "$timeout_secs" codex "${args[@]}" -- "$brief" <"$stdin_src" >"$log_file" 2>&1 || status=$?
 fi
 duration=$(( $(date +%s) - start ))
-tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); t = $0 } END { print t + 0 }' "$log_file" 2>/dev/null || echo 0)
+# Empty means Codex never reported usage (interrupt/timeout): record null,
+# not zero, so accounting can distinguish unknown spend from a free run.
+tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
 
-# Receipts are JSON-serialized with a JSON-aware tool; fallback escapes the
-# two string-breaking characters if python3 is unavailable.
-receipt=$(python3 -c 'import json, sys
+python3 -c '
+import datetime, json, sys
+
 a = sys.argv
-print(json.dumps({"ts": a[1], "mode": a[2], "model": a[3], "effort": a[4],
-                  "sandbox": a[5], "dir": a[6], "secs": int(a[7]),
-                  "tokens": int(a[8]), "exit": int(a[9]), "log": a[10]}))' \
-  "$(date -Is)" "$mode" "$model" "$effort" "$sandbox" "$workdir" \
-  "$duration" "$tokens" "$status" "$log_file" 2>/dev/null) || receipt=""
-if [ -z "$receipt" ]; then
-  esc_dir=${workdir//\\/\\\\}; esc_dir=${esc_dir//\"/\\\"}
-  esc_log=${log_file//\\/\\\\}; esc_log=${esc_log//\"/\\\"}
-  receipt=$(printf '{"ts":"%s","mode":"%s","model":"%s","effort":"%s","sandbox":"%s","dir":"%s","secs":%s,"tokens":%s,"exit":%s,"log":"%s"}' \
-    "$(date -Is)" "$mode" "$model" "$effort" "$sandbox" "$esc_dir" \
-    "$duration" "$tokens" "$status" "$esc_log")
-fi
-printf '%s\n' "$receipt" >> "$receipts"
+print(json.dumps({
+    "ts": datetime.datetime.now().astimezone().isoformat(),
+    "mode": a[1], "model": a[2], "effort": a[3], "sandbox": a[4],
+    "dir": a[5], "secs": int(a[6]),
+    "tokens": int(a[7]) if a[7] else None,
+    "exit": int(a[8]), "log": a[9],
+}))' "$mode" "$model" "$effort" "$sandbox" "$workdir" \
+  "$duration" "$tokens" "$status" "$log_file" >> "$receipts"
 
 if [ -s "$msg_file" ]; then
   cat "$msg_file"

@@ -6,7 +6,15 @@ set -euo pipefail
 # resolves the tracked versions. Idempotent. Refuses to overwrite a divergent
 # regular file; replaces an identical regular file with a symlink.
 
-src_dir="$(cd "$(dirname "$0")/../claude/agents" && pwd)"
+# Resolve the real script location through installer shims (agent-env-install
+# links this file into a prefix such as /usr/local/bin).
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+src_dir="$(cd -P "$(dirname "$self")/../claude/agents" && pwd)"
 dst_dir="${CLAUDE_AGENTS_DIR:-$HOME/.claude/agents}"
 mkdir -p "$dst_dir"
 

@@ -3,9 +3,11 @@ set -euo pipefail
 
 # csub regression tests using a fake-codex PATH shim. No network, no tokens.
 # Covers: isolation pins, mode/model routing, sandbox defaults, -D -w
-# deep-write, stdin handling (the v1 stdin-slurp bug), hyphen-leading briefs
-# (option terminator), supported-version contract, timeout, fail-closed
-# Elephant -w guard, prune scope, and JSON-safe receipts.
+# deep-write, stdin handling, hyphen-leading briefs, supported-version
+# contract incl. prerelease floor exclusion, positive -T validation, timeout,
+# canonical Elephant guard invariants, prune scope, JSON-safe receipts with
+# null-token interruption accounting, and symlink-safe agent installation.
+# BSD/macOS-portable: no GNU-only touch/sort options.
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
@@ -84,52 +86,115 @@ has_arg -- '--' || fail "option terminator not passed to codex"
 has_arg -- '--help' || fail "hyphen-leading brief not passed verbatim"
 grep -qxF 'FAKE-MSG' "$tmp/out6" || fail "hyphen-leading brief did not execute"
 
-# --- 7. supported-version contract fails closed ------------------------------
-set +e
-CSUB_TEST_VERSION="0.144.0-alpha.4" "$csub" -C "$workdir" 'test brief' >/dev/null 2>"$tmp/ver-err"
-rc=$?
-set -e
-[ "$rc" -eq 4 ] || fail "old codex version not refused (got $rc)"
-grep -q 'unsupported codex-cli version' "$tmp/ver-err" || fail "version refusal message missing"
-CSUB_TEST_VERSION="0.146.2" "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1 || fail "newer version must pass the gate"
+# --- 7. supported-version contract fails closed, prereleases excluded --------
+check_version_refused() {
+  set +e
+  CSUB_TEST_VERSION="$1" "$csub" -C "$workdir" 'test brief' >/dev/null 2>"$tmp/ver-err"
+  rc=$?
+  set -e
+  [ "$rc" -eq 4 ] || fail "version $1 not refused (got $rc)"
+  grep -q 'unsupported codex-cli version' "$tmp/ver-err" || fail "version refusal message missing for $1"
+}
+check_version_refused "0.144.0-alpha.4"
+check_version_refused "0.145.0-alpha.4"
+check_version_refused "garbage"
+CSUB_TEST_VERSION="0.145.0" "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1 || fail "exact floor must pass"
+CSUB_TEST_VERSION="0.146.2" "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1 || fail "newer version must pass"
+CSUB_TEST_VERSION="0.146.0-alpha.1" "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1 || fail "prerelease above the floor must pass"
 
-# --- 8. wall-clock timeout ---------------------------------------------------
+# --- 8. -T must be a positive integer ----------------------------------------
+for bad in 0 -5 abc 1.5 ''; do
+  set +e
+  "$csub" -T "$bad" -C "$workdir" 'test brief' >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 2 ] || fail "-T '$bad' not rejected (got $rc)"
+done
+
+# --- 9. wall-clock timeout; interrupted usage recorded as null ---------------
 set +e
 CSUB_TEST_SLEEP=3 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
 rc=$?
 set -e
 [ "$rc" -eq 124 ] || fail "timeout did not produce exit 124 (got $rc)"
+tail -1 "$CSUB_LOG_DIR/receipts.jsonl" | python3 -c '
+import json, sys
+rec = json.loads(sys.stdin.read())
+assert rec["tokens"] is None, rec["tokens"]
+assert rec["exit"] == 124, rec["exit"]
+' || fail "interrupted run did not record tokens as null"
 
-# --- 9. Elephant guard: fail closed on active/multiline/malformed ------------
+# --- 10. Elephant guard: canonical invariants, fail closed -------------------
 eledir="$tmp/elephant-repo"
-mkdir -p "$eledir"
+mkdir -p "$eledir/.codex"
 git -C "$eledir" init -q
+git -C "$eledir" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+marker="$eledir/.codex/elephant-active.json"
 run_w() { set +e; "$csub" -w -C "$eledir" 'test brief' >/dev/null 2>"$tmp/ele-err"; rc=$?; set -e; }
 
-printf '{"active": true}\n' > "$eledir/elephant-active.json"
-run_w; [ "$rc" -eq 3 ] || fail "compact active marker did not refuse -w (got $rc)"
-grep -q 'active Elephant marker' "$tmp/ele-err" || fail "active refusal message missing"
+# absent marker: allowed
+"$csub" -w -C "$eledir" 'test brief' >/dev/null 2>&1 || fail "absent marker must not block -w"
 
-printf '{\n  "active"\n    : true\n}\n' > "$eledir/elephant-active.json"
-run_w; [ "$rc" -eq 3 ] || fail "multiline active marker did not refuse -w (got $rc)"
+# deactivated and committed: allowed
+printf '{"schema": 1, "active": false}\n' > "$marker"
+git -C "$eledir" add .codex/elephant-active.json
+git -C "$eledir" -c user.email=t@t -c user.name=t commit -qm deactivate
+"$csub" -w -C "$eledir" 'test brief' >/dev/null 2>&1 || fail "committed deactivation must not block -w"
 
-printf '{"active": tru\n' > "$eledir/elephant-active.json"
+# uncommitted deactivation: refused (canonical invariant)
+printf '{"schema": 1, "active": true}\n' > "$marker"
+git -C "$eledir" add .codex/elephant-active.json
+git -C "$eledir" -c user.email=t@t -c user.name=t commit -qm activate
+printf '{"schema": 1, "active": false}\n' > "$marker"
+run_w; [ "$rc" -eq 3 ] || fail "uncommitted deactivation did not refuse -w (got $rc)"
+grep -q 'deactivated before commit' "$tmp/ele-err" || fail "uncommitted-deactivation message missing"
+git -C "$eledir" checkout -q -- .codex/elephant-active.json
+
+# unsupported schema: refused
+printf '{"schema": 2, "active": false}\n' > "$marker"
+run_w; [ "$rc" -eq 3 ] || fail "unsupported schema did not refuse -w (got $rc)"
+grep -q 'unsupported schema' "$tmp/ele-err" || fail "schema refusal message missing"
+
+# malformed JSON: refused
+printf '{"active": tru\n' > "$marker"
 run_w; [ "$rc" -eq 3 ] || fail "malformed marker did not fail closed (got $rc)"
-grep -q 'malformed or unreadable' "$tmp/ele-err" || fail "fail-closed message missing"
 
-printf '{\n  "active": false\n}\n' > "$eledir/elephant-active.json"
-"$csub" -w -C "$eledir" 'test brief' >/dev/null 2>&1 || fail "inactive marker must not block -w"
-printf '{"active": true}\n' > "$eledir/elephant-active.json"
+# incomplete active marker (missing contract fields): refused
+printf '{"schema": 1, "active": true}\n' > "$marker"
+run_w; [ "$rc" -eq 3 ] || fail "incomplete active marker did not refuse -w (got $rc)"
+
+# fully valid active marker: refused as active governance
+printf 'receipt-body\n' > "$eledir/.codex/receipt.json"
+printf '{"schema": 1}\n' > "$eledir/.codex/trace.json"
+git -C "$eledir" add .codex/receipt.json .codex/trace.json
+git -C "$eledir" -c user.email=t@t -c user.name=t commit -qm contract
+sha=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$eledir/.codex/receipt.json")
+head_commit=$(git -C "$eledir" rev-parse HEAD)
+python3 -c '
+import json, sys
+json.dump({"schema": 1, "active": True, "receipt": ".codex/receipt.json",
+           "receipt_sha256": sys.argv[2], "traceability": ".codex/trace.json",
+           "activated_at_commit": sys.argv[3]}, open(sys.argv[1], "w"))
+' "$marker" "$sha" "$head_commit"
+run_w; [ "$rc" -eq 3 ] || fail "valid active marker did not refuse -w (got $rc)"
+grep -q 'active Elephant marker' "$tmp/ele-err" || fail "active-governance message missing"
+
+# read-only under active marker: allowed
 "$csub" -C "$eledir" 'test brief' >/dev/null 2>&1 || fail "read-only must not be blocked by marker"
 
-# --- 10. prune scope: only aged csub-* files ---------------------------------
+# non-repo workdir with -w: guard passes through (codex enforces its own repo check)
+nogit="$tmp/nogit"
+mkdir -p "$nogit"
+"$csub" -w -C "$nogit" 'test brief' >/dev/null 2>&1 || fail "non-repo workdir must not be blocked by the guard"
+
+# --- 11. prune scope: only aged csub-* files (portable timestamp) ------------
 mkdir -p "$CSUB_LOG_DIR"
-touch -d '30 days ago' "$CSUB_LOG_DIR/csub-old.log" "$CSUB_LOG_DIR/keep-me.log"
+touch -t 202601010000 "$CSUB_LOG_DIR/csub-old.log" "$CSUB_LOG_DIR/keep-me.log"
 "$csub" -C "$workdir" 'test brief' >/dev/null 2>&1
 [ ! -e "$CSUB_LOG_DIR/csub-old.log" ] || fail "aged csub-* file not pruned"
 [ -e "$CSUB_LOG_DIR/keep-me.log" ] || fail "prune touched a non-csub file"
 
-# --- 11. receipts are valid JSON even with hostile paths ---------------------
+# --- 12. receipts are valid JSON even with hostile paths ---------------------
 qdir="$tmp/work\"quoted"
 mkdir -p "$qdir"
 "$csub" -C "$qdir" 'test brief' >/dev/null 2>&1
@@ -141,5 +206,15 @@ assert rec["model"] == "gpt-5.6-terra", rec["model"]
 assert rec["tokens"] == 4321, rec["tokens"]
 assert rec["mode"] == "fast", rec["mode"]
 ' || fail "receipt is not valid JSON with correct fields under a quoted path"
+
+# --- 13. install-claude-agents works through an installer shim ---------------
+ln -s "$repo/bin/install-claude-agents" "$tmp/bin/install-claude-agents"
+agents_dst="$tmp/agents"
+CLAUDE_AGENTS_DIR="$agents_dst" "$tmp/bin/install-claude-agents" >/dev/null 2>&1 \
+  || fail "installer failed when invoked through a prefix symlink"
+for name in grunt.md mech.md; do
+  [ -L "$agents_dst/$name" ] || fail "installer did not link $name via shim"
+  cmp -s "$agents_dst/$name" "$repo/claude/agents/$name" || fail "shim-installed $name diverges from tracked copy"
+done
 
 printf 'csub tests OK\n'

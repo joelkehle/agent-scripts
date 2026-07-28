@@ -143,8 +143,10 @@ Rules:
   class.
 - `csub` is single-shot and bounded: isolation pins disable MCP servers,
   apps/plugins, web search, and child subagents; default read-only +
-  ephemeral; `-w` grants workspace-write with network off and is refused in a
-  worktree with an active Elephant marker (use an isolated worktree). Default
+  ephemeral; `-w` grants workspace-write with network off, gated by the
+  canonical Elephant validation (`lib/elephant`) — allowed only when the
+  marker is absent or deactivated-and-committed, failing closed on active,
+  malformed, or uncommitted contract states (use an isolated worktree). Default
   wall-clock timeout 20 min. Usage receipts (model, effort, duration, tokens)
   append to `~/.local/state/csub/receipts.jsonl`; logs are csub-owned state,
   pruned after 14 days.
