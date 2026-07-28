@@ -43,7 +43,15 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the real script location so this also works when invoked through
+# its own installed prefix symlink (e.g. /usr/local/bin/agent-env-install).
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+script_dir="$(cd -P "$(dirname "$self")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
 run() {
@@ -86,8 +94,10 @@ for tool in \
   codex-bg \
   committer \
   contributor-agent \
+  csub \
   dirty-audit \
   docs-list \
+  install-claude-agents \
   loop-audit \
   loop-receipt \
   loop-resume \
@@ -96,6 +106,11 @@ for tool in \
 do
   link_file "$script_dir/$tool" "$tool"
 done
+
+# Install the tracked Claude Code agent definitions for the invoking user
+# (symlinks into ~/.claude/agents). Runs unprivileged on purpose: the target
+# is per-user state, not the prefix.
+run "$script_dir/install-claude-agents"
 
 for external in claude codex wwi anchor; do
   candidate=""

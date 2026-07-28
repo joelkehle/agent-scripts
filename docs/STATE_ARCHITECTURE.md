@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.22 (2026-07-27)
+Version: 1.24 (2026-07-28)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -56,6 +56,20 @@ projection.
    logs subject to retention, not state anyone reads back for truth.
 
 ## Ownership Rulings
+
+- **csub delegation logs and receipts (added 2026-07-28):**
+  `~/.local/state/csub/` (override: `CSUB_LOG_DIR`) is owned by the `csub`
+  wrapper (`bin/csub`). `csub-*.log` and `csub-*.last.md` are disposable
+  projections of Codex's own session records — safe to delete, auto-pruned
+  after 14 days. `receipts.jsonl` is the authoritative append-only record of
+  csub usage accounting (timestamp, mode, model, effort, sandbox, duration,
+  tokens, exit, outcome — completed/timeout/signaled/failed — and log
+  pointer; tokens is null when Codex reported no parseable usage, with
+  outcome distinguishing interruption). Rows appended before 2026-07-28
+  predate the outcome field; consumers treat a missing outcome as
+  legacy/unknown, not malformed. It owns no work nouns and nothing rebuilds from
+  it; loss is acceptable accounting loss, so no rebuild path is required.
+  Nothing else may write to this directory.
 
 - **assistant-db vs project-manager:** assistant-db owns identity nouns (who/what
   exists: people, orgs, agreements). Project-manager owns work nouns (what we are
@@ -334,6 +348,12 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.24 (2026-07-28): csub receipts gain the authoritative outcome field
+  (completed/timeout/signaled/failed); tokens:null means no parseable usage
+  reported; pre-2026-07-28 rows lack outcome and read as legacy/unknown.
+- 1.23 (2026-07-28): register csub delegation state family under
+  `~/.local/state/csub/` — disposable Codex-session log projections plus
+  authoritative append-only usage receipts.
 - 1.22 (2026-07-27): register Manager Projects MCP durable mission, initiative,
   and program lifecycle records as one supervised-coding control-plane state
   family; retain standalone runs as non-authoritative disposable working state

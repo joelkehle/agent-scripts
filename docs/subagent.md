@@ -18,7 +18,7 @@ This is the center of gravity for subagent guidance under `~/Projects`.
 - `verify`: independent validation mode, usually a worker running read-only checks. May edit tests only when assigned.
 - `oracle`: second-model review fallback. Use for architecture, code smell, hard bug, or risk review when native subagents are unavailable or model diversity is useful.
 - Pinakes/runtime agents: long-lived product services on the bus. They are not coding subagents.
-- Claude Code custom agents: optional repo-local files under `.claude/agents/*.md`. Use them only when those files actually exist and are maintained.
+- Claude Code custom agents: user-level `~/.claude/agents/*.md` (`grunt`, `mech` — always available; see Model Tiers, Cost, And Cross-Model Routing) plus optional repo-local `.claude/agents/*.md`. Use repo-local ones only when those files actually exist and are maintained.
 
 ## Default
 
@@ -113,13 +113,68 @@ Worker prompts must say that the worker is not alone in the codebase, must not r
 - regressions found
 - remaining risk
 
+## Model Tiers, Cost, And Cross-Model Routing
+
+All Claude Code subagents share Joel's weekly usage limits; the Fable bucket is
+the scarce one. Route by role and cost, not by provider loyalty:
+
+| Work | Route |
+| --- | --- |
+| Search, counting, collation needing Joel's boundaries | `grunt` (Haiku) |
+| Search where the brief restates applicable boundaries | built-in Explore |
+| Small mechanical slices needing Claude context | `mech` (Sonnet) |
+| Cross-file implementation or debugging | `csub` (Terra/medium; `-w` to write) |
+| Review, verification, oracle second opinion | `csub -D` (Sol/high, read-only) |
+| Hard bounded fix needing deep reasoning | `csub -D -w` (bounded deep-write) |
+| Branch/commit review | `csub -R` (`-B` base, `-K` commit, `-U` uncommitted) |
+| Claude-session context or Claude-only connector | Claude subagent |
+| Final integration and Joel-facing judgment | lead, never delegated |
+
+Rules:
+
+- Fable subagents only when the lead can name why the task needs top-tier
+  reasoning. Never for fan-out.
+- Independent verification is a first-class reason to use Codex (`csub -D`) —
+  model diversity fights confirmation bias. The lead still owns the verdict.
+- Connector work routes by live capability discovery, not provider: a
+  capability only in Joel's Claude session (claude.ai connectors,
+  conversation context) stays Claude; an explicitly discovered Codex app/bus
+  capability makes Codex eligible under that capability's read/propose/write
+  class.
+- `csub` is single-shot and bounded: isolation pins disable MCP servers,
+  apps/plugins, web search, and child subagents. Containment covers the
+  child's process group plus live descendants at kill time — it bounds
+  misbehaving children, not adversarial ones that detach and orphan
+  themselves. Default read-only +
+  ephemeral; `-w` grants workspace-write with network off, gated by the
+  canonical Elephant validation (`lib/elephant`) — allowed only when the
+  marker is absent or its deactivation is committed to HEAD, failing closed
+  on active, malformed, staged-only, or untracked contract states (use an
+  isolated worktree). `csub -R` runs `codex exec review` under the same pins
+  and receipts. Execution is supervised: default wall-clock timeout 20 min
+  with TERM→KILL escalation, and cancellation of csub terminates the child
+  and still writes a receipt. Usage receipts (model, effort, duration,
+  tokens, outcome: completed/timeout/signaled/failed) append to
+  `~/.local/state/csub/receipts.jsonl`; tokens is null whenever Codex did
+  not report usage — expected for review mode, and for interrupted runs the
+  outcome field says so. Logs are csub-owned state, pruned after 14 days.
+- Long-horizon unsupervised lead work is never delegated to either provider.
+  Bounded briefs, lead verification, no resume/background children.
+- `grunt` and `mech` are tracked in this repo (`claude/agents/`) and installed
+  as symlinks by `bin/install-claude-agents`, which `agent-env-install` runs
+  during bootstrap. The installer refuses to overwrite divergent local files.
+
+Billing: `csub` lands on the OpenAI plan, preserving Claude weekly limits.
+Under weekly-limit pressure, prefer `csub` for eligible fan-out and keep
+Claude subagents for connector- and context-bound work.
+
 ## Repo-Local Guidance
 
 Repo `AGENTS.md` may add repo-specific trigger rules, ownership boundaries, and verification commands.
 
 Repo `docs/subagent.md` is optional. Add it only when the repo needs specific decomposition patterns or file-set recipes. Keep it short and link back here.
 
-Do not reference `.claude/agents/*.md`, `@test-writer`, `@architect`, or similar local agents unless the repo actually contains those maintained files.
+User-level `~/.claude/agents/` provides `grunt` and `mech` everywhere (tracked here under `claude/agents/`, installed via `bin/install-claude-agents`). Do not reference repo-local `.claude/agents/*.md`, `@test-writer`, `@architect`, or similar agents unless the repo actually contains those maintained files.
 
 ## Tool-Specific Notes
 
@@ -130,7 +185,9 @@ In Codex, explicit user requests such as "use subagents", "delegate this",
 context clean" should trigger native subagent use when the task is non-trivial.
 Use `/agent` in the CLI to inspect or steer active subagent threads.
 
-Claude Code custom agents are repo-local tool config. If a repo does not have `.claude/agents/*.md`, treat references to those agents as stale or historical.
+Claude Code custom agents resolve user-level (`~/.claude/agents/` — `grunt` and `mech` live there) and repo-local. Treat references to repo-local agents as stale unless the repo actually contains those maintained files.
+
+In Claude Code, `csub` is the Codex delegation path (see Model Tiers, Cost, And Cross-Model Routing); Codex native subagents apply only when Codex itself is the lead runtime.
 
 Tmux is for persistent/interactive long jobs, debuggers, servers, or manual external agents. It is not the default subagent mechanism.
 

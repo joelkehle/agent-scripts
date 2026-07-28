@@ -1,0 +1,681 @@
+#!/usr/bin/env bash
+# Re-exec once through python3 to reset SIGINT/SIGHUP to default: background
+# invocations inherit them ignored from non-interactive shells, which would
+# silently defeat the documented signal exits (129/130). Skipped when python3
+# is absent — the prerequisite check below reports that properly.
+if [ -z "${CSUB_SIGRESET:-}" ] && command -v python3 >/dev/null 2>&1; then
+  CSUB_SIGRESET=1 exec python3 -c '
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal(signal.SIGHUP, signal.SIG_DFL)
+os.execvp(sys.argv[1], sys.argv[1:])' "$0" "$@"
+fi
+set -euo pipefail
+umask 077
+
+# csub — bounded single-shot delegation to Codex (codex exec) with isolation
+# pins. Doctrine: docs/subagent.md -> Model Tiers, Cost, And Cross-Model
+# Routing. Billing lands on the OpenAI plan, not Claude weekly limits. The
+# caller owns verification.
+#
+# Prerequisites (fail closed): codex-cli >= MIN_CODEX_VERSION (the isolation
+# pin set is only validated there) and python3 (JSON receipts, version
+# compare, canonical Elephant validation, process supervision).
+#
+# Containment contract: termination (timeout or signal) TERM->KILLs the
+# child's process group PLUS every live descendant reachable through the
+# process tree at kill time. A subprocess that detaches into a new session
+# AND outlives its parent before the kill escapes — csub bounds cooperative
+# and ordinarily-misbehaving children, not adversarial ones.
+#
+# State: ${CSUB_LOG_DIR:-~/.local/state/csub} is csub-owned (registered in
+# docs/STATE_ARCHITECTURE.md). csub-*.log / csub-*.last.md are disposable,
+# pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting.
+# Each receipt carries "outcome": completed | timeout | signaled | failed.
+# "tokens" is null when Codex did not report parseable usage — expected for
+# review mode and interrupted runs; "outcome" tells those apart.
+
+FAST_MODEL="gpt-5.6-terra"; FAST_EFFORT="medium"
+DEEP_MODEL="gpt-5.6-sol";   DEEP_EFFORT="high"
+DEFAULT_TIMEOUT=1200
+DEFAULT_KILL_GRACE=20
+RETAIN_DAYS=14
+MIN_CODEX_VERSION="0.145.0"
+SETSID_PY=$'import os, sys\nos.setsid()\nos.execvp(sys.argv[1], sys.argv[1:])'
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: csub [-D] [-w] [-C DIR] [-T SECS] [-t] "brief"
+       csub -R [-U | -B BASE | -K SHA] [-C DIR] [-T SECS] [-t] ["instructions"]
+Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
+
+  -D        deep mode: gpt-5.6-sol at high reasoning, for review/verification
+            and hard bounded fixes (default: gpt-5.6-terra at medium).
+            Read-only unless -w is also given (bounded deep-write).
+  -w        workspace-write sandbox (network stays off). Refused unless the
+            canonical Elephant check passes: marker absent, or deactivated
+            with that deactivation committed to HEAD. Active, staged-only or
+            untracked deactivation, malformed, or otherwise invalid contract
+            states fail closed — run write work in an isolated worktree.
+  -R        review mode: codex exec review under the same pins, receipts,
+            and timeout (gpt-5.6-sol at high, always read-only).
+            Incompatible with -w.
+  -B BASE   (with -R) review changes against base branch BASE
+  -K SHA    (with -R) review the changes introduced by commit SHA
+  -U        (with -R) review staged, unstaged, and untracked changes
+            Scopes are mutually exclusive. codex accepts custom instructions
+            only on unscoped reviews; csub rejects instructions with any of
+            -B/-K/-U.
+  -C DIR    working root for the task (default: current directory)
+  -T SECS   wall-clock timeout, positive integer seconds (default 1200).
+            TERM to the child's group and live descendants at the bound,
+            KILL after CSUB_KILL_GRACE (default 20s; invalid values fall
+            back to 20). See the containment contract in the header.
+  -t        tee the full event log to stdout while running
+
+The brief must be fully self-contained: goal, files owned, whether edits are
+allowed, checks to run, expected output shape. Pass "-" to read it from stdin.
+Prints Codex's final message on stdout; log and receipt paths on stderr.
+Exit codes: codex's (124 = wall-clock timeout, 129/130/143 = csub signaled),
+3 = Elephant guard refusal, 4 = unsupported codex version, 5 = run succeeded
+but the receipt could not be written, 127 = missing prerequisite. The
+working root must be inside a git worktree (repo-bound contract).
+EOF
+  exit 2
+}
+
+# kill_tree SIG PID: signal the pid's process group plus every live
+# descendant found by walking the process tree (catches subprocesses that
+# left the group via setsid while their parent is still alive — see the
+# containment contract). Exported so the watchdog and escalation helpers
+# (bash children) use the same logic.
+kill_tree() {
+  local sig=$1 root=$2 all queue next p kids
+  all=$(ps -Ao pid=,ppid= 2>/dev/null) || all=""
+  queue=$root
+  local victims=$root
+  while [ -n "$queue" ]; do
+    next=""
+    for p in $queue; do
+      kids=$(printf '%s\n' "$all" | awk -v pp="$p" '$2 == pp { print $1 }')
+      if [ -n "$kids" ]; then
+        next="$next $kids"
+        victims="$victims $kids"
+      fi
+    done
+    queue=$next
+  done
+  kill -s "$sig" -- "-$root" 2>/dev/null || true
+  for p in $victims; do
+    kill -s "$sig" "$p" 2>/dev/null || true
+  done
+}
+export -f kill_tree
+
+# kill_phased ROOT GRACE: two-phase TERM -> KILL. The victim set (pid +
+# start time) is snapshotted at TERM. Every DELAYED signal is identity
+# gated: the group-wide KILL and the fresh survivor walk run only when the
+# root still carries its saved identity, and saved victims are re-verified
+# by start time — a recycled PID (root or descendant) is never signaled.
+# `kill_phased --selftest` deterministically exercises the phase-2 decision
+# function (no real processes) and prints PHASED-SELFTEST-OK.
+kill_phased() {
+  python3 - "$@" <<'PY'
+import os, signal, subprocess, sys, time
+
+def snapshot():
+    try:
+        out = subprocess.run(["ps", "-Ao", "pid=,ppid=,lstart="],
+                             capture_output=True, text=True).stdout
+    except Exception:
+        return {}, {}
+    ids, kids = {}, {}
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        ids[pid] = parts[2]
+        kids.setdefault(ppid, []).append(pid)
+    return ids, kids
+
+def walk(start, ids, kids):
+    seen = {}
+    queue = [start]
+    while queue:
+        p = queue.pop()
+        if p in seen:
+            continue
+        seen[p] = ids.get(p)
+        queue.extend(kids.get(p, []))
+    return seen
+
+def phase2_targets(root, victims, ids2, kids2):
+    """Identity-gated phase-2 plan: (allow_group_kill, {pid: start})."""
+    root_same = (
+        root in ids2
+        and victims.get(root) is not None
+        and ids2.get(root) == victims.get(root)
+    )
+    targets = {}
+    if root_same:
+        targets.update(walk(root, ids2, kids2))
+    for p, start in victims.items():
+        if p not in targets and start is not None and ids2.get(p) == start:
+            targets[p] = start
+    return root_same, targets
+
+def sig(pid, s):
+    try:
+        os.kill(pid, s)
+    except Exception:
+        pass
+
+if sys.argv[1] == "--selftest":
+    # Recycled root (saved start A, now B) with a fresh child: neither may
+    # be signaled; the identity-preserved orphan still must be.
+    victims = {100: "A", 150: "A2"}
+    ids2 = {100: "B", 200: "B2", 150: "A2"}
+    kids2 = {100: [200]}
+    do_group, targets = phase2_targets(100, victims, ids2, kids2)
+    assert not do_group, "group kill allowed on recycled root"
+    assert 100 not in targets and 200 not in targets, "recycled root or its child targeted"
+    assert 150 in targets, "identity-preserved orphan missed"
+    # Healthy root: same identity — group kill allowed; fresh descendant and
+    # preserved orphan all targeted.
+    victims = {100: "A", 150: "A2"}
+    ids2 = {100: "A", 300: "C", 150: "A2"}
+    kids2 = {100: [300]}
+    do_group, targets = phase2_targets(100, victims, ids2, kids2)
+    assert do_group and 100 in targets and 300 in targets and 150 in targets
+    # Vanished (not recycled) root: no group kill; orphans still targeted.
+    do_group, targets = phase2_targets(100, {100: "A", 150: "A2"}, {150: "A2"}, {})
+    assert not do_group and 150 in targets and 100 not in targets
+    print("PHASED-SELFTEST-OK")
+    sys.exit(0)
+
+root, grace = int(sys.argv[1]), int(sys.argv[2])
+
+ids, kids = snapshot()
+victims = walk(root, ids, kids)
+try:
+    os.killpg(root, signal.SIGTERM)
+except Exception:
+    pass
+for p in victims:
+    sig(p, signal.SIGTERM)
+
+time.sleep(grace)
+
+ids2, kids2 = snapshot()
+do_group, targets = phase2_targets(root, victims, ids2, kids2)
+if do_group:
+    try:
+        os.killpg(root, signal.SIGKILL)
+    except Exception:
+        pass
+for p in targets:
+    sig(p, signal.SIGKILL)
+PY
+}
+export -f kill_phased
+
+# Deterministic supervision regression entry (used by tests/csub.sh): runs
+# before argument parsing so it needs no brief, codex, or repo.
+if [ "${CSUB_PHASED_SELFTEST:-}" = "1" ]; then
+  command -v python3 >/dev/null 2>&1 || exit 127
+  kill_phased --selftest
+  exit $?
+fi
+
+deep=false write=false review=false tee_log=false workdir="$PWD"
+timeout_secs=$DEFAULT_TIMEOUT
+review_scope=()
+scope_count=0
+while getopts ':DwRB:K:UC:T:t' opt; do
+  case "$opt" in
+    D) deep=true ;;
+    w) write=true ;;
+    R) review=true ;;
+    B) review_scope+=(--base "$OPTARG"); scope_count=$((scope_count + 1)) ;;
+    K) review_scope+=(--commit "$OPTARG"); scope_count=$((scope_count + 1)) ;;
+    U) review_scope+=(--uncommitted); scope_count=$((scope_count + 1)) ;;
+    C) workdir=$OPTARG ;;
+    T) timeout_secs=$OPTARG ;;
+    t) tee_log=true ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if $review; then
+  $write && { printf 'csub: -R is read-only; -w is not allowed with review mode\n' >&2; exit 2; }
+  [ "$scope_count" -le 1 ] || { printf 'csub: -B, -K, and -U are mutually exclusive (codex exec review accepts one scope)\n' >&2; exit 2; }
+  [ "$#" -le 1 ] || usage
+  brief="${1-}"
+  if [ -n "$brief" ] && [ "$scope_count" -gt 0 ]; then
+    printf 'csub: codex exec review rejects custom instructions with any scope flag; use an unscoped review for instructions\n' >&2
+    exit 2
+  fi
+else
+  [ "$scope_count" -eq 0 ] || { printf 'csub: -B/-K/-U require -R\n' >&2; exit 2; }
+  [ "$#" -eq 1 ] || usage
+  brief=$1
+fi
+
+case "$timeout_secs" in
+  ''|*[!0-9]*)
+    printf 'csub: -T requires a positive integer of seconds (got "%s")\n' "$timeout_secs" >&2
+    exit 2 ;;
+esac
+if [ "$timeout_secs" -lt 1 ]; then
+  printf 'csub: -T 0 would disable the wall-clock bound; refusing\n' >&2
+  exit 2
+fi
+
+# The kill-after grace must itself be a sane positive integer, or an invalid
+# environment value would silently defeat forced termination.
+KILL_GRACE="${CSUB_KILL_GRACE:-$DEFAULT_KILL_GRACE}"
+case "$KILL_GRACE" in
+  ''|*[!0-9]*)
+    printf 'csub: ignoring invalid CSUB_KILL_GRACE "%s"; using %ss\n' "$KILL_GRACE" "$DEFAULT_KILL_GRACE" >&2
+    KILL_GRACE=$DEFAULT_KILL_GRACE ;;
+  *)
+    if [ "$KILL_GRACE" -lt 1 ]; then
+      printf 'csub: ignoring non-positive CSUB_KILL_GRACE "%s"; using %ss\n' "$KILL_GRACE" "$DEFAULT_KILL_GRACE" >&2
+      KILL_GRACE=$DEFAULT_KILL_GRACE
+    fi ;;
+esac
+
+command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
+command -v python3 >/dev/null 2>&1 || { printf 'csub: python3 not found (required for receipts, version compare, Elephant validation, supervision)\n' >&2; exit 127; }
+
+# Repo-bound contract: codex exec refuses untrusted non-repo roots anyway,
+# so reject them here before any spend or setup.
+if ! git -C "$workdir" rev-parse --show-toplevel >/dev/null 2>&1; then
+  printf 'csub: workdir %s is not inside a git worktree (csub is repo-bound; codex would refuse it)\n' "$workdir" >&2
+  exit 2
+fi
+
+# Resolve the real script location through installer shims (agent-env-install
+# links this file into a prefix), so the repo's lib/ stays reachable.
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+repo_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+
+# Supported-version contract: fail closed below MIN, and a prerelease of the
+# floor (e.g. 0.145.0-alpha.4) does not meet the floor.
+codex_version=$(codex --version 2>/dev/null | awk '{print $2}')
+version_ok=$(python3 -c '
+import re, sys
+
+def parse(v):
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?", v)
+    if not m:
+        return None
+    return (int(m[1]), int(m[2]), int(m[3]), 1 if m[4] is None else 0, m[4] or "")
+
+cur, floor = parse(sys.argv[1]), parse(sys.argv[2])
+print("ok" if cur is not None and floor is not None and cur >= floor else "old")
+' "${codex_version:-}" "$MIN_CODEX_VERSION" 2>/dev/null) || version_ok=old
+if [ "$version_ok" != "ok" ]; then
+  printf 'csub: unsupported codex-cli version "%s" (need >= %s, prereleases of the floor excluded); isolation pins are not validated below that\n' \
+    "${codex_version:-unknown}" "$MIN_CODEX_VERSION" >&2
+  exit 4
+fi
+
+if $review; then
+  model=$DEEP_MODEL effort=$DEEP_EFFORT sandbox=read-only mode=review
+else
+  model=$FAST_MODEL effort=$FAST_EFFORT sandbox=read-only
+  if $deep; then model=$DEEP_MODEL; effort=$DEEP_EFFORT; fi
+  if $write; then sandbox=workspace-write; fi
+  mode=fast
+  $deep && mode=deep
+  $write && mode="$mode-write"
+fi
+
+# Elephant guard: reuse the canonical loader (lib/elephant), which fails
+# closed on unsupported schema, invalid JSON, stale/missing contract fields,
+# and worktree-vs-index deactivation drift. csub additionally requires an
+# inactive marker to be committed to HEAD: a staged-only or untracked
+# deactivation still refuses writes. Writes proceed only when the marker is
+# absent or provably deactivated-and-committed.
+if $write; then
+  verdict=$(python3 - "$repo_root/lib" "$workdir" 2>/dev/null <<'PY'
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+workdir = Path(sys.argv[2])
+try:
+    from elephant.elephant_traceability import (
+        ACTIVE_MARKER, TraceabilityError, git_root, load_active_marker,
+    )
+except Exception:
+    print("lib-unavailable")
+    sys.exit(0)
+try:
+    root = git_root(workdir)
+except TraceabilityError:
+    print("norepo")
+    sys.exit(0)
+except Exception:
+    print("invalid: git root resolution failed")
+    sys.exit(0)
+try:
+    active = load_active_marker(root)
+except TraceabilityError as exc:
+    print(f"invalid: {exc}")
+    sys.exit(0)
+except Exception:
+    print("invalid: unexpected error loading marker")
+    sys.exit(0)
+if active is not None:
+    print("active")
+    sys.exit(0)
+marker_path = root / ACTIVE_MARKER
+if marker_path.exists():
+    # Deactivated marker present: the deactivation must exist in HEAD, not
+    # merely in the worktree or index.
+    in_head = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"HEAD:{ACTIVE_MARKER}"],
+        check=False, capture_output=True,
+    )
+    if in_head.returncode != 0:
+        print("invalid: Elephant marker present but never committed")
+        sys.exit(0)
+    same_as_head = subprocess.run(
+        ["git", "-C", str(root), "diff", "--quiet", "HEAD", "--", str(ACTIVE_MARKER)],
+        check=False,
+    )
+    if same_as_head.returncode != 0:
+        print("invalid: Elephant deactivation is not committed to HEAD")
+        sys.exit(0)
+else:
+    # Worktree file absent: if the marker still exists in HEAD, its removal
+    # (e.g. git rm, staged or not) is an uncommitted governance change —
+    # fail closed until the removal is committed.
+    in_head = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"HEAD:{ACTIVE_MARKER}"],
+        check=False, capture_output=True,
+    )
+    if in_head.returncode == 0:
+        print("invalid: Elephant marker exists in HEAD but is missing from the worktree; commit the removal first")
+        sys.exit(0)
+print("inactive")
+PY
+  ) || verdict=""
+  case "$verdict" in
+    inactive|norepo) ;;
+    active)
+      printf 'csub: refusing -w: worktree is governed by an active Elephant marker\n' >&2
+      printf 'csub: run write work in an isolated worktree without an active marker\n' >&2
+      exit 3
+      ;;
+    invalid:*)
+      printf 'csub: refusing -w (failing closed): %s\n' "${verdict#invalid: }" >&2
+      exit 3
+      ;;
+    *)
+      printf 'csub: refusing -w (failing closed): canonical Elephant validation unavailable (%s)\n' "${verdict:-no verdict}" >&2
+      exit 3
+      ;;
+  esac
+fi
+
+state_dir="${CSUB_LOG_DIR:-$HOME/.local/state/csub}"
+mkdir -p "$state_dir"
+# Retention: prune only csub-generated names; never touch foreign files.
+find "$state_dir" -maxdepth 1 -name 'csub-*' -mtime +"$RETAIN_DAYS" -delete 2>/dev/null || true
+
+stamp="csub-$(date +%Y%m%dT%H%M%S)-$$"
+log_file="$state_dir/$stamp.log"
+msg_file="$state_dir/$stamp.last.md"
+receipts="$state_dir/receipts.jsonl"
+
+# Isolation pins: no user config (auth still resolves via CODEX_HOME), no MCP
+# surprise surface, no apps/plugins/web search, no child subagents (both the
+# feature flag and the agents table, for cross-version coverage).
+args=(exec --ephemeral --ignore-user-config
+  --sandbox "$sandbox" -C "$workdir"
+  -c "model=\"$model\"" -c "model_reasoning_effort=\"$effort\""
+  -c 'web_search="disabled"' -c agents.enabled=false
+  -c features.multi_agent_v2=false
+  -c features.apps=false -c features.plugins=false -c features.tool_suggest=false
+  --output-last-message "$msg_file")
+$write && args+=(-c sandbox_workspace_write.network_access=false)
+if $review; then
+  args+=(review)
+  [ ${#review_scope[@]} -gt 0 ] && args+=("${review_scope[@]}")
+fi
+# "--" terminates codex option parsing so hyphen-leading briefs are prompts,
+# never flags. Review mode may run without instructions.
+if [ -n "${brief-}" ] || ! $review; then
+  args+=(-- "$brief")
+fi
+
+# codex exec appends piped stdin to the prompt; lanes call csub with non-tty
+# stdin, so close it unless the brief itself comes from stdin ("-").
+stdin_src=/dev/null
+[ "${brief-}" = "-" ] && stdin_src=/dev/stdin
+
+start=$(date +%s)
+receipt_done=false
+receipt_ok=true
+write_receipt() {
+  # $1 = exit status, $2 = outcome. Unparseable or absent usage becomes
+  # tokens:null — the receipt itself is always written.
+  $receipt_done && return 0
+  receipt_done=true
+  local duration
+  duration=$(( $(date +%s) - start ))
+  # Token trust boundary: codex prints a genuine usage footer for exec
+  # briefs but never for reviews — in review mode any "tokens used" line is
+  # model-authored text, so parsing it would let a review forge its own
+  # accounting. Reviews therefore always record tokens:null. For exec runs,
+  # accept only a sane bounded integer (last match wins — the genuine footer
+  # follows any model text); oversized or non-numeric candidates degrade to
+  # null, never losing the receipt.
+  # ...and an interrupted or failed run never printed the genuine footer, so
+  # any marker present is model text: parse only completed non-review runs.
+  local tokens=""
+  if [ "$mode" != review ] && [ "$2" = completed ]; then
+    tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); if ($0 ~ /^[0-9]{1,12}$/) t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
+  fi
+  python3 -c '
+import datetime, json, sys
+
+a = sys.argv
+tokens = a[7].strip()
+print(json.dumps({
+    "ts": datetime.datetime.now().astimezone().isoformat(),
+    "mode": a[1], "model": a[2], "effort": a[3], "sandbox": a[4],
+    "dir": a[5], "secs": int(a[6]),
+    "tokens": int(tokens) if tokens.isdigit() else None,
+    "exit": int(a[8]), "outcome": a[9], "log": a[10],
+}))' "$mode" "$model" "$effort" "$sandbox" "$workdir" \
+    "$duration" "$tokens" "$1" "$2" "$log_file" >> "$receipts" 2>/dev/null || {
+    receipt_ok=false
+    printf 'csub: WARNING: failed to append receipt to %s — accounting for this run is lost\n' "$receipts" >&2
+  }
+}
+
+child_pid=""
+watchdog_pid=""
+tail_pid=""
+helper_pids=()
+signal_exit=""
+timeout_flag="$state_dir/$stamp.timedout"
+
+# reap_with_deadline PID SECS: give a helper whose phased kill may still be
+# in flight up to SECS to finish its KILL phase, then force-reap. Aborting a
+# mid-phase helper would strand TERM-resistant descendants.
+reap_with_deadline() {
+  local pid=$1 deadline=$2 waited=0
+  while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt $((deadline * 5)) ]; do
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+  kill_tree KILL "$pid"
+  wait "$pid" 2>/dev/null || true
+}
+
+# Cleanup signals only PIDs that are still unreaped children of this shell:
+# variables are cleared the moment a PID is waited, and an unreaped child's
+# PID cannot be recycled (the zombie holds it), so no kill here can reach an
+# unrelated reused PID.
+cleanup() {
+  local p
+  # Escalation helpers are always mid-phase; let their KILL land first.
+  for p in ${helper_pids[@]+"${helper_pids[@]}"}; do
+    reap_with_deadline "$p" $((KILL_GRACE + 2))
+  done
+  for p in ${watchdog_pid:-} ${tail_pid:-}; do
+    if [ "$p" = "${watchdog_pid:-}" ] && [ -e "$timeout_flag" ]; then
+      reap_with_deadline "$p" $((KILL_GRACE + 2))
+    else
+      kill_tree KILL "$p"
+      wait "$p" 2>/dev/null || true
+    fi
+  done
+  if [ -n "${child_pid:-}" ]; then
+    kill_tree KILL "$child_pid"
+    wait "$child_pid" 2>/dev/null || true
+  fi
+  helper_pids=()
+  rm -f "$timeout_flag" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+terminate_child() {
+  [ -n "$child_pid" ] || return 0
+  # kill_phased TERMs immediately and KILLs after the grace with identity
+  # checks — no raw PID is retained across the grace window.
+  CSUB_ESC_G="$KILL_GRACE" CSUB_ESC_C="$child_pid" \
+    python3 -c "$SETSID_PY" bash -c 'kill_phased "$CSUB_ESC_C" "$CSUB_ESC_G"' "csub-esc:$state_dir" 2>/dev/null &
+  helper_pids+=($!)
+}
+
+on_signal() {
+  signal_exit=$1
+  terminate_child
+}
+trap 'on_signal 129' HUP
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
+
+python3 -c "$SETSID_PY" codex "${args[@]}" <"$stdin_src" >"$log_file" 2>&1 &
+child_pid=$!
+
+if $tee_log; then
+  tail -n +1 -f "$log_file" &
+  tail_pid=$!
+fi
+
+# Watchdog (own process group, reaped by cleanup): TERM to the child's tree
+# at the bound, KILL after the grace period. The flag file records that the
+# bound fired so the exit can be reported as 124.
+CSUB_WD_T="$timeout_secs" CSUB_WD_G="$KILL_GRACE" CSUB_WD_C="$child_pid" CSUB_WD_F="$timeout_flag" \
+  python3 -c "$SETSID_PY" bash -c '
+    sleep "$CSUB_WD_T"
+    touch "$CSUB_WD_F" 2>/dev/null
+    kill_phased "$CSUB_WD_C" "$CSUB_WD_G"
+  ' "csub-wd:$state_dir" 2>/dev/null &
+watchdog_pid=$!
+
+status=0
+while :; do
+  if wait "$child_pid" 2>/dev/null; then status=0; else status=$?; fi
+  kill -0 "$child_pid" 2>/dev/null || break
+done
+# The child is reaped: its PID is now recyclable by the OS, so clear the
+# variable — cleanup and any late signal handler must never re-signal a
+# reaped PID (PID-reuse would kill an unrelated process). The same applies
+# to each helper below once waited.
+child_pid=""
+
+# Reap the watchdog explicitly so job-signal diagnostics like
+# "Killed ... csub-wd" never leak into csub's own stderr. If the timeout
+# fired, its phased KILL is still in flight — wait it out (grace-bounded)
+# instead of aborting it, or TERM-resistant descendants would be stranded.
+if [ -e "$timeout_flag" ]; then
+  reap_with_deadline "$watchdog_pid" $((KILL_GRACE + 2))
+else
+  kill_tree KILL "$watchdog_pid"
+  wait "$watchdog_pid" 2>/dev/null || true
+fi
+watchdog_pid=""
+# Signal-path escalators are likewise mid-phase; reap them now rather than
+# leaving them to cleanup so their KILL lands before csub reports.
+if [ ${#helper_pids[@]} -gt 0 ]; then
+  for _p in "${helper_pids[@]}"; do
+    reap_with_deadline "$_p" $((KILL_GRACE + 2))
+  done
+  helper_pids=()
+fi
+if [ -n "$tail_pid" ]; then
+  # The log is final once the child is reaped; give tail one full poll
+  # interval to drain it to EOF before stopping, so -t never omits the
+  # last events.
+  sleep 2
+  kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
+  tail_pid=""
+fi
+
+outcome=completed
+if [ -e "$timeout_flag" ]; then
+  rm -f "$timeout_flag"
+  status=124
+  outcome=timeout
+elif [ -n "$signal_exit" ]; then
+  status=$signal_exit
+  outcome=signaled
+elif [ "$status" -ne 0 ]; then
+  outcome=failed
+fi
+
+# A signal can land after the child was reaped but before the lines above ran
+# — re-check so finalization cannot report a pre-signal status. Timeout keeps
+# precedence (its kill also TERMs our group on some paths).
+if [ -n "$signal_exit" ] && [ "$outcome" != timeout ] && [ "$outcome" != signaled ]; then
+  status=$signal_exit
+  outcome=signaled
+fi
+
+write_receipt "$status" "$outcome"
+# An authoritative accounting record that failed to write must not read as
+# a fully successful run.
+if ! $receipt_ok && [ "$status" -eq 0 ]; then
+  status=5
+fi
+
+if [ -s "$msg_file" ]; then
+  cat "$msg_file"
+else
+  {
+    printf 'csub: no final message (exit %d' "$status"
+    [ "$status" -eq 124 ] && printf ', wall-clock timeout after %ss' "$timeout_secs"
+    [ -n "$signal_exit" ] && printf ', interrupted by signal'
+    printf '); log tail:\n'
+    tail -n 20 "$log_file" 2>/dev/null || true
+  } >&2
+fi
+printf 'csub: log %s\n' "$log_file" >&2
+# Final signal re-check: a TERM/INT during receipt writing or output above
+# must not be swallowed into a 0/completed exit (the receipt, already
+# written, still records the completed work; the exit is honest about the
+# wrapper being signaled).
+if [ -n "$signal_exit" ] && [ "$outcome" != timeout ] && [ "$outcome" != signaled ]; then
+  exit "$signal_exit"
+fi
+exit "$status"
