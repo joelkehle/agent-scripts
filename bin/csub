@@ -309,12 +309,19 @@ write_receipt() {
   # tokens:null — the receipt itself is always written.
   $receipt_done && return 0
   receipt_done=true
-  local duration tokens
+  local duration
   duration=$(( $(date +%s) - start ))
-  # Accept only a sane bounded integer: review output is model-controlled
-  # text that may itself contain a "tokens used" line, and an oversized or
-  # non-numeric candidate must degrade to tokens:null, never lose the receipt.
-  tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); if ($0 ~ /^[0-9]{1,12}$/) t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
+  # Token trust boundary: codex prints a genuine usage footer for exec
+  # briefs but never for reviews — in review mode any "tokens used" line is
+  # model-authored text, so parsing it would let a review forge its own
+  # accounting. Reviews therefore always record tokens:null. For exec runs,
+  # accept only a sane bounded integer (last match wins — the genuine footer
+  # follows any model text); oversized or non-numeric candidates degrade to
+  # null, never losing the receipt.
+  local tokens=""
+  if [ "$mode" != review ]; then
+    tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); if ($0 ~ /^[0-9]{1,12}$/) t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
+  fi
   python3 -c '
 import datetime, json, sys
 
@@ -365,6 +372,10 @@ kill_tree() {
 }
 export -f kill_tree
 
+# Cleanup signals only PIDs that are still unreaped children of this shell:
+# variables are cleared the moment a PID is waited, and an unreaped child's
+# PID cannot be recycled (the zombie holds it), so no kill here can reach an
+# unrelated reused PID.
 cleanup() {
   local p
   for p in ${watchdog_pid:-} ${tail_pid:-} ${helper_pids[@]+"${helper_pids[@]}"}; do
@@ -375,6 +386,7 @@ cleanup() {
     kill_tree KILL "$child_pid"
     wait "$child_pid" 2>/dev/null || true
   fi
+  helper_pids=()
   rm -f "$timeout_flag" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -421,14 +433,21 @@ while :; do
   if wait "$child_pid" 2>/dev/null; then status=0; else status=$?; fi
   kill -0 "$child_pid" 2>/dev/null || break
 done
+# The child is reaped: its PID is now recyclable by the OS, so clear the
+# variable — cleanup and any late signal handler must never re-signal a
+# reaped PID (PID-reuse would kill an unrelated process). The same applies
+# to each helper below once waited.
+child_pid=""
 
 # Reap the watchdog (and tail) explicitly so job-signal diagnostics like
 # "Killed ... csub-wd" never leak into csub's own stderr.
 kill_tree KILL "$watchdog_pid"
 wait "$watchdog_pid" 2>/dev/null || true
+watchdog_pid=""
 if [ -n "$tail_pid" ]; then
   kill "$tail_pid" 2>/dev/null || true
   wait "$tail_pid" 2>/dev/null || true
+  tail_pid=""
 fi
 
 outcome=completed

@@ -38,8 +38,17 @@ for src in "$src_dir"/*.md; do
   fi
   dst="$dst_dir/$name"
   if [ -L "$dst" ]; then
-    ln -sfn "$src" "$dst"
-    printf 'install-claude-agents: linked %s\n' "$name"
+    # A symlink may be user-owned and point at a divergent definition:
+    # repoint only when its content matches the tracked copy, refuse
+    # otherwise (including broken links, which cmp cannot read).
+    if cmp -s "$src" "$dst"; then
+      ln -sfn "$src" "$dst"
+      printf 'install-claude-agents: linked %s\n' "$name"
+    else
+      printf 'install-claude-agents: REFUSING %s — existing symlink resolves to divergent or unreadable content.\n' "$name" >&2
+      printf '  local:   %s -> %s\n  tracked: %s\n  Reconcile manually, then re-run.\n' "$dst" "$(readlink "$dst")" "$src" >&2
+      status=1
+    fi
   elif [ -e "$dst" ]; then
     if cmp -s "$src" "$dst"; then
       ln -sfn "$src" "$dst"

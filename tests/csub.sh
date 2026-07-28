@@ -50,12 +50,16 @@ for a in "$@"; do
 done
 [ -n "$out" ] && printf 'FAKE-MSG\n' > "$out"
 # Real codex prints a usage summary for exec briefs but not for reviews.
+# In review mode, emit a FORGED well-formed line the way model-authored
+# review text could — csub must refuse to account it (tokens stays null).
 if [ "$is_review" = "0" ]; then
   if [ "${CSUB_TEST_TOKENS_GARBAGE:-0}" = "1" ]; then
     printf 'tokens used\nnot-a-number\n'
   else
     printf 'tokens used\n4,321\n'
   fi
+else
+  printf 'tokens used\n777\n'
 fi
 exit "${CSUB_TEST_EXIT:-0}"
 SHIM
@@ -134,7 +138,7 @@ for want in review --base main 'model="gpt-5.6-sol"' \
   has_arg "$want" || fail "-R -B args missing: $want"
 done
 grep -qxF -e '--' "$CSUB_TEST_ARGS" && fail "-R -B must not pass a positional"
-check_receipt mode=review outcome=completed tokens=null || fail "review receipt must be completed with null tokens"
+check_receipt mode=review outcome=completed tokens=null || fail "review receipt accounted a forged model-authored token line (must be null)"
 
 "$csub" -R -U -C "$workdir" >/dev/null 2>&1
 has_arg '--uncommitted' || fail "-U scope not passed"
@@ -380,6 +384,22 @@ for name in grunt.md mech.md; do
   [ -L "$agents_dst/$name" ] || fail "installer did not link $name via shim"
   cmp -s "$agents_dst/$name" "$repo/claude/agents/$name" || fail "shim-installed $name diverges from tracked copy"
 done
+
+# --- 18b. divergent user-owned symlinks are refused, identical repointed -----
+sym_dst="$tmp/sym-agents"
+mkdir -p "$sym_dst"
+printf 'my own grunt\n' > "$tmp/user-grunt.md"
+ln -s "$tmp/user-grunt.md" "$sym_dst/grunt.md"
+cp "$repo/claude/agents/mech.md" "$tmp/mech-copy.md"
+ln -s "$tmp/mech-copy.md" "$sym_dst/mech.md"
+set +e
+CLAUDE_AGENTS_DIR="$sym_dst" "$repo/bin/install-claude-agents" >/dev/null 2>"$tmp/sym-err"
+sym_rc=$?
+set -e
+[ "$sym_rc" -ne 0 ] || fail "divergent user symlink did not cause a refusal exit"
+grep -q 'REFUSING grunt.md' "$tmp/sym-err" || fail "divergent-symlink refusal message missing"
+[ "$(readlink "$sym_dst/grunt.md")" = "$tmp/user-grunt.md" ] || fail "divergent user symlink was replaced"
+[ "$(readlink "$sym_dst/mech.md")" = "$repo/claude/agents/mech.md" ] || fail "identical-content symlink was not repointed"
 
 # --- 18a. untracked agent definitions are never installed --------------------
 rogue="$repo/claude/agents/zz-rogue-test.md"
