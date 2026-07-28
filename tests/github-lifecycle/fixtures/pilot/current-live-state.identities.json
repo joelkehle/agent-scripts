@@ -1,0 +1,26 @@
+{
+  "schema": "github-lifecycle-build-identity.v1",
+  "observed_at": "2026-07-27T00:00:00Z",
+  "observed_by": "ghl-010-pilot",
+  "source": "fixture",
+  "note": "The live state as understood when GHL-010 phase one was written. The coordinator commit 4fc77c8 is the real merge of GHL-002 only, so the deployed build predates GHL-004, GHL-006, and GHL-008. The Manager entry uses 642f601, a real commit that precedes the GHL-005 request surface, as a representative pre-GHL-005 production build; the conductor replaces both entries with actual health-endpoint output before the canary. No ACT-REV receipts are recorded here, which is itself a refusal reason.",
+  "services": [
+    {
+      "service": "contribution-coordinator",
+      "commit": "4fc77c8",
+      "dirty": false,
+      "activated_at": "2026-07-20T00:00:00Z",
+      "endpoint": "http://beelink:8114/health",
+      "note": "Merge of GHL-002 only; missing GHL-004, GHL-006, and GHL-008."
+    },
+    {
+      "service": "manager",
+      "commit": "642f601",
+      "dirty": false,
+      "activated_at": "2026-07-18T00:00:00Z",
+      "endpoint": "http://beelink:8080/health",
+      "note": "Representative pre-GHL-005 production build; lacks the request_agent_mission surface."
+    }
+  ],
+  "checkpoint_receipts": []
+}

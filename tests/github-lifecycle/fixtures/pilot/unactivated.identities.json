@@ -1,0 +1,25 @@
+{
+  "schema": "github-lifecycle-build-identity.v1",
+  "observed_at": "2026-08-01T12:00:00Z",
+  "observed_by": "ghl-010-pilot",
+  "source": "fixture",
+  "note": "Both required commits are present, but the coordinator build is dirty and the Manager build reports no activation time. A build that is merely present is not an activated build.",
+  "services": [
+    {
+      "service": "contribution-coordinator",
+      "commit": "d47bc86f079563189aedc65f2a3b6ef0260ab6d2",
+      "dirty": true,
+      "activated_at": "2026-08-01T11:30:00Z"
+    },
+    {
+      "service": "manager",
+      "commit": "f8747414b011f4a950ab409ef9afa4410e134cd6",
+      "dirty": false,
+      "activated_at": ""
+    }
+  ],
+  "checkpoint_receipts": [
+    { "checkpoint_id": "ACT-REV-01", "receipt_ref": "act-rev-01/bootstrap-mission-policies" },
+    { "checkpoint_id": "ACT-REV-02", "receipt_ref": "act-rev-02/review-repair" }
+  ]
+}
