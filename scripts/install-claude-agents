@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# install-claude-agents — symlink canonical Claude Code agent definitions
+# (claude/agents/*.md) into ~/.claude/agents so every lane on this machine
+# resolves the tracked versions. Idempotent. Refuses to overwrite a divergent
+# regular file; replaces an identical regular file with a symlink.
+
+src_dir="$(cd "$(dirname "$0")/../claude/agents" && pwd)"
+dst_dir="${CLAUDE_AGENTS_DIR:-$HOME/.claude/agents}"
+mkdir -p "$dst_dir"
+
+status=0
+for src in "$src_dir"/*.md; do
+  name=$(basename "$src")
+  dst="$dst_dir/$name"
+  if [ -L "$dst" ]; then
+    ln -sfn "$src" "$dst"
+    printf 'install-claude-agents: linked %s\n' "$name"
+  elif [ -e "$dst" ]; then
+    if cmp -s "$src" "$dst"; then
+      ln -sfn "$src" "$dst"
+      printf 'install-claude-agents: replaced identical file %s with link\n' "$name"
+    else
+      printf 'install-claude-agents: REFUSING %s — existing file diverges from tracked copy.\n' "$name" >&2
+      printf '  local:   %s\n  tracked: %s\n  Reconcile manually, then re-run.\n' "$dst" "$src" >&2
+      status=1
+    fi
+  else
+    ln -s "$src" "$dst"
+    printf 'install-claude-agents: installed %s\n' "$name"
+  fi
+done
+exit "$status"

@@ -106,6 +106,10 @@ an unbuilt recruitment/vendor need.
   read before editing; preserve unrelated changes.
 - Subagents are allowed only when parallel read, disjoint writes, or independent
   verification materially reduce risk or time. Read `docs/subagent.md` first.
+- Route delegation by role and cost: `grunt` (Haiku) or `mech` (Sonnet) custom
+  agents, `csub` for Codex implementation, `csub -D` for cross-model review and
+  verification. Ladder and rules: `docs/subagent.md` → Model Tiers, Cost, And
+  Cross-Model Routing.
 - Prefer existing bus agents, shared packages, and repo patterns before new
   services or dependencies.
 - For a new dependency, check current maintenance, releases, and adoption.
