@@ -33,6 +33,10 @@ if [ "${CSUB_TEST_GRANDCHILD:-0}" = "1" ]; then
   sleep 60 &
   printf 'GRANDPID<%s>\n' "$!" >> "$CSUB_TEST_ARGS"
 fi
+if [ "${CSUB_TEST_RESISTANT_GC:-0}" = "1" ]; then
+  bash -c 'trap "" TERM; sleep 60' &
+  printf 'RESGC<%s>\n' "$!" >> "$CSUB_TEST_ARGS"
+fi
 if [ "${CSUB_TEST_SETSID_GC:-0}" = "1" ]; then
   python3 -c 'import os, sys
 os.setsid()
@@ -75,6 +79,7 @@ export CSUB_KILL_GRACE=1
 csub="$repo/bin/csub"
 workdir="$tmp/work"
 mkdir -p "$workdir"
+git -C "$workdir" init -q
 
 has_arg() { grep -qxF -e "$1" "$CSUB_TEST_ARGS"; }
 last_receipt() { tail -1 "$CSUB_LOG_DIR/receipts.jsonl"; }
@@ -221,7 +226,7 @@ grep -q 'non-positive CSUB_KILL_GRACE' "$tmp/grace0-err" || fail "non-positive g
 # --- 10. watchdog timeout: tree-killed, unknown usage, escapees dead ---------
 rm -f "$CSUB_TEST_ARGS"
 set +e
-CSUB_TEST_GRANDCHILD=1 CSUB_TEST_SETSID_GC=1 CSUB_TEST_EARLY_TOKENS=1 CSUB_TEST_SLEEP=5 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
+CSUB_TEST_GRANDCHILD=1 CSUB_TEST_SETSID_GC=1 CSUB_TEST_RESISTANT_GC=1 CSUB_TEST_EARLY_TOKENS=1 CSUB_TEST_SLEEP=5 "$csub" -T 1 -C "$workdir" 'test brief' >/dev/null 2>&1
 rc=$?
 set -e
 [ "$rc" -eq 124 ] || fail "timeout did not produce exit 124 (got $rc)"
@@ -232,6 +237,9 @@ setsid_pid=$(sed -n 's/^SETSIDGC<\([0-9]*\)>$/\1/p' "$CSUB_TEST_ARGS")
 [ -n "$setsid_pid" ] || fail "setsid grandchild pid not captured"
 wait_gone "$grand_pid" || fail "grandchild survived group timeout kill"
 wait_gone "$setsid_pid" || fail "setsid-detached grandchild survived tree kill"
+res_pid=$(sed -n 's/^RESGC<\([0-9]*\)>$/\1/p' "$CSUB_TEST_ARGS")
+[ -n "$res_pid" ] || fail "resistant grandchild pid not captured"
+wait_gone "$res_pid" || fail "TERM-resistant orphaned grandchild survived identity-preserved KILL"
 
 # --- 11. TERM-resistant child is still KILLed at the bound -------------------
 start_ts=$(date +%s)
@@ -292,6 +300,19 @@ check_receipt outcome=completed tokens=null exit=0 || fail "garbage token summar
 # --- 14c. successful runs emit no job-control noise on stderr ----------------
 "$csub" -C "$workdir" 'test brief' >/dev/null 2>"$tmp/noise"
 grep -Eq 'Killed|csub-wd|csub-esc' "$tmp/noise" && fail "stderr contains job-control noise: $(cat "$tmp/noise")"
+
+# --- 14d. receipt-write failure surfaces as exit 5 ---------------------------
+r5dir="$tmp/receipt-fail-state"
+mkdir -p "$r5dir/receipts.jsonl"   # a directory: appends will fail, logs still fine
+set +e
+CSUB_LOG_DIR="$r5dir" "$csub" -C "$workdir" 'test brief' >/dev/null 2>"$tmp/r5-err"; rc=$?
+set -e
+[ "$rc" -eq 5 ] || fail "receipt-write failure did not exit 5 (got $rc)"
+grep -q 'failed to append receipt' "$tmp/r5-err" || fail "receipt-failure warning missing"
+
+# --- 14e. -t streams the complete log incl. final events ---------------------
+"$csub" -t -C "$workdir" 'test brief' > "$tmp/tee-out" 2>/dev/null
+grep -q '4,321' "$tmp/tee-out" || fail "-t omitted final log events"
 
 # --- 15. Elephant guard: canonical invariants, fail closed -------------------
 eledir="$tmp/elephant-repo"
@@ -355,7 +376,11 @@ grep -q 'active Elephant marker' "$tmp/ele-err" || fail "active-governance messa
 
 nogit="$tmp/nogit"
 mkdir -p "$nogit"
-"$csub" -w -C "$nogit" 'test brief' >/dev/null 2>&1 || fail "non-repo workdir must not be blocked by the guard"
+set +e
+"$csub" -C "$nogit" 'test brief' >/dev/null 2>"$tmp/nogit-err"; rc=$?
+set -e
+[ "$rc" -eq 2 ] || fail "non-repo workdir not rejected (got $rc)"
+grep -q 'repo-bound' "$tmp/nogit-err" || fail "repo-bound rejection message missing"
 
 # --- 16. prune scope: only aged csub-* files (portable timestamp) ------------
 mkdir -p "$CSUB_LOG_DIR"
@@ -367,6 +392,7 @@ touch -t 202601010000 "$CSUB_LOG_DIR/csub-old.log" "$CSUB_LOG_DIR/keep-me.log"
 # --- 17. receipts are valid JSON even with hostile paths ---------------------
 qdir="$tmp/work\"quoted"
 mkdir -p "$qdir"
+git -C "$qdir" init -q
 "$csub" -C "$qdir" 'test brief' >/dev/null 2>&1
 last_receipt | python3 -c '
 import json, sys

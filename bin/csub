@@ -77,8 +77,9 @@ The brief must be fully self-contained: goal, files owned, whether edits are
 allowed, checks to run, expected output shape. Pass "-" to read it from stdin.
 Prints Codex's final message on stdout; log and receipt paths on stderr.
 Exit codes: codex's (124 = wall-clock timeout, 129/130/143 = csub signaled),
-3 = Elephant guard refusal, 4 = unsupported codex version, 127 = missing
-prerequisite.
+3 = Elephant guard refusal, 4 = unsupported codex version, 5 = run succeeded
+but the receipt could not be written, 127 = missing prerequisite. The
+working root must be inside a git worktree (repo-bound contract).
 EOF
   exit 2
 }
@@ -144,6 +145,13 @@ esac
 
 command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
 command -v python3 >/dev/null 2>&1 || { printf 'csub: python3 not found (required for receipts, version compare, Elephant validation, supervision)\n' >&2; exit 127; }
+
+# Repo-bound contract: codex exec refuses untrusted non-repo roots anyway,
+# so reject them here before any spend or setup.
+if ! git -C "$workdir" rev-parse --show-toplevel >/dev/null 2>&1; then
+  printf 'csub: workdir %s is not inside a git worktree (csub is repo-bound; codex would refuse it)\n' "$workdir" >&2
+  exit 2
+fi
 
 # Resolve the real script location through installer shims (agent-env-install
 # links this file into a prefix), so the repo's lib/ stays reachable.
@@ -304,6 +312,7 @@ stdin_src=/dev/null
 
 start=$(date +%s)
 receipt_done=false
+receipt_ok=true
 write_receipt() {
   # $1 = exit status, $2 = outcome. Unparseable or absent usage becomes
   # tokens:null — the receipt itself is always written.
@@ -336,7 +345,10 @@ print(json.dumps({
     "tokens": int(tokens) if tokens.isdigit() else None,
     "exit": int(a[8]), "outcome": a[9], "log": a[10],
 }))' "$mode" "$model" "$effort" "$sandbox" "$workdir" \
-    "$duration" "$tokens" "$1" "$2" "$log_file" >> "$receipts" 2>/dev/null || true
+    "$duration" "$tokens" "$1" "$2" "$log_file" >> "$receipts" 2>/dev/null || {
+    receipt_ok=false
+    printf 'csub: WARNING: failed to append receipt to %s — accounting for this run is lost\n' "$receipts" >&2
+  }
 }
 
 child_pid=""
@@ -374,15 +386,110 @@ kill_tree() {
 }
 export -f kill_tree
 
+# kill_phased ROOT GRACE: two-phase TERM -> KILL with identity preservation.
+# The victim set (pid + start time) is snapshotted at TERM time, so a
+# descendant whose parent died of TERM and which re-parented to init is
+# still KILLed after the grace period — but only when its start time still
+# matches, so a recycled PID is never signaled. Fresh descendants spawned
+# during the grace are picked up by a second walk.
+kill_phased() {
+  python3 - "$1" "$2" <<'PY'
+import os, signal, subprocess, sys, time
+
+root, grace = int(sys.argv[1]), int(sys.argv[2])
+
+def snapshot():
+    try:
+        out = subprocess.run(["ps", "-Ao", "pid=,ppid=,lstart="],
+                             capture_output=True, text=True).stdout
+    except Exception:
+        return {}, {}
+    ids, kids = {}, {}
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        try:
+            pid, ppid = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+        ids[pid] = parts[2]
+        kids.setdefault(ppid, []).append(pid)
+    return ids, kids
+
+def walk(start, ids, kids):
+    seen = {}
+    queue = [start]
+    while queue:
+        p = queue.pop()
+        if p in seen:
+            continue
+        seen[p] = ids.get(p)
+        queue.extend(kids.get(p, []))
+    return seen
+
+def sig(pid, s):
+    try:
+        os.kill(pid, s)
+    except Exception:
+        pass
+
+ids, kids = snapshot()
+victims = walk(root, ids, kids)
+try:
+    os.killpg(root, signal.SIGTERM)
+except Exception:
+    pass
+for p in victims:
+    sig(p, signal.SIGTERM)
+
+time.sleep(grace)
+
+ids2, kids2 = snapshot()
+survivors = walk(root, ids2, kids2)
+try:
+    os.killpg(root, signal.SIGKILL)
+except Exception:
+    pass
+for p in survivors:
+    sig(p, signal.SIGKILL)
+for p, start in victims.items():
+    if p not in survivors and start is not None and ids2.get(p) == start:
+        sig(p, signal.SIGKILL)
+PY
+}
+export -f kill_phased
+
+# reap_with_deadline PID SECS: give a helper whose phased kill may still be
+# in flight up to SECS to finish its KILL phase, then force-reap. Aborting a
+# mid-phase helper would strand TERM-resistant descendants.
+reap_with_deadline() {
+  local pid=$1 deadline=$2 waited=0
+  while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt $((deadline * 5)) ]; do
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+  kill_tree KILL "$pid"
+  wait "$pid" 2>/dev/null || true
+}
+
 # Cleanup signals only PIDs that are still unreaped children of this shell:
 # variables are cleared the moment a PID is waited, and an unreaped child's
 # PID cannot be recycled (the zombie holds it), so no kill here can reach an
 # unrelated reused PID.
 cleanup() {
   local p
-  for p in ${watchdog_pid:-} ${tail_pid:-} ${helper_pids[@]+"${helper_pids[@]}"}; do
-    kill_tree KILL "$p"
-    wait "$p" 2>/dev/null || true
+  # Escalation helpers are always mid-phase; let their KILL land first.
+  for p in ${helper_pids[@]+"${helper_pids[@]}"}; do
+    reap_with_deadline "$p" $((KILL_GRACE + 2))
+  done
+  for p in ${watchdog_pid:-} ${tail_pid:-}; do
+    if [ "$p" = "${watchdog_pid:-}" ] && [ -e "$timeout_flag" ]; then
+      reap_with_deadline "$p" $((KILL_GRACE + 2))
+    else
+      kill_tree KILL "$p"
+      wait "$p" 2>/dev/null || true
+    fi
   done
   if [ -n "${child_pid:-}" ]; then
     kill_tree KILL "$child_pid"
@@ -395,9 +502,10 @@ trap cleanup EXIT
 
 terminate_child() {
   [ -n "$child_pid" ] || return 0
-  kill_tree TERM "$child_pid"
+  # kill_phased TERMs immediately and KILLs after the grace with identity
+  # checks — no raw PID is retained across the grace window.
   CSUB_ESC_G="$KILL_GRACE" CSUB_ESC_C="$child_pid" \
-    python3 -c "$SETSID_PY" bash -c 'sleep "$CSUB_ESC_G"; kill_tree KILL "$CSUB_ESC_C"' "csub-esc:$state_dir" 2>/dev/null &
+    python3 -c "$SETSID_PY" bash -c 'kill_phased "$CSUB_ESC_C" "$CSUB_ESC_G"' "csub-esc:$state_dir" 2>/dev/null &
   helper_pids+=($!)
 }
 
@@ -424,9 +532,7 @@ CSUB_WD_T="$timeout_secs" CSUB_WD_G="$KILL_GRACE" CSUB_WD_C="$child_pid" CSUB_WD
   python3 -c "$SETSID_PY" bash -c '
     sleep "$CSUB_WD_T"
     touch "$CSUB_WD_F" 2>/dev/null
-    kill_tree TERM "$CSUB_WD_C"
-    sleep "$CSUB_WD_G"
-    kill_tree KILL "$CSUB_WD_C"
+    kill_phased "$CSUB_WD_C" "$CSUB_WD_G"
   ' "csub-wd:$state_dir" 2>/dev/null &
 watchdog_pid=$!
 
@@ -441,12 +547,30 @@ done
 # to each helper below once waited.
 child_pid=""
 
-# Reap the watchdog (and tail) explicitly so job-signal diagnostics like
-# "Killed ... csub-wd" never leak into csub's own stderr.
-kill_tree KILL "$watchdog_pid"
-wait "$watchdog_pid" 2>/dev/null || true
+# Reap the watchdog explicitly so job-signal diagnostics like
+# "Killed ... csub-wd" never leak into csub's own stderr. If the timeout
+# fired, its phased KILL is still in flight — wait it out (grace-bounded)
+# instead of aborting it, or TERM-resistant descendants would be stranded.
+if [ -e "$timeout_flag" ]; then
+  reap_with_deadline "$watchdog_pid" $((KILL_GRACE + 2))
+else
+  kill_tree KILL "$watchdog_pid"
+  wait "$watchdog_pid" 2>/dev/null || true
+fi
 watchdog_pid=""
+# Signal-path escalators are likewise mid-phase; reap them now rather than
+# leaving them to cleanup so their KILL lands before csub reports.
+if [ ${#helper_pids[@]} -gt 0 ]; then
+  for _p in "${helper_pids[@]}"; do
+    reap_with_deadline "$_p" $((KILL_GRACE + 2))
+  done
+  helper_pids=()
+fi
 if [ -n "$tail_pid" ]; then
+  # The log is final once the child is reaped; give tail one full poll
+  # interval to drain it to EOF before stopping, so -t never omits the
+  # last events.
+  sleep 2
   kill "$tail_pid" 2>/dev/null || true
   wait "$tail_pid" 2>/dev/null || true
   tail_pid=""
@@ -473,6 +597,11 @@ if [ -n "$signal_exit" ] && [ "$outcome" != timeout ] && [ "$outcome" != signale
 fi
 
 write_receipt "$status" "$outcome"
+# An authoritative accounting record that failed to write must not read as
+# a fully successful run.
+if ! $receipt_ok && [ "$status" -eq 0 ]; then
+  status=5
+fi
 
 if [ -s "$msg_file" ]; then
   cat "$msg_file"
