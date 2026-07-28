@@ -1,0 +1,87 @@
+{
+  "schema": "github-lifecycle-adjudication-evidence.v1",
+  "bundle_version": "1.0.0",
+  "owner_login": "joelkehle",
+  "collection": {
+    "collected_at": "2026-07-27T09:00:00.000Z",
+    "collected_by": "kehle-reviewer-agent",
+    "source": "fixture",
+    "note": "A merged pull request whose adjudication changes durable doctrine through an owner ruling and a packet-flagged judgment call."
+  },
+  "notes": [
+    "Recorded evidence only. Live collection belongs to the deployed contribution coordinator."
+  ],
+  "pull_requests": [
+    {
+      "repository": "joelkehle/agent-scripts",
+      "pull_number": 44,
+      "url": "https://github.com/joelkehle/agent-scripts/pull/44",
+      "current_head_sha": "f0d638a477bcea0fb9bab51c96c8c3725e0798f4",
+      "state": "merged",
+      "business_scope": "personal",
+      "lineage": {
+        "repository": "joelkehle/agent-scripts",
+        "issue_number": 9,
+        "issue_id": "GHL-009",
+        "issue_url": "https://github.com/joelkehle/agent-scripts/issues/9",
+        "spec_id": "JK-SPEC-GHLIFE-001",
+        "source_revision": "ca942ac07abc9e92599c2ebc05c0523d627318b1",
+        "requirements": [
+          "GHL-REQ-08",
+          "GHL-REQ-09",
+          "GHL-NFR-03"
+        ]
+      },
+      "issue_comments": [
+        {
+          "comment_id": 9401,
+          "author": "kehle-contributor-agent",
+          "created_at": "2026-07-27T06:00:00.000Z",
+          "url": null,
+          "body": "<!-- github-lifecycle-claim.v1 idempotency_key=0768850e6b4007756a8faf7a585b0eb9b05a9d5d9df92962b072254f004f4519 -->\n```json\n{\n  \"schema\": \"github-lifecycle-claim.v1\",\n  \"event_id\": \"ed6e20252b7a65b618a7ee7fc85a4959\",\n  \"idempotency_key\": \"0768850e6b4007756a8faf7a585b0eb9b05a9d5d9df92962b072254f004f4519\",\n  \"action\": \"published\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"issue_number\": 9,\n  \"claim_generation\": 1,\n  \"previous_event_id\": null,\n  \"claimant_identity\": \"kehle-contributor-agent\",\n  \"authenticated_actor\": \"kehle-contributor-agent\",\n  \"lease_id\": \"591ab8bbf6a0784140561eef6f208753\",\n  \"occurred_at\": \"2026-07-27T06:00:00.000Z\",\n  \"lease_expires_at\": null,\n  \"mission_request_id\": \"joelkehle/agent-scripts#9/1\",\n  \"mission_id\": \"mission-ghl-009-1\",\n  \"candidate_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n  \"pull_request_url\": null,\n  \"reason\": null\n}\n```\n"
+        }
+      ],
+      "comments": [
+        {
+          "comment_id": 9402,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-27T08:11:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/44#issuecomment-9402",
+          "body": "<!-- ready-for-joel.v1 head_sha=f0d638a477bcea0fb9bab51c96c8c3725e0798f4 -->\n```json\n{\n  \"marker\": \"ready-for-joel.v1\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 44,\n  \"head_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n  \"generated_at\": \"2026-07-27T08:10:00.000Z\",\n  \"contributor_identity\": \"kehle-contributor-agent\",\n  \"reviewer_identity\": \"kehle-reviewer-agent\",\n  \"poster_identity\": \"kehle-reviewer-agent\",\n  \"reviewer_independent\": true,\n  \"change_summary\": \"Adds the adjudication observer and its graduation renderer.\",\n  \"findings\": [],\n  \"acceptance_criteria_status\": \"met\",\n  \"validation_evidence\": [\n    {\n      \"command\": \"npm run agent:check\",\n      \"head_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n      \"outcome\": \"pass\"\n    }\n  ],\n  \"unresolved_judgment_calls\": [\n    \"Whether a stale decision may ever resolve attention.\"\n  ],\n  \"recommended_disposition\": \"merge\",\n  \"risk\": \"low\",\n  \"reversibility\": \"two_way\",\n  \"deployment_status\": \"not_deployed\",\n  \"reviewer_attribution\": \"kehle-reviewer-agent\",\n  \"decision_analysis\": {\n    \"recommendation\": {\n      \"disposition\": \"merge\",\n      \"confidence\": 0.66\n    },\n    \"falsifiers\": [\n      \"The renderer writes a doctrine file.\",\n      \"A replay produces a second proposal.\"\n    ],\n    \"reversibility\": \"two_way\",\n    \"kill_criteria\": \"Revert if a rendered proposal is ever posted without Joel's adjudication.\",\n    \"decide_by\": \"none\"\n  },\n  \"unresolved_judgment\": [\n    {\n      \"id\": \"UJ-02\",\n      \"summary\": \"A decision recorded against a superseded head never resolves owner attention; the coordinator supersedes the item on the head change instead.\",\n      \"graduates_to_doctrine\": true,\n      \"owning_document\": \"contribution-review-architecture.md\",\n      \"requirement_ids\": [\n        \"GHL-REQ-08\"\n      ]\n    },\n    {\n      \"id\": \"UJ-03\",\n      \"summary\": \"Whether the observer should render more than eight lines of decision analysis.\",\n      \"graduates_to_doctrine\": false\n    }\n  ],\n  \"payload_hash\": \"fdf53d6e2cdfe19f68b04d87bc73d7354879c1557a3c8933f7463215055ec843\"\n}\n```\n"
+        },
+        {
+          "comment_id": 9403,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-27T08:12:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/44#issuecomment-9403",
+          "body": "<!-- owner-attention.v1 item_key=joelkehle/agent-scripts#44@f0d638a477bc idempotency_key=3159a16290b8720668ac9f1f4f8b457eaae092beea360b12f969b8d8bf2996c2 head_sha=f0d638a477bcea0fb9bab51c96c8c3725e0798f4 state=open -->\n```json\n{\n  \"schema\": \"owner-attention.v1\",\n  \"item_key\": \"joelkehle/agent-scripts#44@f0d638a477bc\",\n  \"business_scope\": \"personal\",\n  \"repo\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 44,\n  \"pr_url\": \"https://github.com/joelkehle/agent-scripts/pull/44\",\n  \"head_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n  \"packet\": {\n    \"marker\": \"ready-for-joel.v1\",\n    \"head_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n    \"payload_hash\": \"fdf53d6e2cdfe19f68b04d87bc73d7354879c1557a3c8933f7463215055ec843\",\n    \"recommended_disposition\": \"merge\",\n    \"posted\": true,\n    \"reviewer_identity\": \"kehle-reviewer-agent\",\n    \"poster_identity\": \"kehle-reviewer-agent\",\n    \"contributor_identity\": \"kehle-contributor-agent\",\n    \"reviewer_independent\": true\n  },\n  \"required_action\": \"adjudicate the ready pull request\",\n  \"state\": \"open\",\n  \"ready_at\": \"2026-07-27T08:12:00.000Z\",\n  \"age_days\": 0,\n  \"escalation\": {\n    \"level\": \"none\",\n    \"age_days\": 0\n  },\n  \"surface\": \"github\",\n  \"proposed_action\": \"adjudicate\",\n  \"posted_by\": \"kehle-reviewer-agent\",\n  \"event_id\": \"7d481c748f61ade3f34018037279228d\",\n  \"idempotency_key\": \"3159a16290b8720668ac9f1f4f8b457eaae092beea360b12f969b8d8bf2996c2\",\n  \"label\": {\n    \"name\": \"ready-for-joel\",\n    \"desired\": true\n  },\n  \"receipts\": {\n    \"packet_posted\": true,\n    \"review_posted\": true,\n    \"payload_hash\": \"fdf53d6e2cdfe19f68b04d87bc73d7354879c1557a3c8933f7463215055ec843\"\n  }\n}\n```\n"
+        },
+        {
+          "comment_id": 9404,
+          "author": "joelkehle",
+          "created_at": "2026-07-27T09:20:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/44#issuecomment-9404",
+          "body": "<!-- github-lifecycle-ruling.v1 head_sha=f0d638a477bcea0fb9bab51c96c8c3725e0798f4 -->\n```json\n{\n  \"schema\": \"github-lifecycle-ruling.v1\",\n  \"owning_document\": \"maintainer-charter.md\",\n  \"ruling_slug\": \"observer-states-attention-resolution\",\n  \"statement\": \"An adjudication observer states which owner-attention item a decision resolves; only the separately authorized guarded adapter performs that resolution.\",\n  \"head_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n  \"reason\": \"Stating a resolution is evidence; performing it is a write that needs its own authorization.\",\n  \"ruling_refs\": [\n    \"R1\",\n    \"R5\"\n  ],\n  \"requirement_ids\": [\n    \"GHL-REQ-08\",\n    \"GHL-NFR-02\"\n  ]\n}\n```\n"
+        },
+        {
+          "comment_id": 9405,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-27T09:31:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/44#issuecomment-9405",
+          "body": "<!-- adjudication-observation.v1 head_sha=f0d638a477bcea0fb9bab51c96c8c3725e0798f4 -->\n```json\n{\n  \"schema\": \"adjudication-observation.v1\",\n  \"repo\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 44,\n  \"head_sha\": \"f0d638a477bcea0fb9bab51c96c8c3725e0798f4\",\n  \"business_scope\": \"personal\",\n  \"observed_action\": \"approve\",\n  \"decision\": \"acknowledged\",\n  \"decided_by\": \"joelkehle\",\n  \"observed_at\": \"2026-07-27T09:31:00.000Z\",\n  \"packet_payload_hash\": \"fdf53d6e2cdfe19f68b04d87bc73d7354879c1557a3c8933f7463215055ec843\",\n  \"no_github_write\": true,\n  \"github_disposition\": \"merged\",\n  \"observed_from\": \"pull_request\"\n}\n```\n"
+        }
+      ],
+      "decisions": [
+        {
+          "github_disposition": "merged",
+          "decided_by": "joelkehle",
+          "decided_at": "2026-07-27T09:18:44.000Z",
+          "head_sha": "f0d638a477bcea0fb9bab51c96c8c3725e0798f4",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/44",
+          "reason": "Boundary is right and the ruling belongs in the charter.",
+          "observed_from": "pull_request"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "github-lifecycle-adjudication-evidence.v1",
+  "bundle_version": "1.0.0",
+  "owner_login": "joelkehle",
+  "collection": {
+    "collected_at": "2026-07-27T09:00:00.000Z",
+    "collected_by": "kehle-reviewer-agent",
+    "source": "fixture",
+    "note": "Joel decided at a head the pull request has moved past; the decision must not resolve attention or graduate doctrine."
+  },
+  "notes": [
+    "Recorded evidence only. Live collection belongs to the deployed contribution coordinator."
+  ],
+  "pull_requests": [
+    {
+      "repository": "joelkehle/agent-scripts",
+      "pull_number": 43,
+      "url": "https://github.com/joelkehle/agent-scripts/pull/43",
+      "current_head_sha": "fadaf334d4868b53a9c828e824493f657bae9514",
+      "state": "open",
+      "business_scope": "personal",
+      "lineage": {
+        "repository": "joelkehle/agent-scripts",
+        "issue_number": 7,
+        "issue_id": "GHL-007",
+        "spec_id": "JK-SPEC-GHLIFE-001",
+        "source_revision": "ca942ac07abc9e92599c2ebc05c0523d627318b1",
+        "requirements": [
+          "GHL-REQ-07"
+        ]
+      },
+      "comments": [
+        {
+          "comment_id": 9301,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-25T12:01:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/43#issuecomment-9301",
+          "body": "<!-- ready-for-joel.v1 head_sha=1d3d3d84842dbe62c5936f5b1a98995f6e1d744f -->\n```json\n{\n  \"marker\": \"ready-for-joel.v1\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 43,\n  \"head_sha\": \"1d3d3d84842dbe62c5936f5b1a98995f6e1d744f\",\n  \"generated_at\": \"2026-07-25T12:00:00.000Z\",\n  \"contributor_identity\": \"kehle-contributor-agent\",\n  \"reviewer_identity\": \"kehle-reviewer-agent\",\n  \"poster_identity\": \"kehle-reviewer-agent\",\n  \"reviewer_independent\": true,\n  \"change_summary\": \"Adds scope routing for personal repositories.\",\n  \"findings\": [],\n  \"acceptance_criteria_status\": \"met\",\n  \"validation_evidence\": [\n    {\n      \"command\": \"npm run agent:check\",\n      \"head_sha\": \"1d3d3d84842dbe62c5936f5b1a98995f6e1d744f\",\n      \"outcome\": \"pass\"\n    }\n  ],\n  \"unresolved_judgment_calls\": [],\n  \"recommended_disposition\": \"merge\",\n  \"risk\": \"low\",\n  \"reversibility\": \"two_way\",\n  \"deployment_status\": \"not_deployed\",\n  \"reviewer_attribution\": \"kehle-reviewer-agent\",\n  \"payload_hash\": \"28b4529066a62d152c062cad2905b57110a428d2e11e13b42706146f71dec017\"\n}\n```\n"
+        },
+        {
+          "comment_id": 9302,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-25T12:02:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/43#issuecomment-9302",
+          "body": "<!-- owner-attention.v1 item_key=joelkehle/agent-scripts#43@1d3d3d84842d idempotency_key=486f4809344c46bd53eeffde56b09b9f5642f946d0561a8d8012649537f32be4 head_sha=1d3d3d84842dbe62c5936f5b1a98995f6e1d744f state=superseded -->\n```json\n{\n  \"schema\": \"owner-attention.v1\",\n  \"item_key\": \"joelkehle/agent-scripts#43@1d3d3d84842d\",\n  \"business_scope\": \"personal\",\n  \"repo\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 43,\n  \"pr_url\": \"https://github.com/joelkehle/agent-scripts/pull/43\",\n  \"head_sha\": \"1d3d3d84842dbe62c5936f5b1a98995f6e1d744f\",\n  \"packet\": {\n    \"marker\": \"ready-for-joel.v1\",\n    \"head_sha\": \"1d3d3d84842dbe62c5936f5b1a98995f6e1d744f\",\n    \"payload_hash\": \"28b4529066a62d152c062cad2905b57110a428d2e11e13b42706146f71dec017\",\n    \"recommended_disposition\": \"merge\",\n    \"posted\": true,\n    \"reviewer_identity\": \"kehle-reviewer-agent\",\n    \"poster_identity\": \"kehle-reviewer-agent\",\n    \"contributor_identity\": \"kehle-contributor-agent\",\n    \"reviewer_independent\": true\n  },\n  \"required_action\": \"adjudicate the ready pull request\",\n  \"state\": \"superseded\",\n  \"ready_at\": \"2026-07-25T12:02:00.000Z\",\n  \"age_days\": 0,\n  \"escalation\": {\n    \"level\": \"none\",\n    \"age_days\": 0\n  },\n  \"surface\": \"github\",\n  \"proposed_action\": \"adjudicate\",\n  \"posted_by\": \"kehle-reviewer-agent\",\n  \"event_id\": \"f23c2224fbd397d8496ab515ae98fc87\",\n  \"idempotency_key\": \"486f4809344c46bd53eeffde56b09b9f5642f946d0561a8d8012649537f32be4\",\n  \"label\": {\n    \"name\": \"ready-for-joel\",\n    \"desired\": true\n  },\n  \"receipts\": {\n    \"packet_posted\": true,\n    \"review_posted\": true,\n    \"payload_hash\": \"28b4529066a62d152c062cad2905b57110a428d2e11e13b42706146f71dec017\"\n  },\n  \"superseded_by_head\": \"fadaf334d4868b53a9c828e824493f657bae9514\"\n}\n```\n"
+        },
+        {
+          "comment_id": 9303,
+          "author": "joelkehle",
+          "created_at": "2026-07-25T12:30:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/43#issuecomment-9303",
+          "body": "<!-- github-lifecycle-ruling.v1 head_sha=1d3d3d84842dbe62c5936f5b1a98995f6e1d744f -->\n```json\n{\n  \"schema\": \"github-lifecycle-ruling.v1\",\n  \"owning_document\": \"contribution-review-architecture.md\",\n  \"ruling_slug\": \"scope-routing-fails-closed\",\n  \"statement\": \"An unowned attention route fails closed rather than defaulting to the personal surface.\",\n  \"head_sha\": \"1d3d3d84842dbe62c5936f5b1a98995f6e1d744f\",\n  \"ruling_refs\": [\n    \"R5\"\n  ],\n  \"requirement_ids\": [\n    \"GHL-REQ-07\"\n  ]\n}\n```\n"
+        }
+      ],
+      "decisions": [
+        {
+          "github_disposition": "merged",
+          "decided_by": "joelkehle",
+          "decided_at": "2026-07-25T12:35:00.000Z",
+          "head_sha": "1d3d3d84842dbe62c5936f5b1a98995f6e1d744f",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/43",
+          "reason": "Recorded against the head that has since been replaced.",
+          "observed_from": "pull_request"
+        }
+      ]
+    }
+  ]
+}

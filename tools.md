@@ -101,6 +101,13 @@ Local tool catalog for this machine.
 - Default manifest: `docs/github-lifecycle/jk-spec-ghlife-001.v1.json`
 - Examples: `ghl-manifest validate`, `ghl-manifest render --issue GHL-003`, `ghl-manifest receipt --actor codex-contributor --at 2026-07-27T00:00:00.000Z`
 
+## ghl-adjudication
+- Purpose: correlate Joel's recorded GitHub adjudication with its ready packet, owner-attention item, and issue lineage, and render a proposed doctrine-graduation issue; offline, read-only, and never writes GitHub or doctrine.
+- Location: ~/Projects/shared/agent-scripts/bin/ghl-adjudication
+- Docs: ~/Projects/shared/agent-scripts/docs/github-lifecycle-adjudication.md
+- Input: a `github-lifecycle-adjudication-evidence.v1` bundle; fixtures live in `tests/github-lifecycle/fixtures/adjudication/`
+- Examples: `ghl-adjudication observe evidence.json`, `ghl-adjudication render evidence.json --ruling JK-RULING-20260727-44`, `ghl-adjudication receipt evidence.json --actor codex-contributor --at 2026-07-27T00:00:00.000Z`
+
 ## browser-tools
 - Purpose: Chrome DevTools navigation, evaluation, screenshots, inspection, and
   browser lifecycle.

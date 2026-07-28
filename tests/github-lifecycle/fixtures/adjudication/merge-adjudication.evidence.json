@@ -1,0 +1,72 @@
+{
+  "schema": "github-lifecycle-adjudication-evidence.v1",
+  "bundle_version": "1.0.0",
+  "owner_login": "joelkehle",
+  "collection": {
+    "collected_at": "2026-07-27T09:00:00.000Z",
+    "collected_by": "kehle-reviewer-agent",
+    "source": "fixture",
+    "note": "One merged pull request adjudicated by Joel at the exact current head."
+  },
+  "notes": [
+    "Recorded evidence only. Live collection belongs to the deployed contribution coordinator."
+  ],
+  "pull_requests": [
+    {
+      "repository": "joelkehle/agent-scripts",
+      "pull_number": 41,
+      "url": "https://github.com/joelkehle/agent-scripts/pull/41",
+      "current_head_sha": "48beb0d19893dfd24c257c4cb0a3caa29cbd861f",
+      "state": "merged",
+      "business_scope": "personal",
+      "lineage": {
+        "repository": "joelkehle/agent-scripts",
+        "issue_number": 4,
+        "issue_id": "GHL-004",
+        "issue_url": "https://github.com/joelkehle/agent-scripts/issues/4",
+        "spec_id": "JK-SPEC-GHLIFE-001",
+        "source_revision": "ca942ac07abc9e92599c2ebc05c0523d627318b1",
+        "requirements": [
+          "GHL-REQ-02",
+          "GHL-NFR-02"
+        ]
+      },
+      "issue_comments": [
+        {
+          "comment_id": 9001,
+          "author": "kehle-contributor-agent",
+          "created_at": "2026-07-26T15:02:00.000Z",
+          "url": null,
+          "body": "<!-- github-lifecycle-claim.v1 idempotency_key=d9bf1718b1060c063c577e44e53937dc5033c3b0ce1f3c474f987471ea78fe52 -->\n```json\n{\n  \"schema\": \"github-lifecycle-claim.v1\",\n  \"event_id\": \"74d087c8030a5f528c09f60334ce9289\",\n  \"idempotency_key\": \"d9bf1718b1060c063c577e44e53937dc5033c3b0ce1f3c474f987471ea78fe52\",\n  \"action\": \"published\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"issue_number\": 4,\n  \"claim_generation\": 1,\n  \"previous_event_id\": null,\n  \"claimant_identity\": \"kehle-contributor-agent\",\n  \"authenticated_actor\": \"kehle-contributor-agent\",\n  \"lease_id\": \"98e238b7895b80876b808fc971f66c33\",\n  \"occurred_at\": \"2026-07-26T15:02:00.000Z\",\n  \"lease_expires_at\": null,\n  \"mission_request_id\": \"joelkehle/agent-scripts#4/1\",\n  \"mission_id\": \"mission-ghl-009-1\",\n  \"candidate_sha\": \"48beb0d19893dfd24c257c4cb0a3caa29cbd861f\",\n  \"pull_request_url\": null,\n  \"reason\": null\n}\n```\n"
+        }
+      ],
+      "comments": [
+        {
+          "comment_id": 9101,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-26T17:41:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/41#issuecomment-9101",
+          "body": "<!-- ready-for-joel.v1 head_sha=48beb0d19893dfd24c257c4cb0a3caa29cbd861f -->\n```json\n{\n  \"marker\": \"ready-for-joel.v1\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 41,\n  \"head_sha\": \"48beb0d19893dfd24c257c4cb0a3caa29cbd861f\",\n  \"generated_at\": \"2026-07-26T17:40:00.000Z\",\n  \"contributor_identity\": \"kehle-contributor-agent\",\n  \"reviewer_identity\": \"kehle-reviewer-agent\",\n  \"poster_identity\": \"kehle-reviewer-agent\",\n  \"reviewer_independent\": true,\n  \"change_summary\": \"Adds the versioned claim reducer tests requested in GHL-004.\",\n  \"findings\": [],\n  \"acceptance_criteria_status\": \"met\",\n  \"validation_evidence\": [\n    {\n      \"command\": \"npm run agent:check\",\n      \"head_sha\": \"48beb0d19893dfd24c257c4cb0a3caa29cbd861f\",\n      \"outcome\": \"pass\"\n    }\n  ],\n  \"unresolved_judgment_calls\": [],\n  \"recommended_disposition\": \"merge\",\n  \"risk\": \"low\",\n  \"reversibility\": \"two_way\",\n  \"deployment_status\": \"not_deployed\",\n  \"reviewer_attribution\": \"kehle-reviewer-agent\",\n  \"decision_analysis\": {\n    \"recommendation\": {\n      \"disposition\": \"merge\",\n      \"confidence\": 0.78\n    },\n    \"falsifiers\": [\n      \"The reducer drops a competing claim under server-order ties.\"\n    ],\n    \"reversibility\": \"two_way\",\n    \"kill_criteria\": \"Revert if a claim collision reaches a second mission within a week.\",\n    \"decide_by\": \"none\"\n  },\n  \"payload_hash\": \"2af3f29352e7290fb48cf25084c471e7ad53ca60bd33bc8d2a07b9c19ebd16e8\"\n}\n```\n"
+        },
+        {
+          "comment_id": 9102,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-26T17:42:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/41#issuecomment-9102",
+          "body": "<!-- owner-attention.v1 item_key=joelkehle/agent-scripts#41@48beb0d19893 idempotency_key=86de77f6dafa65aabf7803a9a338b77ee27d822c8843efb3a57de8ebfcfb74b9 head_sha=48beb0d19893dfd24c257c4cb0a3caa29cbd861f state=open -->\n```json\n{\n  \"schema\": \"owner-attention.v1\",\n  \"item_key\": \"joelkehle/agent-scripts#41@48beb0d19893\",\n  \"business_scope\": \"personal\",\n  \"repo\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 41,\n  \"pr_url\": \"https://github.com/joelkehle/agent-scripts/pull/41\",\n  \"head_sha\": \"48beb0d19893dfd24c257c4cb0a3caa29cbd861f\",\n  \"packet\": {\n    \"marker\": \"ready-for-joel.v1\",\n    \"head_sha\": \"48beb0d19893dfd24c257c4cb0a3caa29cbd861f\",\n    \"payload_hash\": \"2af3f29352e7290fb48cf25084c471e7ad53ca60bd33bc8d2a07b9c19ebd16e8\",\n    \"recommended_disposition\": \"merge\",\n    \"posted\": true,\n    \"reviewer_identity\": \"kehle-reviewer-agent\",\n    \"poster_identity\": \"kehle-reviewer-agent\",\n    \"contributor_identity\": \"kehle-contributor-agent\",\n    \"reviewer_independent\": true\n  },\n  \"required_action\": \"adjudicate the ready pull request\",\n  \"state\": \"open\",\n  \"ready_at\": \"2026-07-26T17:42:00.000Z\",\n  \"age_days\": 0,\n  \"escalation\": {\n    \"level\": \"none\",\n    \"age_days\": 0\n  },\n  \"surface\": \"github\",\n  \"proposed_action\": \"adjudicate\",\n  \"posted_by\": \"kehle-reviewer-agent\",\n  \"event_id\": \"24a7de770a368481ce4ec87230a3c5bd\",\n  \"idempotency_key\": \"86de77f6dafa65aabf7803a9a338b77ee27d822c8843efb3a57de8ebfcfb74b9\",\n  \"label\": {\n    \"name\": \"ready-for-joel\",\n    \"desired\": true\n  },\n  \"receipts\": {\n    \"packet_posted\": true,\n    \"review_posted\": true,\n    \"payload_hash\": \"2af3f29352e7290fb48cf25084c471e7ad53ca60bd33bc8d2a07b9c19ebd16e8\"\n  }\n}\n```\n"
+        }
+      ],
+      "decisions": [
+        {
+          "github_disposition": "merged",
+          "decided_by": "joelkehle",
+          "decided_at": "2026-07-26T18:04:11.000Z",
+          "head_sha": "48beb0d19893dfd24c257c4cb0a3caa29cbd861f",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/41",
+          "reason": "Reducer behavior matches the specification; merging.",
+          "observed_from": "pull_request"
+        }
+      ]
+    }
+  ]
+}

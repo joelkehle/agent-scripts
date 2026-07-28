@@ -1,0 +1,77 @@
+{
+  "schema": "github-lifecycle-adjudication-evidence.v1",
+  "bundle_version": "1.0.0",
+  "owner_login": "joelkehle",
+  "collection": {
+    "collected_at": "2026-07-27T09:00:00.000Z",
+    "collected_by": "kehle-reviewer-agent",
+    "source": "fixture",
+    "note": "A reviewer policy guardrail and Joel's own request-changes adjudication on the same head."
+  },
+  "notes": [
+    "Recorded evidence only. Live collection belongs to the deployed contribution coordinator."
+  ],
+  "pull_requests": [
+    {
+      "repository": "joelkehle/agent-scripts",
+      "pull_number": 42,
+      "url": "https://github.com/joelkehle/agent-scripts/pull/42",
+      "current_head_sha": "8960b0246ca1934b7d443b8896366316259e09d1",
+      "state": "open",
+      "business_scope": "shared",
+      "lineage": {
+        "repository": "joelkehle/agent-scripts",
+        "issue_number": 8,
+        "issue_id": "GHL-008",
+        "spec_id": "JK-SPEC-GHLIFE-001",
+        "source_revision": "ca942ac07abc9e92599c2ebc05c0523d627318b1",
+        "requirements": [
+          "GHL-REQ-07"
+        ]
+      },
+      "comments": [
+        {
+          "comment_id": 9201,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-26T20:11:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/42#issuecomment-9201",
+          "body": "<!-- ready-for-joel.v1 head_sha=8960b0246ca1934b7d443b8896366316259e09d1 -->\n```json\n{\n  \"marker\": \"ready-for-joel.v1\",\n  \"repository\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 42,\n  \"head_sha\": \"8960b0246ca1934b7d443b8896366316259e09d1\",\n  \"generated_at\": \"2026-07-26T20:10:00.000Z\",\n  \"contributor_identity\": \"kehle-contributor-agent\",\n  \"reviewer_identity\": \"kehle-reviewer-agent\",\n  \"poster_identity\": \"kehle-reviewer-agent\",\n  \"reviewer_independent\": true,\n  \"change_summary\": \"Adds the owner-attention adapter's retry path.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"summary\": \"Retry loop has no bound.\",\n      \"citation\": \"internal/adapter.go:118\"\n    }\n  ],\n  \"acceptance_criteria_status\": \"partially_met\",\n  \"validation_evidence\": [\n    {\n      \"command\": \"npm run agent:check\",\n      \"head_sha\": \"8960b0246ca1934b7d443b8896366316259e09d1\",\n      \"outcome\": \"pass\"\n    }\n  ],\n  \"unresolved_judgment_calls\": [],\n  \"recommended_disposition\": \"request_changes\",\n  \"risk\": \"low\",\n  \"reversibility\": \"two_way\",\n  \"deployment_status\": \"not_deployed\",\n  \"reviewer_attribution\": \"kehle-reviewer-agent\",\n  \"payload_hash\": \"836438db9dfec5fbfe22511c4b92e3e44632357a494bf1512dd805cc0107f4ee\"\n}\n```\n"
+        },
+        {
+          "comment_id": 9202,
+          "author": "kehle-reviewer-agent",
+          "created_at": "2026-07-26T20:12:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/42#issuecomment-9202",
+          "body": "<!-- owner-attention.v1 item_key=joelkehle/agent-scripts#42@8960b0246ca1 idempotency_key=a2b42f08c9b28bdb2af617aac70e4d63e99519a97eea379876340c0b27f2a86c head_sha=8960b0246ca1934b7d443b8896366316259e09d1 state=open -->\n```json\n{\n  \"schema\": \"owner-attention.v1\",\n  \"item_key\": \"joelkehle/agent-scripts#42@8960b0246ca1\",\n  \"business_scope\": \"shared\",\n  \"repo\": \"joelkehle/agent-scripts\",\n  \"pull_number\": 42,\n  \"pr_url\": \"https://github.com/joelkehle/agent-scripts/pull/42\",\n  \"head_sha\": \"8960b0246ca1934b7d443b8896366316259e09d1\",\n  \"packet\": {\n    \"marker\": \"ready-for-joel.v1\",\n    \"head_sha\": \"8960b0246ca1934b7d443b8896366316259e09d1\",\n    \"payload_hash\": \"836438db9dfec5fbfe22511c4b92e3e44632357a494bf1512dd805cc0107f4ee\",\n    \"recommended_disposition\": \"request_changes\",\n    \"posted\": true,\n    \"reviewer_identity\": \"kehle-reviewer-agent\",\n    \"poster_identity\": \"kehle-reviewer-agent\",\n    \"contributor_identity\": \"kehle-contributor-agent\",\n    \"reviewer_independent\": true\n  },\n  \"required_action\": \"adjudicate the ready pull request\",\n  \"state\": \"open\",\n  \"ready_at\": \"2026-07-26T20:12:00.000Z\",\n  \"age_days\": 0,\n  \"escalation\": {\n    \"level\": \"none\",\n    \"age_days\": 0\n  },\n  \"surface\": \"github\",\n  \"proposed_action\": \"adjudicate\",\n  \"posted_by\": \"kehle-reviewer-agent\",\n  \"event_id\": \"333bf348dd778e610e14db2796675289\",\n  \"idempotency_key\": \"a2b42f08c9b28bdb2af617aac70e4d63e99519a97eea379876340c0b27f2a86c\",\n  \"label\": {\n    \"name\": \"ready-for-joel\",\n    \"desired\": true\n  },\n  \"receipts\": {\n    \"packet_posted\": true,\n    \"review_posted\": true,\n    \"payload_hash\": \"836438db9dfec5fbfe22511c4b92e3e44632357a494bf1512dd805cc0107f4ee\"\n  }\n}\n```\n"
+        },
+        {
+          "comment_id": 9203,
+          "author": "joelkehle",
+          "created_at": "2026-07-26T21:00:00.000Z",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/42#issuecomment-9203",
+          "body": "Agreed with the finding. Bound the retry and push a new head."
+        }
+      ],
+      "decisions": [
+        {
+          "github_disposition": "changes_requested",
+          "decided_by": "kehle-reviewer-agent",
+          "decided_at": "2026-07-26T20:13:00.000Z",
+          "head_sha": "8960b0246ca1934b7d443b8896366316259e09d1",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/42#pullrequestreview-771",
+          "reason": "Deterministic policy blocker: unbounded retry.",
+          "observed_from": "review"
+        },
+        {
+          "github_disposition": "changes_requested",
+          "decided_by": "joelkehle",
+          "decided_at": "2026-07-26T21:01:30.000Z",
+          "head_sha": "8960b0246ca1934b7d443b8896366316259e09d1",
+          "url": "https://github.com/joelkehle/agent-scripts/pull/42#pullrequestreview-772",
+          "reason": "Bound the retry before this merges.",
+          "observed_from": "review"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+
+const path = require("node:path");
+
+const {
+  buildAdjudicationReceipt,
+  correlateAdjudications,
+  loadEvidenceBundle,
+  readEvidence,
+  renderGraduation,
+} = require("../lib/github-lifecycle");
+
+const TOOL = "ghl-adjudication";
+const TOOL_VERSION = "1.0.0";
+
+function usage() {
+  console.log(`Usage: ${TOOL} <command> <evidence.json> [options]
+
+Correlates Joel's recorded GitHub adjudication with the ready packet, the
+owner-attention item, and the lifecycle issue for the same head, and renders a
+proposed doctrine-graduation issue when a decision changes durable doctrine.
+Reading is offline and rendering is proposal-only; this tool never writes to
+GitHub, never adjudicates, and never edits a doctrine file.
+
+Commands:
+  observe     Report correlated adjudication records, the attention resolution
+              each decision implies, and what is still awaiting adjudication
+  render      Print deterministic proposed graduation issue titles and bodies
+  receipt     Print an attributable JSON observation receipt
+
+Options:
+  --format text|json   Output format (default: text; receipt is json)
+  --pull NUMBER        Limit to one pull request
+  --ruling ID          Render one ruling instead of every proposal
+  --actor NAME         Receipt observer identity (default: $USER)
+  --at TIMESTAMP       Receipt timestamp (default: current time)
+
+Exit codes: 0 ok, 1 evidence defects, 2 usage or input error.`);
+}
+
+function parseArgs(argv) {
+  const out = { format: null, pull: null, ruling: null, actor: null, at: null, evidence: null, help: false };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+
+    if (arg === "-h" || arg === "--help") {
+      out.help = true;
+      continue;
+    }
+
+    if (!arg.startsWith("--")) {
+      if (out.evidence) {
+        throw new Error(`unexpected argument: ${arg}`);
+      }
+
+      out.evidence = arg;
+      continue;
+    }
+
+    const [rawKey, inlineValue] = arg.split(/=(.*)/s, 2);
+    const key = rawKey.replace(/^--/, "");
+    const value = inlineValue !== undefined ? inlineValue : argv[++i];
+
+    if (value === undefined) {
+      throw new Error(`${arg} requires a value`);
+    }
+
+    switch (key) {
+      case "format":
+        out.format = value;
+        break;
+      case "pull":
+        out.pull = Number.parseInt(value, 10);
+
+        if (!Number.isInteger(out.pull) || out.pull <= 0) {
+          throw new Error("--pull requires a positive pull request number");
+        }
+
+        break;
+      case "ruling":
+        out.ruling = value;
+        break;
+      case "actor":
+        out.actor = value;
+        break;
+      case "at":
+        out.at = value;
+        break;
+      default:
+        throw new Error(`unknown argument: ${arg}`);
+    }
+  }
+
+  return out;
+}
+
+function printJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function filterReport(report, args) {
+  if (args.pull === null) {
+    return report;
+  }
+
+  const records = report.records.filter((record) => record.pull_number === args.pull);
+  const recordIds = new Set(records.map((record) => record.record_id));
+
+  return {
+    ...report,
+    records,
+    awaiting_adjudication: report.awaiting_adjudication.filter((entry) => entry.pull_number === args.pull),
+    rulings: report.rulings.filter((ruling) => recordIds.has(ruling.record_id)),
+  };
+}
+
+function reportErrors(report) {
+  for (const error of report.errors) {
+    console.error(`${TOOL}: ${error.code} ${error.path || "<evidence>"}: ${error.message}`);
+  }
+
+  if (report.ok) {
+    return 0;
+  }
+
+  console.error(`${TOOL}: ${report.errors.length} defect(s)`);
+
+  return 1;
+}
+
+function printRecord(record) {
+  const decision = record.decision;
+
+  console.log("");
+  console.log(
+    `--- ${record.repository}#${record.pull_number} ${decision.github_disposition}` +
+      ` by ${decision.decided_by} at ${decision.head_sha}`,
+  );
+  console.log(`    status: ${record.status} (${record.classification}), record ${record.record_id}`);
+
+  if (record.packet) {
+    console.log(
+      `    packet: ${record.packet.marker} payload ${record.packet.observed_payload_sha256.slice(0, 12)}` +
+        ` recommended ${record.packet.recommended_disposition || "none"}` +
+        ` by ${record.packet.reviewer_identity || "unknown"}`,
+    );
+  }
+
+  if (record.calibration && record.calibration.recommendation_followed !== null) {
+    console.log(
+      `    calibration: recommendation ${record.calibration.recommendation_followed ? "followed" : "not followed"}` +
+        `${record.calibration.stated_confidence === null ? "" : ` at stated confidence ${record.calibration.stated_confidence}`}`,
+    );
+  }
+
+  if (record.attention_resolution) {
+    const resolution = record.attention_resolution;
+    console.log(
+      `    attention: ${resolution.item_key} ${resolution.item_state} -> ${resolution.proposed_state}` +
+        ` (${resolution.observed_action}/${resolution.decision}),` +
+        ` write ${resolution.write_needed ? "needed" : "already recorded"}, stated only`,
+    );
+  } else if (record.attention_resolution_blocked) {
+    console.log(`    attention: not resolved — ${record.attention_resolution_blocked}`);
+  }
+
+  if (record.lineage) {
+    console.log(
+      `    lineage: issue ${record.lineage.issue_id} (#${record.lineage.issue_number})` +
+        `${record.lineage.spec_id ? ` from ${record.lineage.spec_id}` : ""},` +
+        ` ${record.claim_events} claim event(s)`,
+    );
+  }
+
+  for (const ruling of record.rulings) {
+    console.log(`    ruling: ${ruling.ruling_id} -> ${ruling.owning_document} (${ruling.source})`);
+  }
+
+  for (const warning of record.warnings) {
+    console.log(`    warning: ${warning.code}: ${warning.message}`);
+  }
+}
+
+function commandObserve(report, args) {
+  if (args.format === "json") {
+    printJson(report);
+    return report.ok ? 0 : 1;
+  }
+
+  console.log(`${TOOL}: ${report.source}`);
+  console.log(`${TOOL}: evidence ${report.evidence_schema} ${report.bundle_version} sha256 ${report.evidence_sha256}`);
+  console.log(`${TOOL}: ${report.write_boundary}`);
+  console.log(
+    `${TOOL}: ${report.counts.pull_requests} pull request(s), ${report.records.length} decision record(s), ` +
+      `${report.rulings.length} ruling(s)`,
+  );
+
+  for (const record of report.records) {
+    printRecord(record);
+  }
+
+  if (report.awaiting_adjudication.length > 0) {
+    console.log("");
+  }
+
+  for (const entry of report.awaiting_adjudication) {
+    console.log(`${TOOL}: awaiting adjudication ${entry.repository}#${entry.pull_number}: ${entry.reason}`);
+  }
+
+  const status = reportErrors(report);
+
+  if (status === 0) {
+    console.log(`${TOOL}: ok`);
+  }
+
+  return status;
+}
+
+function commandRender(report, args) {
+  if (!report.ok) {
+    console.error(`${TOOL}: refusing to render from defective evidence`);
+    return reportErrors(report);
+  }
+
+  const graduation = renderGraduation(report);
+  const proposals = args.ruling
+    ? graduation.proposals.filter((proposal) => proposal.ruling_id === args.ruling)
+    : graduation.proposals;
+
+  if (args.ruling && proposals.length === 0) {
+    throw new Error(`unknown ruling: ${args.ruling}`);
+  }
+
+  if (args.format === "json") {
+    printJson({ ...graduation, proposals });
+    return 0;
+  }
+
+  console.log(`${TOOL}: ${graduation.write_boundary}`);
+
+  if (proposals.length === 0) {
+    console.log(`${TOOL}: no adjudicated decision changes durable doctrine; nothing to propose`);
+    return 0;
+  }
+
+  for (const proposal of proposals) {
+    console.log("");
+    console.log(`--- ${proposal.title}`);
+    console.log("");
+    console.log(proposal.body);
+  }
+
+  return 0;
+}
+
+function commandReceipt(bundle, report, args) {
+  const receipt = buildAdjudicationReceipt({
+    bundle,
+    report,
+    graduation: report.ok ? renderGraduation(report) : { proposals: [] },
+    actor: args.actor || process.env.USER || "unknown",
+    tool: TOOL,
+    tool_version: TOOL_VERSION,
+    timestamp: args.at || new Date().toISOString(),
+    source: report.source,
+  });
+
+  printJson(receipt);
+
+  return report.ok ? 0 : 1;
+}
+
+function main() {
+  const [command, ...rest] = process.argv.slice(2);
+
+  if (!command || command === "-h" || command === "--help" || command === "help") {
+    usage();
+    return 0;
+  }
+
+  const args = parseArgs(rest);
+
+  if (args.help) {
+    usage();
+    return 0;
+  }
+
+  if (!args.evidence) {
+    usage();
+    throw new Error("an evidence bundle path is required");
+  }
+
+  const evidencePath = path.resolve(args.evidence);
+  const bundle = loadEvidenceBundle(evidencePath);
+  const report = filterReport(correlateAdjudications(readEvidence(bundle, evidencePath)), args);
+
+  switch (command) {
+    case "observe":
+      return commandObserve(report, args);
+    case "render":
+      return commandRender(report, args);
+    case "receipt":
+      return commandReceipt(bundle, report, args);
+    default:
+      throw new Error(`unknown command: ${command}`);
+  }
+}
+
+try {
+  process.exitCode = main();
+} catch (error) {
+  console.error(`${TOOL}: ${error.message}`);
+  process.exitCode = 2;
+}
