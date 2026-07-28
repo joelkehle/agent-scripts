@@ -15,7 +15,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
-csub="$repo/scripts/csub"
+csub="$repo/bin/csub"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fail() { printf 'csub-live FAIL: %s\n' "$1" >&2; exit 1; }

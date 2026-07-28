@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+# csub — bounded single-shot delegation to Codex (codex exec) with isolation
+# pins. Doctrine: docs/subagent.md -> Model Tiers, Cost, And Cross-Model
+# Routing. Billing lands on the OpenAI plan, not Claude weekly limits. The
+# caller owns verification.
+#
+# Supported-version contract: the isolation pin set is validated against
+# codex-cli >= MIN_CODEX_VERSION (agents.enabled changed shape across
+# versions); csub fails closed on older or unknown versions.
+#
+# State: ${CSUB_LOG_DIR:-~/.local/state/csub} is csub-owned (registered in
+# docs/STATE_ARCHITECTURE.md). csub-*.log / csub-*.last.md are disposable,
+# pruned after RETAIN_DAYS; receipts.jsonl is append-only usage accounting.
+
+FAST_MODEL="gpt-5.6-terra"; FAST_EFFORT="medium"
+DEEP_MODEL="gpt-5.6-sol";   DEEP_EFFORT="high"
+DEFAULT_TIMEOUT=1200
+RETAIN_DAYS=14
+MIN_CODEX_VERSION="0.145.0"
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: csub [-D] [-w] [-C DIR] [-T SECS] [-t] "brief"
+Bounded single-shot delegation to Codex. Read-only + ephemeral by default.
+
+  -D        deep mode: gpt-5.6-sol at high reasoning, for review/verification
+            and hard bounded fixes (default: gpt-5.6-terra at medium).
+            Read-only unless -w is also given (bounded deep-write).
+  -w        workspace-write sandbox (network stays off). Refused when the
+            target worktree carries an Elephant marker that is active,
+            malformed, or unreadable — run in an isolated worktree.
+  -C DIR    working root for the task (default: current directory)
+  -T SECS   wall-clock timeout (default 1200)
+  -t        tee the full event log to stdout while running
+
+The brief must be fully self-contained: goal, files owned, whether edits are
+allowed, checks to run, expected output shape. Pass "-" to read it from stdin.
+Prints Codex's final message on stdout; log and receipt paths on stderr.
+Exit codes: codex's (124 = wall-clock timeout), 3 = Elephant guard refusal,
+4 = unsupported codex version, 127 = missing prerequisite.
+EOF
+  exit 2
+}
+
+deep=false write=false tee_log=false workdir="$PWD"
+timeout_secs=$DEFAULT_TIMEOUT
+while getopts ':DwC:T:t' opt; do
+  case "$opt" in
+    D) deep=true ;;
+    w) write=true ;;
+    C) workdir=$OPTARG ;;
+    T) timeout_secs=$OPTARG ;;
+    t) tee_log=true ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND - 1))
+[ "$#" -eq 1 ] || usage
+brief=$1
+
+command -v codex >/dev/null 2>&1 || { printf 'csub: codex CLI not found\n' >&2; exit 127; }
+
+# Supported-version contract (fail closed: pins are only validated >= MIN).
+codex_version=$(codex --version 2>/dev/null | awk '{print $2}')
+if [ -z "$codex_version" ] ||
+   [ "$(printf '%s\n%s\n' "$MIN_CODEX_VERSION" "$codex_version" | sort -V | head -1)" != "$MIN_CODEX_VERSION" ]; then
+  printf 'csub: unsupported codex-cli version "%s" (need >= %s); isolation pins are not validated below that\n' \
+    "${codex_version:-unknown}" "$MIN_CODEX_VERSION" >&2
+  exit 4
+fi
+
+# Portable wall-clock bound (macOS ships no coreutils timeout; Homebrew names
+# it gtimeout — same resolution as tests/agent-loop-tools.sh).
+if command -v timeout >/dev/null 2>&1; then timeout_cmd="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then timeout_cmd="gtimeout"
+else printf 'csub: timeout/gtimeout not found; refusing unbounded execution\n' >&2; exit 127
+fi
+
+model=$FAST_MODEL effort=$FAST_EFFORT sandbox=read-only
+if $deep; then model=$DEEP_MODEL; effort=$DEEP_EFFORT; fi
+if $write; then sandbox=workspace-write; fi
+mode=fast
+$deep && mode=deep
+$write && mode="$mode-write"
+
+# Elephant guard: never grant write access inside a worktree governed by an
+# Elephant marker unless the marker parses as valid JSON with active != true.
+# Fail closed on malformed or unreadable markers, matching the canonical
+# Elephant loader. Isolated-worktree coordination means running csub -w in a
+# worktree whose marker is absent or provably inactive.
+if $write; then
+  repo_root=$(git -C "$workdir" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$repo_root" ]; then
+    while IFS= read -r marker; do
+      verdict=$(python3 - "$marker" 2>/dev/null <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+except Exception:
+    print("unreadable")
+    sys.exit(0)
+print("active" if data.get("active") is True else "inactive")
+PY
+      ) || verdict=unreadable
+      [ -n "$verdict" ] || verdict=unreadable
+      case "$verdict" in
+        inactive) ;;
+        active)
+          printf 'csub: refusing -w: active Elephant marker at %s\n' "$marker" >&2
+          printf 'csub: run write work in an isolated worktree without an active marker\n' >&2
+          exit 3
+          ;;
+        *)
+          printf 'csub: refusing -w: Elephant marker at %s is malformed or unreadable (failing closed)\n' "$marker" >&2
+          exit 3
+          ;;
+      esac
+    done < <(find "$repo_root" -maxdepth 3 -name elephant-active.json 2>/dev/null)
+  fi
+fi
+
+state_dir="${CSUB_LOG_DIR:-$HOME/.local/state/csub}"
+mkdir -p "$state_dir"
+# Retention: prune only csub-generated names; never touch foreign files.
+find "$state_dir" -maxdepth 1 -name 'csub-*' -mtime +"$RETAIN_DAYS" -delete 2>/dev/null || true
+
+stamp="csub-$(date +%Y%m%dT%H%M%S)-$$"
+log_file="$state_dir/$stamp.log"
+msg_file="$state_dir/$stamp.last.md"
+receipts="$state_dir/receipts.jsonl"
+
+# Isolation pins: no user config (auth still resolves via CODEX_HOME), no MCP
+# surprise surface, no apps/plugins/web search, no child subagents (both the
+# feature flag and the agents table, for cross-version coverage).
+args=(exec --ephemeral --ignore-user-config
+  --sandbox "$sandbox" -C "$workdir"
+  -c "model=\"$model\"" -c "model_reasoning_effort=\"$effort\""
+  -c 'web_search="disabled"' -c agents.enabled=false
+  -c features.multi_agent_v2=false
+  -c features.apps=false -c features.plugins=false -c features.tool_suggest=false
+  --output-last-message "$msg_file")
+$write && args+=(-c sandbox_workspace_write.network_access=false)
+
+# codex exec appends piped stdin to the prompt; lanes call csub with non-tty
+# stdin, so close it unless the brief itself comes from stdin ("-").
+stdin_src=/dev/null
+[ "$brief" = "-" ] && stdin_src=/dev/stdin
+
+# "--" terminates codex option parsing so hyphen-leading briefs are prompts,
+# never flags.
+start=$(date +%s)
+status=0
+if $tee_log; then
+  "$timeout_cmd" "$timeout_secs" codex "${args[@]}" -- "$brief" <"$stdin_src" 2>&1 | tee "$log_file" || status=$?
+else
+  "$timeout_cmd" "$timeout_secs" codex "${args[@]}" -- "$brief" <"$stdin_src" >"$log_file" 2>&1 || status=$?
+fi
+duration=$(( $(date +%s) - start ))
+tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); t = $0 } END { print t + 0 }' "$log_file" 2>/dev/null || echo 0)
+
+# Receipts are JSON-serialized with a JSON-aware tool; fallback escapes the
+# two string-breaking characters if python3 is unavailable.
+receipt=$(python3 -c 'import json, sys
+a = sys.argv
+print(json.dumps({"ts": a[1], "mode": a[2], "model": a[3], "effort": a[4],
+                  "sandbox": a[5], "dir": a[6], "secs": int(a[7]),
+                  "tokens": int(a[8]), "exit": int(a[9]), "log": a[10]}))' \
+  "$(date -Is)" "$mode" "$model" "$effort" "$sandbox" "$workdir" \
+  "$duration" "$tokens" "$status" "$log_file" 2>/dev/null) || receipt=""
+if [ -z "$receipt" ]; then
+  esc_dir=${workdir//\\/\\\\}; esc_dir=${esc_dir//\"/\\\"}
+  esc_log=${log_file//\\/\\\\}; esc_log=${esc_log//\"/\\\"}
+  receipt=$(printf '{"ts":"%s","mode":"%s","model":"%s","effort":"%s","sandbox":"%s","dir":"%s","secs":%s,"tokens":%s,"exit":%s,"log":"%s"}' \
+    "$(date -Is)" "$mode" "$model" "$effort" "$sandbox" "$esc_dir" \
+    "$duration" "$tokens" "$status" "$esc_log")
+fi
+printf '%s\n' "$receipt" >> "$receipts"
+
+if [ -s "$msg_file" ]; then
+  cat "$msg_file"
+else
+  {
+    printf 'csub: no final message (exit %d' "$status"
+    [ "$status" -eq 124 ] && printf ', wall-clock timeout after %ss' "$timeout_secs"
+    printf '); log tail:\n'
+    tail -n 20 "$log_file" 2>/dev/null || true
+  } >&2
+fi
+printf 'csub: log %s\n' "$log_file" >&2
+exit "$status"

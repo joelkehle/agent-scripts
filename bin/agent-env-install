@@ -86,8 +86,10 @@ for tool in \
   codex-bg \
   committer \
   contributor-agent \
+  csub \
   dirty-audit \
   docs-list \
+  install-claude-agents \
   loop-audit \
   loop-receipt \
   loop-resume \

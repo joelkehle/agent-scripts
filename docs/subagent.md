@@ -18,7 +18,7 @@ This is the center of gravity for subagent guidance under `~/Projects`.
 - `verify`: independent validation mode, usually a worker running read-only checks. May edit tests only when assigned.
 - `oracle`: second-model review fallback. Use for architecture, code smell, hard bug, or risk review when native subagents are unavailable or model diversity is useful.
 - Pinakes/runtime agents: long-lived product services on the bus. They are not coding subagents.
-- Claude Code custom agents: optional repo-local files under `.claude/agents/*.md`. Use them only when those files actually exist and are maintained.
+- Claude Code custom agents: user-level `~/.claude/agents/*.md` (`grunt`, `mech` — always available; see Model Tiers, Cost, And Cross-Model Routing) plus optional repo-local `.claude/agents/*.md`. Use repo-local ones only when those files actually exist and are maintained.
 
 ## Default
 
@@ -151,7 +151,7 @@ Rules:
 - Long-horizon unsupervised lead work is never delegated to either provider.
   Bounded briefs, lead verification, no resume/background children.
 - `grunt` and `mech` are tracked in this repo (`claude/agents/`) and installed
-  as symlinks by `scripts/install-claude-agents`. The installer refuses to
+  as symlinks by `bin/install-claude-agents`. The installer refuses to
   overwrite divergent local files.
 
 Billing: `csub` lands on the OpenAI plan, preserving Claude weekly limits.
@@ -164,7 +164,7 @@ Repo `AGENTS.md` may add repo-specific trigger rules, ownership boundaries, and 
 
 Repo `docs/subagent.md` is optional. Add it only when the repo needs specific decomposition patterns or file-set recipes. Keep it short and link back here.
 
-User-level `~/.claude/agents/` provides `grunt` and `mech` everywhere (tracked here under `claude/agents/`, installed via `scripts/install-claude-agents`). Do not reference repo-local `.claude/agents/*.md`, `@test-writer`, `@architect`, or similar agents unless the repo actually contains those maintained files.
+User-level `~/.claude/agents/` provides `grunt` and `mech` everywhere (tracked here under `claude/agents/`, installed via `bin/install-claude-agents`). Do not reference repo-local `.claude/agents/*.md`, `@test-writer`, `@architect`, or similar agents unless the repo actually contains those maintained files.
 
 ## Tool-Specific Notes
 
