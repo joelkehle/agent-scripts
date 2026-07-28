@@ -14,7 +14,8 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+ROGUE_CLEANUP=""
+trap 'rm -rf "$tmp"; [ -n "$ROGUE_CLEANUP" ] && rm -f "$ROGUE_CLEANUP"' EXIT
 
 fail() { printf 'csub test FAIL: %s\n' "$1" >&2; exit 1; }
 
@@ -70,6 +71,20 @@ mkdir -p "$workdir"
 
 has_arg() { grep -qxF -e "$1" "$CSUB_TEST_ARGS"; }
 last_receipt() { tail -1 "$CSUB_LOG_DIR/receipts.jsonl"; }
+
+# A process counts as terminated when it is gone OR a zombie: in containers
+# whose PID 1 does not reap orphans, a killed child lingers as <defunct> and
+# plain kill -0 would report it alive forever.
+proc_gone() {
+  local st
+  st=$(ps -o state= -p "$1" 2>/dev/null | tr -d '[:space:]')
+  case "$st" in ''|Z*) return 0 ;; *) return 1 ;; esac
+}
+wait_gone() {
+  local _i
+  for _i in $(seq 1 50); do proc_gone "$1" && return 0; sleep 0.1; done
+  return 1
+}
 check_receipt() {
   last_receipt | python3 -c '
 import json, sys
@@ -208,10 +223,8 @@ grand_pid=$(sed -n 's/^GRANDPID<\([0-9]*\)>$/\1/p' "$CSUB_TEST_ARGS")
 setsid_pid=$(sed -n 's/^SETSIDGC<\([0-9]*\)>$/\1/p' "$CSUB_TEST_ARGS")
 [ -n "$grand_pid" ] || fail "grandchild pid not captured"
 [ -n "$setsid_pid" ] || fail "setsid grandchild pid not captured"
-for _ in $(seq 1 30); do kill -0 "$grand_pid" 2>/dev/null || break; sleep 0.1; done
-kill -0 "$grand_pid" 2>/dev/null && fail "grandchild survived group timeout kill"
-for _ in $(seq 1 30); do kill -0 "$setsid_pid" 2>/dev/null || break; sleep 0.1; done
-kill -0 "$setsid_pid" 2>/dev/null && fail "setsid-detached grandchild survived tree kill"
+wait_gone "$grand_pid" || fail "grandchild survived group timeout kill"
+wait_gone "$setsid_pid" || fail "setsid-detached grandchild survived tree kill"
 
 # --- 11. TERM-resistant child is still KILLed at the bound -------------------
 start_ts=$(date +%s)
@@ -238,15 +251,13 @@ set -e
 [ "$rc" -eq 143 ] || fail "cancelled csub did not exit 143 (got $rc)"
 [ -n "$shim_pid" ] || fail "shim pid not captured"
 [ -n "$grand_pid" ] || fail "grandchild pid not captured (cancel)"
-for _ in $(seq 1 50); do kill -0 "$shim_pid" 2>/dev/null || break; sleep 0.1; done
-kill -0 "$shim_pid" 2>/dev/null && fail "codex child survived csub cancellation"
-for _ in $(seq 1 50); do kill -0 "$grand_pid" 2>/dev/null || break; sleep 0.1; done
-kill -0 "$grand_pid" 2>/dev/null && fail "grandchild survived csub cancellation"
+wait_gone "$shim_pid" || fail "codex child survived csub cancellation"
+wait_gone "$grand_pid" || fail "grandchild survived csub cancellation"
 check_receipt outcome=signaled exit=143 tokens=null || fail "cancellation receipt wrong"
 
 # --- 13. no watchdog/escalation helpers survive csub -------------------------
 sleep 1
-if pgrep -f 'csub-wd|csub-esc' >/dev/null 2>&1; then
+if pgrep -f -- "csub-wd:$CSUB_LOG_DIR" >/dev/null 2>&1 || pgrep -f -- "csub-esc:$CSUB_LOG_DIR" >/dev/null 2>&1; then
   fail "watchdog/escalation helpers survived csub exit"
 fi
 
@@ -372,6 +383,10 @@ done
 
 # --- 18a. untracked agent definitions are never installed --------------------
 rogue="$repo/claude/agents/zz-rogue-test.md"
+if [ -e "$rogue" ] || [ -L "$rogue" ]; then
+  printf 'csub tests: SKIP untracked-agent subtest (pre-existing %s)\n' "$rogue" >&2
+else
+ROGUE_CLEANUP="$rogue"
 printf -- '---\nname: rogue\n---\nrogue\n' > "$rogue"
 rogue_dst="$tmp/rogue-agents"
 CLAUDE_AGENTS_DIR="$rogue_dst" "$repo/bin/install-claude-agents" >/dev/null 2>"$tmp/rogue-err" && rogue_rc=0 || rogue_rc=$?
@@ -380,6 +395,8 @@ rm -f "$rogue"
 [ ! -e "$rogue_dst/zz-rogue-test.md" ] || fail "untracked agent definition was installed"
 grep -q 'skipping untracked zz-rogue-test.md' "$tmp/rogue-err" || fail "untracked-skip message missing"
 [ -L "$rogue_dst/grunt.md" ] || fail "tracked agents not installed alongside rogue skip"
+ROGUE_CLEANUP=""
+fi
 
 # --- 19. bootstrap installs agents, and works through its own shim -----------
 boot_agents="$tmp/boot-agents"

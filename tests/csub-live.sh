@@ -42,9 +42,27 @@ out_fast="$tmp/out-fast"
 "$csub" -C "$fixture" "$prompt" > "$out_fast" 2>"$tmp/err-fast" || fail "fast run failed (see $tmp/err-fast)"
 
 grep -q "SENTINEL: *$sentinel" "$out_fast" || fail "AGENTS.md sentinel did not reach the child"
-grep -Eiq 'canary' "$out_fast" && fail "MCP canary visible in tool surface"
-grep -Eiq 'gmail|google|connector' "$out_fast" && fail "connector visible in tool surface"
-grep -Eiq 'web[_ ]?search' "$out_fast" && fail "web search visible in tool surface"
+# Parse the structured TOOLS: line and flag only POSITIVE capability names;
+# a compliant answer like "connectors: none" or "web search: disabled"
+# describes the intended isolated state and must not fail the run.
+python3 - "$out_fast" <<'PY' || fail "forbidden capability exposed in TOOLS line (see above)"
+import re, sys
+
+text = open(sys.argv[1]).read()
+m = re.search(r'^TOOLS:(.*)$', text, re.M)
+assert m, "no TOOLS: line in output"
+items = [i.strip().lower() for i in re.split(r'[,;]', m.group(1)) if i.strip()]
+absence = ('none', 'disabled', 'unavailable', 'no ', 'not ', 'n/a')
+exposed = []
+for item in items:
+    if any(a in item for a in absence):
+        continue
+    if re.search(r'canary|gmail|google|connector|web[ _-]?search|mcp', item):
+        exposed.append(item)
+if exposed:
+    print(f"exposed capabilities: {exposed}", file=sys.stderr)
+    sys.exit(1)
+PY
 log_fast=$(ls "$CSUB_LOG_DIR"/csub-*.log | tail -1)
 grep -Eiq 'csub_canary' "$log_fast" && fail "canary initialization attempted (found in event log)"
 

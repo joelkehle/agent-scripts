@@ -311,7 +311,10 @@ write_receipt() {
   receipt_done=true
   local duration tokens
   duration=$(( $(date +%s) - start ))
-  tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
+  # Accept only a sane bounded integer: review output is model-controlled
+  # text that may itself contain a "tokens used" line, and an oversized or
+  # non-numeric candidate must degrade to tokens:null, never lose the receipt.
+  tokens=$(awk '/^tokens used$/ { getline; gsub(/,/, ""); if ($0 ~ /^[0-9]{1,12}$/) t = $0 } END { if (t != "") print t }' "$log_file" 2>/dev/null || true)
   python3 -c '
 import datetime, json, sys
 
@@ -380,7 +383,7 @@ terminate_child() {
   [ -n "$child_pid" ] || return 0
   kill_tree TERM "$child_pid"
   CSUB_ESC_G="$KILL_GRACE" CSUB_ESC_C="$child_pid" \
-    python3 -c "$SETSID_PY" bash -c 'sleep "$CSUB_ESC_G"; kill_tree KILL "$CSUB_ESC_C"' csub-esc 2>/dev/null &
+    python3 -c "$SETSID_PY" bash -c 'sleep "$CSUB_ESC_G"; kill_tree KILL "$CSUB_ESC_C"' "csub-esc:$state_dir" 2>/dev/null &
   helper_pids+=($!)
 }
 
@@ -410,7 +413,7 @@ CSUB_WD_T="$timeout_secs" CSUB_WD_G="$KILL_GRACE" CSUB_WD_C="$child_pid" CSUB_WD
     kill_tree TERM "$CSUB_WD_C"
     sleep "$CSUB_WD_G"
     kill_tree KILL "$CSUB_WD_C"
-  ' csub-wd 2>/dev/null &
+  ' "csub-wd:$state_dir" 2>/dev/null &
 watchdog_pid=$!
 
 status=0
@@ -440,6 +443,14 @@ elif [ "$status" -ne 0 ]; then
   outcome=failed
 fi
 
+# A signal can land after the child was reaped but before the lines above ran
+# — re-check so finalization cannot report a pre-signal status. Timeout keeps
+# precedence (its kill also TERMs our group on some paths).
+if [ -n "$signal_exit" ] && [ "$outcome" != timeout ] && [ "$outcome" != signaled ]; then
+  status=$signal_exit
+  outcome=signaled
+fi
+
 write_receipt "$status" "$outcome"
 
 if [ -s "$msg_file" ]; then
@@ -454,4 +465,11 @@ else
   } >&2
 fi
 printf 'csub: log %s\n' "$log_file" >&2
+# Final signal re-check: a TERM/INT during receipt writing or output above
+# must not be swallowed into a 0/completed exit (the receipt, already
+# written, still records the completed work; the exit is honest about the
+# wrapper being signaled).
+if [ -n "$signal_exit" ] && [ "$outcome" != timeout ] && [ "$outcome" != signaled ]; then
+  exit "$signal_exit"
+fi
 exit "$status"

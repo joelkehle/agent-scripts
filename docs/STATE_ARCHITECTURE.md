@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.23 (2026-07-28)
+Version: 1.24 (2026-07-28)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -65,7 +65,9 @@ projection.
   csub usage accounting (timestamp, mode, model, effort, sandbox, duration,
   tokens, exit, outcome — completed/timeout/signaled/failed — and log
   pointer; tokens is null when Codex reported no parseable usage, with
-  outcome distinguishing interruption). It owns no work nouns and nothing rebuilds from
+  outcome distinguishing interruption). Rows appended before 2026-07-28
+  predate the outcome field; consumers treat a missing outcome as
+  legacy/unknown, not malformed. It owns no work nouns and nothing rebuilds from
   it; loss is acceptable accounting loss, so no rebuild path is required.
   Nothing else may write to this directory.
 
@@ -346,6 +348,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.24 (2026-07-28): csub receipts gain the authoritative outcome field
+  (completed/timeout/signaled/failed); tokens:null means no parseable usage
+  reported; pre-2026-07-28 rows lack outcome and read as legacy/unknown.
 - 1.23 (2026-07-28): register csub delegation state family under
   `~/.local/state/csub/` — disposable Codex-session log projections plus
   authoritative append-only usage receipts.
