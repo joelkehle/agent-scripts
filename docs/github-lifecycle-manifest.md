@@ -90,6 +90,9 @@ The structured contract contains:
 | `finding_policy` | Fixed `fix`/`defer`/`escalate` classifications and `accept_or_defer` at budget |
 
 Pass criteria may reference only proof IDs declared in the same issue.
+Every proof requirement, evidence statement, pass criterion, expected result,
+kill trigger, kill action, and kill decision time must contain at least one
+non-whitespace character.
 Objectively vague standalone values such as `TBD`, `robust`, `clean`, or
 `works well` fail validation. The narrow vocabulary is deliberately
 deterministic; the validator does not attempt probabilistic prose grading.

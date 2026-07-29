@@ -434,6 +434,34 @@ describe("structured definition of done v2", () => {
     );
   });
 
+  it("rejects empty or whitespace-only mandatory DoD statements deterministically", () => {
+    const manifest = structuredManifest();
+    const statements = [
+      ["proof_requirements", 0, "requirement"],
+      ["proof_requirements", 0, "evidence"],
+      ["pass_criteria", 0, "criterion"],
+      ["pass_criteria", 0, "expected_result"],
+      ["kill_criteria", 0, "trigger"],
+      ["kill_criteria", 0, "action"],
+      ["kill_criteria", 0, "decision_time"],
+    ];
+
+    statements.forEach(([collection, index, field], statementIndex) => {
+      manifest.issues[0].definition_of_done[collection][index][field] = statementIndex % 2 === 0 ? "" : " \t ";
+    });
+
+    const validation = validateManifest(manifest);
+    const vague = validation.errors.filter((error) => error.code === DEFECT_CODES.VAGUE_DOD_FIELD);
+
+    assert.equal(validation.ok, false);
+    assert.deepEqual(
+      vague.map((error) => error.path),
+      statements.map(
+        ([collection, index, field]) => `issues[0].definition_of_done.${collection}[${index}].${field}`,
+      ),
+    );
+  });
+
   it("rejects malformed budgets with a named defect", () => {
     const cases = [-1, 1.5, "two"];
 
