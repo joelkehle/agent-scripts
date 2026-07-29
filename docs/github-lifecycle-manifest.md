@@ -23,6 +23,7 @@ external write and lives outside this repository.
 |---|---|
 | Ratified `GHL-001`..`GHL-010` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v1.json` |
 | Generated JSON Schema | `docs/schemas/github-lifecycle-manifest.v1.schema.json` |
+| Structured DoD JSON Schema | `docs/schemas/github-lifecycle-manifest.v2.schema.json` |
 | Library | `lib/github-lifecycle/` |
 | CLI | `bin/ghl-manifest` |
 | Tests | `tests/github-lifecycle/spec-issue-manifest.test.js` |
@@ -35,6 +36,7 @@ ghl-manifest validate path/to/manifest.json --format json
 ghl-manifest render --issue GHL-003
 ghl-manifest receipt --actor codex-contributor --at 2026-07-27T00:00:00.000Z
 ghl-manifest schema
+ghl-manifest schema --schema-version v2
 ```
 
 Exit codes are `0` for a clean run, `1` for validation defects, and `2` for a
@@ -71,6 +73,27 @@ Each `issues[]` entry MUST carry the fields `GHL-REQ-01` requires:
 Optional: `summary`, `manager_project`, `external_dependencies`,
 `validation_notes`, `labels`. Unknown fields are rejected.
 
+## Schema `github-lifecycle-manifest.v2`
+
+Version 2 retains every v1 field and makes `issues[].definition_of_done`
+mandatory. Existing v1 manifests remain valid and render exactly as before;
+consumers select behavior from the manifest's `schema` value.
+
+The structured contract contains:
+
+| Field | Contract |
+|---|---|
+| `proof_requirements[]` | Stable `id`, gradeable `requirement`, and named `evidence` |
+| `pass_criteria[]` | Declared `proof_id`, criterion, and exact `expected_result` |
+| `budget` | Non-negative integer `max_review_rounds` and `max_continuation_attempts` |
+| `kill_criteria[]` | Measurable `trigger`, required `action`, and `decision_time` |
+| `finding_policy` | Fixed `fix`/`defer`/`escalate` classifications and `accept_or_defer` at budget |
+
+Pass criteria may reference only proof IDs declared in the same issue.
+Objectively vague standalone values such as `TBD`, `robust`, `clean`, or
+`works well` fail validation. The narrow vocabulary is deliberately
+deterministic; the validator does not attempt probabilistic prose grading.
+
 `write_class` is the highest external-write class the issue's own execution is
 authorized to reach, using the `read`/`propose`/`write` vocabulary from
 `AGENTS.MD`. In the ratified batch, `GHL-001` through `GHL-009` are `propose`
@@ -103,6 +126,9 @@ Defect codes:
 | `unknown_dependency` | A dependency on an undeclared issue |
 | `self_dependency` | An issue depends on itself |
 | `dependency_cycle` | A cycle in `depends_on`, reported once per cycle |
+| `vague_dod_field` | A mandatory DoD statement is a named vague placeholder |
+| `malformed_dod_budget` | A DoD budget is not a non-negative integer contract |
+| `unknown_dod_proof` | A pass criterion references an undeclared proof ID |
 
 The JSON Schema is generated from the same field tables the validator uses, so
 the two cannot drift; a test asserts the checked-in file matches. JSON Schema
@@ -123,6 +149,12 @@ that lets a downstream adapter find and upsert its issue without duplicating it:
 `payload_sha256` covers the canonical issue entry only, so editing one issue
 does not churn the other bodies. An omitted optional list and an empty one hash
 alike.
+
+For v2, the rendered issue body includes every DoD field and the render payload
+also exposes the unchanged `definition_of_done` object. Validation receipts
+carry the same per-issue objects under `subject.definition_of_done`. Both are
+sealed or hashed through canonical JSON, so key order and formatting cannot
+produce byte drift.
 
 `tests/github-lifecycle/fixtures/ghl-003.expected.md` is the byte-stability
 anchor. An intended manifest edit that changes `GHL-003` regenerates it with:

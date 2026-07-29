@@ -33,13 +33,14 @@ Options:
   --issue ID           Render one issue instead of the whole batch
   --actor NAME         Receipt validator identity (default: $USER)
   --at TIMESTAMP       Receipt timestamp (default: current time)
+  --schema-version v1|v2  Schema contract to print (default: v1)
 
 Exit codes: 0 ok, 1 validation defects, 2 usage or input error.
 Default manifest: ${path.relative(process.cwd(), DEFAULT_MANIFEST)}`);
 }
 
 function parseArgs(argv) {
-  const out = { format: null, issue: null, actor: null, at: null, manifest: null, help: false };
+  const out = { format: null, issue: null, actor: null, at: null, schemaVersion: null, manifest: null, help: false };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -78,6 +79,9 @@ function parseArgs(argv) {
         break;
       case "at":
         out.at = value;
+        break;
+      case "schema-version":
+        out.schemaVersion = value;
         break;
       default:
         throw new Error(`unknown argument: ${arg}`);
@@ -187,7 +191,8 @@ function main() {
   }
 
   if (command === "schema") {
-    printJson(buildJsonSchema());
+    const schema = args.schemaVersion ? `github-lifecycle-manifest.${args.schemaVersion}` : undefined;
+    printJson(buildJsonSchema(schema));
     return 0;
   }
 
@@ -206,9 +211,13 @@ function main() {
   }
 }
 
-try {
-  process.exitCode = main();
-} catch (error) {
-  console.error(`${TOOL}: ${error.message}`);
-  process.exitCode = 2;
+if (require.main === module) {
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    console.error(`${TOOL}: ${error.message}`);
+    process.exitCode = 2;
+  }
 }
+
+module.exports = { main, parseArgs };

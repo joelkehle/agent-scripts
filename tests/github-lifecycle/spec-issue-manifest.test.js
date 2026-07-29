@@ -2,8 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 const { after, describe, it } = require("node:test");
+const { main: runCliMain } = require("../../bin/ghl-manifest");
 
 const {
   DEFECT_CODES,
@@ -20,6 +20,7 @@ const {
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const MANIFEST_PATH = path.join(REPO_ROOT, "docs", "github-lifecycle", "jk-spec-ghlife-001.v1.json");
 const SCHEMA_PATH = path.join(REPO_ROOT, "docs", "schemas", "github-lifecycle-manifest.v1.schema.json");
+const SCHEMA_V2_PATH = path.join(REPO_ROOT, "docs", "schemas", "github-lifecycle-manifest.v2.schema.json");
 const GOLDEN_PATH = path.join(__dirname, "fixtures", "ghl-003.expected.md");
 const CLI = path.join(REPO_ROOT, "bin", "ghl-manifest");
 const FIXED_TIMESTAMP = "2026-07-27T00:00:00.000Z";
@@ -78,6 +79,44 @@ function minimalManifest() {
   };
 }
 
+function structuredManifest() {
+  const manifest = minimalManifest();
+  manifest.schema = "github-lifecycle-manifest.v2";
+  for (const issue of manifest.issues) {
+    issue.definition_of_done = {
+      proof_requirements: [
+        {
+          id: "PROOF-01",
+          requirement: `Validate ${issue.issue_id} with the repository gate.`,
+          evidence: "An exact-command test result anchored to the candidate commit.",
+        },
+      ],
+      pass_criteria: [
+        {
+          proof_id: "PROOF-01",
+          criterion: "The repository gate exits successfully.",
+          expected_result: "Exit status 0 with no reported test failures.",
+        },
+      ],
+      budget: { max_review_rounds: 2, max_continuation_attempts: 3 },
+      kill_criteria: [
+        {
+          trigger: "A required change leaves the declared repository scope.",
+          action: "Stop implementation and escalate the contract gap.",
+          decision_time: "Before making the out-of-scope edit.",
+        },
+      ],
+      finding_policy: {
+        within_dod: "fix",
+        beyond_dod: "defer",
+        contract_gap: "escalate",
+        at_budget: "accept_or_defer",
+      },
+    };
+  }
+  return manifest;
+}
+
 function writeTempManifest(manifest) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ghl-manifest-"));
   tempDirs.push(dir);
@@ -88,11 +127,25 @@ function writeTempManifest(manifest) {
 }
 
 function runCli(args) {
+  const originalArgv = process.argv;
+  const stdout = [];
+  const stderr = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+
   try {
-    const stdout = execFileSync(process.execPath, [CLI, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    return { status: 0, stdout };
+    process.argv = [process.execPath, CLI, ...args];
+    console.log = (...values) => stdout.push(values.join(" "));
+    console.error = (...values) => stderr.push(values.join(" "));
+    const status = runCliMain();
+    return { status, stdout: `${stdout.join("\n")}\n`, stderr: `${stderr.join("\n")}\n` };
   } catch (error) {
-    return { status: error.status, stdout: error.stdout || "", stderr: error.stderr || "" };
+    stderr.push(`ghl-manifest: ${error.message}`);
+    return { status: 2, stdout: `${stdout.join("\n")}\n`, stderr: `${stderr.join("\n")}\n` };
+  } finally {
+    process.argv = originalArgv;
+    console.log = originalLog;
+    console.error = originalError;
   }
 }
 
@@ -315,7 +368,7 @@ describe("defect detection", () => {
 
   it("rejects a manifest written against another schema version", () => {
     const manifest = minimalManifest();
-    manifest.schema = "github-lifecycle-manifest.v2";
+    manifest.schema = "github-lifecycle-manifest.v3";
 
     assert.ok(defectCodes(manifest).includes(DEFECT_CODES.SCHEMA_MISMATCH));
   });
@@ -326,6 +379,87 @@ describe("defect detection", () => {
     delete manifest.issues[1].validation_commands;
 
     assert.deepEqual(validateManifest(manifest).errors, validateManifest(manifest).errors);
+  });
+});
+
+describe("structured definition of done v2", () => {
+  it("validates a complete machine-gradeable contract", () => {
+    const validation = validateManifest(structuredManifest());
+
+    assert.equal(validation.ok, true);
+    assert.equal(validation.manifest_schema, "github-lifecycle-manifest.v2");
+  });
+
+  it("keeps a valid v1 fixture compatible without a DoD contract", () => {
+    const manifest = minimalManifest();
+
+    assert.equal(validateManifest(manifest).ok, true);
+    assert.equal(renderManifest(manifest).issues[0].definition_of_done, undefined);
+  });
+
+  it("names every missing mandatory DoD field deterministically", () => {
+    const mandatory = ["proof_requirements", "pass_criteria", "budget", "kill_criteria", "finding_policy"];
+
+    for (const field of mandatory) {
+      const manifest = structuredManifest();
+      delete manifest.issues[0].definition_of_done[field];
+      const errors = validateManifest(manifest).errors;
+
+      assert.ok(
+        errors.some(
+          (error) =>
+            error.code === DEFECT_CODES.MISSING_FIELD &&
+            error.path === `issues[0].definition_of_done.${field}`,
+        ),
+        `missing ${field} was not reported`,
+      );
+    }
+  });
+
+  it("rejects vague proof, pass, and kill criteria with a named defect", () => {
+    const manifest = structuredManifest();
+    manifest.issues[0].definition_of_done.proof_requirements[0].evidence = "TBD";
+    manifest.issues[0].definition_of_done.pass_criteria[0].expected_result = "works well";
+    manifest.issues[0].definition_of_done.kill_criteria[0].trigger = "as needed";
+
+    const vague = validateManifest(manifest).errors.filter((error) => error.code === DEFECT_CODES.VAGUE_DOD_FIELD);
+
+    assert.deepEqual(
+      vague.map((error) => error.path),
+      [
+        "issues[0].definition_of_done.proof_requirements[0].evidence",
+        "issues[0].definition_of_done.pass_criteria[0].expected_result",
+        "issues[0].definition_of_done.kill_criteria[0].trigger",
+      ],
+    );
+  });
+
+  it("rejects malformed budgets with a named defect", () => {
+    const cases = [-1, 1.5, "two"];
+
+    for (const value of cases) {
+      const manifest = structuredManifest();
+      manifest.issues[0].definition_of_done.budget.max_review_rounds = value;
+      const errors = validateManifest(manifest).errors;
+
+      assert.ok(errors.some((error) => error.code === DEFECT_CODES.MALFORMED_DOD_BUDGET), String(value));
+    }
+  });
+
+  it("projects the identical DoD contract into rendering and receipts", () => {
+    const manifest = structuredManifest();
+    const rendered = renderManifest(manifest);
+    const receipt = buildValidationReceipt({
+      manifest,
+      validation: validateManifest(manifest),
+      actor: "codex-contributor",
+      timestamp: FIXED_TIMESTAMP,
+    });
+
+    assert.deepEqual(rendered.issues[0].definition_of_done, manifest.issues[0].definition_of_done);
+    assert.deepEqual(receipt.subject.definition_of_done[0].contract, manifest.issues[0].definition_of_done);
+    assert.deepEqual(renderManifest(manifest), rendered);
+    assert.ok(verifyReceipt(receipt));
   });
 });
 
@@ -510,6 +644,13 @@ describe("published schema", () => {
   it("matches the generated schema", () => {
     assert.deepEqual(JSON.parse(fs.readFileSync(SCHEMA_PATH, "utf8")), buildJsonSchema());
   });
+
+  it("matches the generated v2 schema", () => {
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(SCHEMA_V2_PATH, "utf8")),
+      buildJsonSchema("github-lifecycle-manifest.v2"),
+    );
+  });
 });
 
 describe("ghl-manifest CLI", () => {
@@ -558,5 +699,12 @@ describe("ghl-manifest CLI", () => {
 
     assert.equal(result.status, 2);
     assert.match(result.stderr, /cannot read manifest/);
+  });
+
+  it("prints the versioned v2 schema", () => {
+    const result = runCli(["schema", "--schema-version", "v2"]);
+
+    assert.equal(result.status, 0);
+    assert.equal(JSON.parse(result.stdout).properties.schema.const, "github-lifecycle-manifest.v2");
   });
 });
