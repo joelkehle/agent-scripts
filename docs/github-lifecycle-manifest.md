@@ -83,19 +83,30 @@ The structured contract contains:
 
 | Field | Contract |
 |---|---|
+| `class` | `full` or `lightweight` |
 | `proof_requirements[]` | Stable `id`, gradeable `requirement`, and named `evidence` |
 | `pass_criteria[]` | Declared `proof_id`, criterion, and exact `expected_result` |
-| `budget` | Non-negative integer `max_review_rounds` and `max_continuation_attempts` |
-| `kill_criteria[]` | Measurable `trigger`, required `action`, and `decision_time` |
+| `non_goals` | Exact copy of the issue exclusions, preventing contract drift |
+| `budget` | Positive `max_review_rounds` and non-negative `max_continuation_attempts` |
+| `kill_criteria[]` | Measurable `trigger`, required `action`, and `decide_by` deadline |
+| `defer_policy` | Named follow-up destination and explicit maintainer promotion rule |
+| `ratification` | Actor `joelkehle`; evidence must be an attributed GitHub comment |
 | `finding_policy` | Fixed `fix`/`defer`/`escalate` classifications and `accept_or_defer` at budget |
 
 Pass criteria may reference only proof IDs declared in the same issue.
 Every proof requirement, evidence statement, pass criterion, expected result,
-kill trigger, kill action, and kill decision time must contain at least one
+non-goal, kill trigger, kill action, kill deadline, defer destination, and
+promotion rule must contain at least one
 non-whitespace character.
 Objectively vague standalone values such as `TBD`, `robust`, `clean`, or
 `works well` fail validation. The narrow vocabulary is deliberately
 deterministic; the validator does not attempt probabilistic prose grading.
+
+Rendering remains proposal-only. A v2 issue is not ratified merely because the
+renderer marker is present. Before claim, the coordinator recomputes the
+marker payload from the exact GitHub title and body and requires a comment
+authored by `joelkehle` carrying a matching
+`ratified-definition-of-done.v1` marker.
 
 `write_class` is the highest external-write class the issue's own execution is
 authorized to reach, using the `read`/`propose`/`write` vocabulary from

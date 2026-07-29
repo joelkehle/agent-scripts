@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -84,6 +85,7 @@ function structuredManifest() {
   manifest.schema = "github-lifecycle-manifest.v2";
   for (const issue of manifest.issues) {
     issue.definition_of_done = {
+      class: "full",
       proof_requirements: [
         {
           id: "PROOF-01",
@@ -98,14 +100,23 @@ function structuredManifest() {
           expected_result: "Exit status 0 with no reported test failures.",
         },
       ],
+      non_goals: [...issue.non_goals],
       budget: { max_review_rounds: 2, max_continuation_attempts: 3 },
       kill_criteria: [
         {
           trigger: "A required change leaves the declared repository scope.",
           action: "Stop implementation and escalate the contract gap.",
-          decision_time: "Before making the out-of-scope edit.",
+          decide_by: "Before making the out-of-scope edit.",
         },
       ],
+      defer_policy: {
+        destination: "A linked follow-up issue.",
+        promotion_rule: "Joel explicitly promotes the follow-up into a new ratified contract.",
+      },
+      ratification: {
+        actor: "joelkehle",
+        evidence: "github_comment",
+      },
       finding_policy: {
         within_dod: "fix",
         beyond_dod: "defer",
@@ -398,7 +409,17 @@ describe("structured definition of done v2", () => {
   });
 
   it("names every missing mandatory DoD field deterministically", () => {
-    const mandatory = ["proof_requirements", "pass_criteria", "budget", "kill_criteria", "finding_policy"];
+    const mandatory = [
+      "class",
+      "proof_requirements",
+      "pass_criteria",
+      "non_goals",
+      "budget",
+      "kill_criteria",
+      "defer_policy",
+      "ratification",
+      "finding_policy",
+    ];
 
     for (const field of mandatory) {
       const manifest = structuredManifest();
@@ -443,7 +464,7 @@ describe("structured definition of done v2", () => {
       ["pass_criteria", 0, "expected_result"],
       ["kill_criteria", 0, "trigger"],
       ["kill_criteria", 0, "action"],
-      ["kill_criteria", 0, "decision_time"],
+      ["kill_criteria", 0, "decide_by"],
     ];
 
     statements.forEach(([collection, index, field], statementIndex) => {
@@ -463,7 +484,7 @@ describe("structured definition of done v2", () => {
   });
 
   it("rejects malformed budgets with a named defect", () => {
-    const cases = [-1, 1.5, "two"];
+    const cases = [0, -1, 1.5, "two"];
 
     for (const value of cases) {
       const manifest = structuredManifest();
@@ -472,6 +493,28 @@ describe("structured definition of done v2", () => {
 
       assert.ok(errors.some((error) => error.code === DEFECT_CODES.MALFORMED_DOD_BUDGET), String(value));
     }
+  });
+
+  it("requires DoD non-goals and ratification policy to match the issue contract", () => {
+    const manifest = structuredManifest();
+    manifest.issues[0].definition_of_done.non_goals = ["A different exclusion."];
+    manifest.issues[1].definition_of_done.ratification.actor = "codex";
+    const errors = validateManifest(manifest).errors;
+
+    assert.ok(
+      errors.some(
+        (error) =>
+          error.code === DEFECT_CODES.DOD_NON_GOALS_MISMATCH &&
+          error.path === "issues[0].definition_of_done.non_goals",
+      ),
+    );
+    assert.ok(
+      errors.some(
+        (error) =>
+          error.code === DEFECT_CODES.INVALID_FIELD &&
+          error.path === "issues[1].definition_of_done.ratification.actor",
+      ),
+    );
   });
 
   it("rejects duplicate proof IDs with a named deterministic defect", () => {
@@ -508,6 +551,17 @@ describe("structured definition of done v2", () => {
     assert.deepEqual(receipt.subject.definition_of_done[0].contract, manifest.issues[0].definition_of_done);
     assert.deepEqual(renderManifest(manifest), rendered);
     assert.ok(verifyReceipt(receipt));
+    assert.match(rendered.issues[0].body, /Claiming requires a GitHub comment by that actor/);
+  });
+
+  it("binds the v2 payload hash to the exact rendered title and body", () => {
+    const rendered = renderManifest(structuredManifest()).issues[0];
+    const [marker, ...bodyParts] = rendered.body.split("\n\n");
+    const body = bodyParts.join("\n\n");
+    const expected = crypto.createHash("sha256").update(`${rendered.title}\n${body}`).digest("hex");
+
+    assert.match(marker, new RegExp(`payload_sha256=${expected}`));
+    assert.equal(rendered.payload_sha256, expected);
   });
 });
 
