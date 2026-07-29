@@ -446,6 +446,26 @@ describe("structured definition of done v2", () => {
     }
   });
 
+  it("rejects duplicate proof IDs with a named deterministic defect", () => {
+    const manifest = structuredManifest();
+    manifest.issues[0].definition_of_done.proof_requirements.push({
+      ...manifest.issues[0].definition_of_done.proof_requirements[0],
+    });
+
+    assert.deepEqual(
+      validateManifest(manifest).errors.filter(
+        (error) => error.code === DEFECT_CODES.DUPLICATE_DOD_PROOF_ID,
+      ),
+      [
+        {
+          code: DEFECT_CODES.DUPLICATE_DOD_PROOF_ID,
+          path: "issues[0].definition_of_done.proof_requirements[1].id",
+          message: "duplicates proof requirement PROOF-01",
+        },
+      ],
+    );
+  });
+
   it("projects the identical DoD contract into rendering and receipts", () => {
     const manifest = structuredManifest();
     const rendered = renderManifest(manifest);

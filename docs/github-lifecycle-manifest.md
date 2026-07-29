@@ -128,6 +128,7 @@ Defect codes:
 | `dependency_cycle` | A cycle in `depends_on`, reported once per cycle |
 | `vague_dod_field` | A mandatory DoD statement is a named vague placeholder |
 | `malformed_dod_budget` | A DoD budget is not a non-negative integer contract |
+| `duplicate_dod_proof_id` | The same DoD proof ID is declared more than once in an issue |
 | `unknown_dod_proof` | A pass criterion references an undeclared proof ID |
 
 The JSON Schema is generated from the same field tables the validator uses, so
