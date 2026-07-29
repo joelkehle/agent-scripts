@@ -42,15 +42,28 @@ Default coding work is local `write` inside the current repo. External `write` a
 
 ## Loop Contract
 
+Before non-trivial write or review work, establish a measurable definition of
+done. A direct user request that already states the outcome, proof, scope, and
+stop rule may ratify it; do not add redundant approval ceremony. Otherwise
+draft the contract and stop for ratification. See `docs/measurable-done.md`.
+
 Every loop must define:
 
 - Trigger: user task, failing test, PR feedback, stale docs, scheduled check, or explicit skill call.
 - Context: nearest `AGENTS.md`, relevant docs with `read_when`, source files, tests, issue/PR context, and live bus discovery when agentic capability is involved.
 - Allowed actions: read, propose, write, or destructive write.
+- Definition of done: gradeable acceptance evidence, explicit non-goals, kill
+  criteria, budget, defer policy, and ratification evidence.
 - Feedback: exact commands or runtime probes that prove or disprove progress.
 - Repair limit: default three focused attempts on the same failure.
 - Stop rule: validation passes, scope expands, risky system change is required, product behavior is unclear, or the repair limit is hit.
 - Receipt: changed files, checks run, failures repaired, unresolved risks, and proof-pack URL when needed.
+
+During review and repair, classify new findings as within the definition of
+done, beyond it, or evidence of a contract gap. Beyond-contract findings
+default to deferred. A P1 blocks retaining the affected behavior, but the
+maintainer may fix it, remove the capability, narrow the guarantee, or stop the
+release; severity does not silently authorize unbounded repair.
 
 ## Commit Defaults
 

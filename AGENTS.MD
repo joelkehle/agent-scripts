@@ -57,6 +57,8 @@ conditional docs, skills, hooks, or live discovery:
   `docs/instruction-architecture.md`.
 - Coding loops: `docs/loop-operating-model.md` and the `ship-loop`,
   `review-loop`, `repair-loop`, `learn-loop`, and `hygiene-loop` skills.
+- Measurable definitions of done and loop stop rules:
+  `docs/measurable-done.md`.
 - Contributor coordination, spec-to-issue parsing, assignment, PR adjudication,
   and nudges: `docs/contributor-operating-protocol.md`; durable maintainer
   rulings: `docs/maintainer-charter.md`.
