@@ -54,9 +54,12 @@ Before non-trivial write work begins, establish a ratified contract containing:
    direct request that already states a clear contract counts; do not add a
    redundant approval ceremony.
 
-A lightweight, reversible task may use an inline contract: outcome, proof,
-non-goal, and stop rule. "Robust," "clean," and "works well" are not
-self-grading criteria.
+A lightweight task must be reversible, single-repository, and have no schema,
+auth, credential, deployment, migration, new dependency, reachable-service, or
+destructive external-write impact. Its inline contract still needs the
+outcome, exact proof and passing result, explicit non-goal, stop rule,
+one-round review cap, standing defer policy, and Joel-attributable ratification
+evidence. "Robust," "clean," and "works well" are not self-grading criteria.
 
 ## Rules During Work
 
