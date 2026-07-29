@@ -1,0 +1,45 @@
+[
+  {
+    "name": "full task without a contract stops",
+    "task": {
+      "reversible": true,
+      "repositories": 1,
+      "schema": true,
+      "auth": false,
+      "credential": false,
+      "deployment": false,
+      "migration": false,
+      "new_dependency": false,
+      "reachable_service": false,
+      "destructive_external_write": false
+    },
+    "contract": null,
+    "expected_action": "draft_and_stop"
+  },
+  {
+    "name": "complete lightweight request proceeds",
+    "task": {
+      "reversible": true,
+      "repositories": 1,
+      "schema": false,
+      "auth": false,
+      "credential": false,
+      "deployment": false,
+      "migration": false,
+      "new_dependency": false,
+      "reachable_service": false,
+      "destructive_external_write": false
+    },
+    "contract": {
+      "outcome": "Correct one misspelled heading in the current repository.",
+      "proof": "rg -n 'Definition of done' docs/measurable-done.md",
+      "pass_condition": "The corrected heading appears exactly once.",
+      "non_goal": "No prose rewrite.",
+      "stop_rule": "Stop after the targeted check and one review pass.",
+      "max_review_rounds": 1,
+      "defer_policy": "Record unrelated findings for later maintainer triage.",
+      "ratification_evidence": "Joel's complete direct request."
+    },
+    "expected_action": "proceed"
+  }
+]

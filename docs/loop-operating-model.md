@@ -47,6 +47,15 @@ done. A direct user request that already states the outcome, proof, scope, and
 stop rule may ratify it; do not add redundant approval ceremony. Otherwise
 draft the contract and stop for ratification. See `docs/measurable-done.md`.
 
+The lightweight inline path is narrow: the task must be reversible,
+single-repository, and free of schema, auth, credential, deployment, migration,
+new-dependency, reachable-service, and destructive external-write impact. Joel
+must already have supplied the outcome, exact proof and passing result,
+explicit non-goal, stop rule, one-round review cap, and standing defer policy.
+Record his request as ratification evidence. If any condition is absent, use
+the full contract and stop before non-trivial write or review work until Joel
+ratifies it.
+
 Every loop must define:
 
 - Trigger: user task, failing test, PR feedback, stale docs, scheduled check, or explicit skill call.
