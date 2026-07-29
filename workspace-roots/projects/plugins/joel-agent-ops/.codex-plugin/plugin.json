@@ -1,0 +1,28 @@
+{
+  "id": "joel-agent-ops",
+  "name": "joel-agent-ops",
+  "version": "0.1.0",
+  "description": "Shared coding-agent operating skills for Joel's workspace, packaged for Codex and Claude Code.",
+  "author": {
+    "name": "Joel Kehle",
+    "email": "joel@kehle.com"
+  },
+  "skills": "./skills/",
+  "repository": "https://github.com/joelkehle/agent-scripts",
+  "keywords": [
+    "codex",
+    "claude-code",
+    "agent-operations"
+  ],
+  "interface": {
+    "displayName": "Joel Agent Ops",
+    "shortDescription": "Shared Codex and Claude Code operating skills.",
+    "longDescription": "Joel Agent Ops packages the tracked workspace operating skills without moving their canonical source.",
+    "developerName": "Joel Kehle",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills"
+    ],
+    "defaultPrompt": "Use the appropriate Joel Agent Ops skill for this task."
+  }
+}

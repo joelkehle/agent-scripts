@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Walkthrough"
+  short_description: "Run fast Studio iterations and clean acceptance reviews"
+  default_prompt: "Use $design-walkthrough, choose Studio or Acceptance explicitly, and use the fastest reliable model for each role."

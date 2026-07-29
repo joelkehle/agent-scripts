@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source_rel="workspace-roots/projects/.agents/skills"
+source_root="$repo_root/$source_rel"
+destination="$repo_root/workspace-roots/projects/plugins/joel-agent-ops/skills"
+stage="$(mktemp -d "${TMPDIR:-/tmp}/joel-agent-ops-skills.XXXXXX")"
+
+cleanup() {
+  if [ -e "$stage" ]; then
+    "$repo_root/bin/trash" "$stage" >/dev/null
+  fi
+}
+trap cleanup EXIT
+
+skills=(
+  design-walkthrough
+  feature-elicitation
+  hygiene-loop
+  learn-loop
+  oracle
+  repair-loop
+  review-loop
+  ship-loop
+)
+
+file_count=0
+for skill in "${skills[@]}"; do
+  [ -f "$source_root/$skill/SKILL.md" ] || {
+    printf 'sync-plugin-skills: missing canonical skill: %s\n' "$skill" >&2
+    exit 1
+  }
+  skill_file_count=0
+  while IFS= read -r -d '' tracked_file; do
+    relative="${tracked_file#"$source_rel/"}"
+    target="$stage/$relative"
+    mkdir -p "$(dirname "$target")"
+    cp "$repo_root/$tracked_file" "$target"
+    skill_file_count=$((skill_file_count + 1))
+    file_count=$((file_count + 1))
+  done < <(git -C "$repo_root" ls-files -z -- "$source_rel/$skill")
+  [ "$skill_file_count" -gt 0 ] || {
+    printf 'sync-plugin-skills: no tracked files for skill: %s\n' "$skill" >&2
+    exit 1
+  }
+done
+
+chmod 755 "$stage"
+if [ -e "$destination" ] || [ -L "$destination" ]; then
+  "$repo_root/bin/trash" "$destination" >/dev/null
+fi
+mkdir -p "$(dirname "$destination")"
+mv "$stage" "$destination"
+trap - EXIT
+
+printf 'sync-plugin-skills: synced %s tracked files across %s canonical skills\n' \
+  "$file_count" "${#skills[@]}"

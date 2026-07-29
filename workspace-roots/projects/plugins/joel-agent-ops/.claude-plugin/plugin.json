@@ -1,0 +1,9 @@
+{
+  "name": "joel-agent-ops",
+  "version": "0.1.0",
+  "description": "Shared coding-agent operating skills for Joel's workspace, packaged for Codex and Claude Code.",
+  "author": {
+    "name": "Joel Kehle",
+    "email": "joel@kehle.com"
+  }
+}

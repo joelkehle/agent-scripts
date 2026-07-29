@@ -1,0 +1,20 @@
+{
+  "name": "joel-agent-ops",
+  "interface": {
+    "displayName": "Joel Agent Ops"
+  },
+  "plugins": [
+    {
+      "name": "joel-agent-ops",
+      "source": {
+        "source": "local",
+        "path": "./plugins/joel-agent-ops"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "productivity"
+    }
+  ]
+}

@@ -85,6 +85,8 @@ for stale in \
   reject_text "$workspace_agents" "$stale"
 done
 
+bash "$repo_root/tests/plugin-marketplace.sh"
+
 printf 'instruction-architecture: ok global=%s workspace=%s\n' \
   "$(wc -c < "$global_agents" | tr -d ' ')" \
   "$(wc -c < "$workspace_agents" | tr -d ' ')"

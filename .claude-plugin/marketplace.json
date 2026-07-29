@@ -1,0 +1,22 @@
+{
+  "name": "joel-agent-ops",
+  "owner": {
+    "name": "Joel Kehle",
+    "email": "joel@kehle.com"
+  },
+  "metadata": {
+    "description": "Dual-runtime operating skills for Joel's coding agents."
+  },
+  "plugins": [
+    {
+      "name": "joel-agent-ops",
+      "source": "./workspace-roots/projects/plugins/joel-agent-ops",
+      "description": "Shared operating skills for Codex and Claude Code.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Joel Kehle",
+        "email": "joel@kehle.com"
+      }
+    }
+  ]
+}

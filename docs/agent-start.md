@@ -33,6 +33,28 @@ The packet includes:
 
 Use `--skip-bus` only when bus probing is unrelated or temporarily noisy. The normal startup path should keep bus visibility because many Joel workflows should reuse existing Pinakes agents before new local code.
 
+## Named Codex Threads
+
+Codex 0.146 can name new threads. Keep WWI as the work authority and use the
+loop slug as the human-readable thread name when it is unique:
+
+```text
+/rename <wwi-loop-slug>
+/new <child-mission-slug>
+/clear <child-mission-slug>
+```
+
+`/rename` labels the current thread. `/new <name>` and `/clear <name>` start a
+fresh named thread. Pin active threads in the Codex app; archive only after the
+loop receipt is complete. Do not bulk rename or archive historical threads.
+
+Names improve browsing, but UUIDs remain the unambiguous recovery key. For an
+operational restart or duplicate name, use:
+
+```bash
+yolo resume -C <cwd> <session-id>
+```
+
 ## Launcher Notice
 
 `agent-start --notice` is for Codex/Claude launch wrappers. It reads the latest
