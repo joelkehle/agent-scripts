@@ -357,7 +357,7 @@ cat > "$workbench_summary" <<'JSON'
   }
 }
 JSON
-notice_clean="$(agent-start --notice --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
+notice_clean="$(agent-start --notice --mode read --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
 [ "$notice_clean" = "" ] || fail "clean notice should be quiet, got: $notice_clean"
 
 cat > "$workbench_summary" <<'JSON'
@@ -379,11 +379,11 @@ cat > "$workbench_summary" <<'JSON'
   }
 }
 JSON
-notice_warn="$(agent-start --notice --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
+notice_warn="$(agent-start --notice --mode read --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
 assert_contains "$notice_warn" "Agent workbench warning: 2 issues"
 assert_contains "$notice_warn" "- missing tool: codex"
 assert_contains "$notice_warn" "Proof: http://example.test/workbench/latest/"
-notice_missing="$(agent-start --notice --workbench-summary "$tmp/missing-workbench.json" --workbench-url http://fallback.test/latest/)"
+notice_missing="$(agent-start --notice --mode read --workbench-summary "$tmp/missing-workbench.json" --workbench-url http://fallback.test/latest/)"
 assert_contains "$notice_missing" "Agent workbench warning: workbench summary unavailable"
 assert_contains "$notice_missing" "Proof: http://fallback.test/latest/"
 

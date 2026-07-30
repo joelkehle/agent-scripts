@@ -198,8 +198,10 @@ assert_contains "$wrong_credential_output" "Git selected a credential other than
 [ ! -e "$tmp/wrong-credential-target" ] || fail "target ran after Git credential mismatch"
 
 install_dir="$tmp/install"
-"$repo_root/bin/agent-env-install" --prefix "$install_dir" >/dev/null
+CLAUDE_AGENTS_DIR="$tmp/claude-agents" \
+  "$repo_root/bin/agent-env-install" --prefix "$install_dir" >/dev/null
 [ -L "$install_dir/contributor-agent" ] || fail "installer omitted contributor-agent"
+[ -L "$tmp/claude-agents/grunt.md" ] || fail "installer omitted isolated Claude agent definitions"
 [ "$(readlink "$install_dir/contributor-agent")" = "$wrapper" ] ||
   fail "installer linked contributor-agent to the wrong source"
 

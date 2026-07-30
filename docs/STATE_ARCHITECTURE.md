@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.24 (2026-07-28)
+Version: 1.25 (2026-07-30)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -56,6 +56,23 @@ projection.
    logs subject to retention, not state anyone reads back for truth.
 
 ## Ownership Rulings
+
+- **weekly focus and local workspace-run state (added 2026-07-30):**
+  `/mnt/synology-share1/AgentCoord/registry/weekly-focus.yaml` owns current
+  weekly priority/attention metadata: week ending, declared goals, definitions
+  of done, required milestones, fallbacks, non-goals, and optional opaque
+  mission/initiative/campaign references. It is above the supervised execution
+  hierarchy and owns no execution status, descendants, budgets, evidence,
+  dispatch, planning, or scheduling. Manager's supervised coding control plane
+  remains authoritative for mission, initiative, and campaign truth.
+
+  `~/.local/state/agent-workspaces/` (override:
+  `AGENT_WORKSPACE_STATE_ROOT`) holds disposable atomic local coordination
+  manifests for coding-process entrance, PID/start-token ownership, exit,
+  abandonment, and quarantine observations. Git owns source and commits;
+  AgentCoord claims own cross-host writer hints. Losing these manifests loses
+  local collision/reconciliation context but no work noun, source, commit, or
+  supervised execution truth. Only `agent-workspace` writes this directory.
 
 - **csub delegation logs and receipts (added 2026-07-28):**
   `~/.local/state/csub/` (override: `CSUB_LOG_DIR`) is owned by the `csub`
@@ -348,6 +365,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.25 (2026-07-30): register weekly focus as priority metadata above the
+  existing mission/initiative/campaign hierarchy and local workspace manifests
+  as disposable launch/reconciliation coordination state.
 - 1.24 (2026-07-28): csub receipts gain the authoritative outcome field
   (completed/timeout/signaled/failed); tokens:null means no parseable usage
   reported; pre-2026-07-28 rows lack outcome and read as legacy/unknown.

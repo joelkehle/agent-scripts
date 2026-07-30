@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+"use strict";
+
+const path = require("node:path");
+const {
+  DEFAULT_AGENTCOORD_ROOT,
+  DEFAULT_QUARANTINE_ROOT,
+  DEFAULT_STATE_ROOT,
+  preflightWorkspace,
+  publicPreflight,
+} = require("../lib/workspace-preflight");
+
+function usage() {
+  console.log(`Usage: workspace-preflight --root DIR --mode read|write [--json]
+       [--agentcoord-root DIR] [--quarantine-root DIR] [--state-root DIR]
+
+Read-only repository/workspace diagnosis. It never changes remotes or checkouts.`);
+}
+
+function parseArgs(argv) {
+  const args = {
+    root: "",
+    mode: "",
+    json: false,
+    help: false,
+    agentcoordRoot: DEFAULT_AGENTCOORD_ROOT,
+    quarantineRoot: DEFAULT_QUARANTINE_ROOT,
+    stateRoot: DEFAULT_STATE_ROOT,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--help" || arg === "-h") args.help = true;
+    else if (arg === "--json") args.json = true;
+    else if (arg === "--root") args.root = argv[++index];
+    else if (arg === "--mode") args.mode = argv[++index];
+    else if (arg === "--agentcoord-root") args.agentcoordRoot = argv[++index];
+    else if (arg === "--quarantine-root") args.quarantineRoot = argv[++index];
+    else if (arg === "--state-root") args.stateRoot = argv[++index];
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  if (!args.root) throw new Error("--root is required");
+  if (!["read", "write"].includes(args.mode)) throw new Error("--mode must be read or write");
+  args.root = path.resolve(args.root);
+  return args;
+}
+
+function render(result) {
+  const lines = [
+    `workspace-preflight: ${result.ok ? "PASS" : "REFUSE"} mode=${result.mode}`,
+    `root: ${result.repository_root}`,
+    `canonical remote: ${result.canonical_remote || "(unavailable)"}`,
+    `branch: ${result.branch || "(detached)"} head=${result.starting_head || "(unavailable)"}`,
+  ];
+  if (result.tracking_branch) {
+    const divergence = result.divergence
+      ? `ahead=${result.divergence.ahead} behind=${result.divergence.behind}`
+      : "ambiguous";
+    lines.push(`tracking: ${result.tracking_branch} ${divergence}`);
+  }
+  for (const item of result.issues) lines.push(`- ${item.code}: ${item.message}`);
+  return `${lines.join("\n")}\n`;
+}
+
+try {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    process.exit(0);
+  }
+  const result = publicPreflight(preflightWorkspace(args.root, args.mode, args));
+  if (args.json) console.log(JSON.stringify(result, null, 2));
+  else process.stdout.write(render(result));
+  process.exit(result.ok ? 0 : 1);
+} catch (error) {
+  console.error(`workspace-preflight: ${error.message}`);
+  usage();
+  process.exit(2);
+}

@@ -17,10 +17,17 @@ agent-start
 agent-start --json
 agent-start --notice
 agent-start --root ~/Projects/shared/agent-scripts
+agent-start --root . --goal W31-EXAMPLE
+agent-start --root . --mode read
 ```
 
 The packet includes:
 
+- active weekly goals, definitions of done, required milestones, and optional
+  mission/initiative/campaign bindings;
+- the actual `origin` URL and `workspace-preflight` result for `read` or
+  `write` mode;
+- active and quarantined local workspace-run manifests;
 - command availability for the core agent workbench tools;
 - `wwi` open loops;
 - `machine-compliance --agent-startup --format text`;
@@ -58,7 +65,8 @@ yolo resume -C <cwd> <session-id>
 ## Launcher Notice
 
 `agent-start --notice` is for Codex/Claude launch wrappers. It reads the latest
-workbench summary. Clean state is silent.
+workbench summary and runs the local weekly-focus/workspace safety collection.
+Clean state is silent.
 
 When the workbench requests attention, notice mode prints:
 
@@ -70,7 +78,11 @@ Proof: http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/lat
 ```
 
 Notice mode does not run the full startup packet. It is intentionally cheap and
-safe to call before handing control to `codex` or `claude`.
+safe to call before handing control to `codex` or `claude`. It defaults to
+`--mode write`; use `--mode read` for a deliberately read-only launch.
+
+See `docs/launch-safety.md` for focus validation, repository authority,
+preflight refusal reasons, and atomic begin/seal/reconcile manifests.
 
 The default workbench summary is:
 

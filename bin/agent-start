@@ -4,14 +4,29 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { relevantRunStates } = require("../lib/agent-workspace");
+const {
+  DEFAULT_FOCUS_FILE,
+  loadFocus,
+  resolveGoal,
+} = require("../lib/weekly-focus");
+const {
+  DEFAULT_AGENTCOORD_ROOT: PREFLIGHT_AGENTCOORD_ROOT,
+  DEFAULT_QUARANTINE_ROOT,
+  DEFAULT_STATE_ROOT,
+  preflightWorkspace,
+  publicPreflight,
+} = require("../lib/workspace-preflight");
 
 const DEFAULT_AGENTCOORD_ROOT = process.env.AGENTCOORD_ROOT || "/mnt/synology-share1/AgentCoord";
 const DEFAULT_WORKBENCH_SUMMARY = process.env.AGENT_WORKBENCH_SUMMARY || "/home/joelkehle/Projects/shared/dev-dashboard/codex-output/agentic-software-ops/agent-workbench/latest/summary.json";
 const DEFAULT_WORKBENCH_URL = process.env.AGENT_WORKBENCH_URL || "http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/latest/";
-const REQUIRED_TOOLS = ["agent-start", "agentcoord", "machine-compliance", "committer", "docs-list", "bus-discover", "wwi", "claude", "codex", "agent-check"];
+const REQUIRED_TOOLS = ["agent-start", "agent-focus", "workspace-preflight", "agent-workspace", "agentcoord", "machine-compliance", "committer", "docs-list", "bus-discover", "wwi", "claude", "codex", "agent-check"];
 
 function usage() {
-  console.log(`Usage: agent-start [--root DIR] [--json] [--notice] [--card PATH] [--skip-bus|--no-bus] [--timeout MS]
+  console.log(`Usage: agent-start [--root DIR] [--mode read|write] [--goal GOAL_ID]
+                   [--focus-file PATH] [--json] [--notice] [--card PATH]
+                   [--skip-bus|--no-bus] [--timeout MS]
                    [--workbench-summary PATH] [--workbench-url URL]
 
 Prints a coding-agent launch packet: WWI, compliance, bus discovery, AgentCoord,
@@ -33,6 +48,12 @@ function parseArgs(argv) {
     workbenchSummary: DEFAULT_WORKBENCH_SUMMARY,
     explicitWorkbenchSummary: Boolean(process.env.AGENT_WORKBENCH_SUMMARY),
     workbenchUrl: DEFAULT_WORKBENCH_URL,
+    mode: "write",
+    goalId: process.env.AGENT_FOCUS_GOAL_ID || "",
+    focusFile: DEFAULT_FOCUS_FILE,
+    agentcoordRoot: PREFLIGHT_AGENTCOORD_ROOT,
+    quarantineRoot: DEFAULT_QUARANTINE_ROOT,
+    stateRoot: DEFAULT_STATE_ROOT,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -41,6 +62,9 @@ function parseArgs(argv) {
     else if (arg === "--notice") args.notice = true;
     else if (arg === "--skip-bus" || arg === "--no-bus") args.skipBus = true;
     else if (arg === "--root") args.root = argv[++i];
+    else if (arg === "--mode") args.mode = argv[++i];
+    else if (arg === "--goal") args.goalId = argv[++i];
+    else if (arg === "--focus-file") args.focusFile = argv[++i];
     else if (arg === "--card") args.cardPath = argv[++i];
     else if (arg === "--timeout") args.timeoutMs = Number(argv[++i]);
     else if (arg === "--workbench-summary") {
@@ -51,6 +75,7 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0) throw new Error("--timeout must be positive milliseconds");
+  if (!["read", "write"].includes(args.mode)) throw new Error("--mode must be read or write");
   args.root = path.resolve(args.root);
   return args;
 }
@@ -178,8 +203,49 @@ function buildSurface(packet) {
     }
   }
   if (packet.workbench) reasons.push(...workbenchReasons(packet.workbench));
+  if (!packet.weeklyFocus.ok) reasons.push(`weekly focus invalid: ${packet.weeklyFocus.error}`);
+  if (packet.workspacePreflight.shouldSurface) {
+    reasons.push(...packet.workspacePreflight.issues.map((item) => `${item.code}: ${item.message}`));
+  }
   packet.surfaceReasons = reasons;
   packet.shouldSurface = reasons.length > 0;
+}
+
+function collectWeeklyFocus(args) {
+  try {
+    const focus = loadFocus(args.focusFile);
+    const selected = args.goalId ? resolveGoal(focus, args.goalId) : null;
+    return {
+      ok: true,
+      file: focus.file,
+      week_ending: focus.week_ending,
+      goals: focus.goals,
+      selected,
+      not_this_week: focus.not_this_week,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      file: args.focusFile,
+      week_ending: null,
+      goals: [],
+      selected: null,
+      not_this_week: [],
+      error: error.message,
+    };
+  }
+}
+
+function collectSafety(args, root) {
+  const weeklyFocus = collectWeeklyFocus(args);
+  const workspacePreflight = publicPreflight(preflightWorkspace(root, args.mode, {
+    agentcoordRoot: args.agentcoordRoot,
+    quarantineRoot: args.quarantineRoot,
+    stateRoot: args.stateRoot,
+  }));
+  const runStates = relevantRunStates(root, { stateRoot: args.stateRoot });
+  return { weeklyFocus, workspacePreflight, runStates };
 }
 
 function collect(args) {
@@ -198,6 +264,7 @@ function collect(args) {
     shouldSurface: false,
     surfaceReasons: [],
     results: [],
+    ...collectSafety(args, root),
   };
   packet.results.push(sectionFromCommand("WWI", run("wwi", [], { cwd: root, timeoutMs: args.timeoutMs }), 40));
   packet.results.push(sectionFromCommand("Machine Compliance", compliance(args.timeoutMs), 80));
@@ -213,8 +280,15 @@ function collect(args) {
   return packet;
 }
 
-function renderNotice(workbench) {
-  const reasons = workbenchReasons(workbench);
+function safetyReasons(safety) {
+  const reasons = [];
+  if (!safety.weeklyFocus.ok) reasons.push(`weekly focus invalid: ${safety.weeklyFocus.error}`);
+  reasons.push(...safety.workspacePreflight.issues.map((item) => `${item.code}: ${item.message}`));
+  return reasons;
+}
+
+function renderNotice(workbench, safety) {
+  const reasons = [...workbenchReasons(workbench), ...safetyReasons(safety)];
   if (!reasons.length) return "";
   const headline = reasons.length === 1 ? reasons[0] : `${reasons.length} issues`;
   const out = [`Agent workbench warning: ${headline}`];
@@ -234,6 +308,35 @@ function renderText(packet) {
   if (packet.surfaceReasons.length) {
     out.push("surfaceReasons:");
     out.push(...packet.surfaceReasons.map((reason) => `- ${reason}`));
+  }
+  out.push("");
+  out.push("== Weekly Focus ==");
+  if (!packet.weeklyFocus.ok) {
+    out.push(`INVALID ${packet.weeklyFocus.error}`);
+  } else {
+    out.push(`week ending: ${packet.weeklyFocus.week_ending}`);
+    for (const goal of packet.weeklyFocus.goals) {
+      const selected = packet.weeklyFocus.selected?.goal_id === goal.id ? " [selected]" : "";
+      out.push(`goal: ${goal.id}${selected}`);
+      out.push(`  definition of done: ${goal.done}`);
+      out.push(`  required milestone: ${goal.required_milestone}`);
+      for (const ref of goal.execution_refs || []) {
+        out.push(`  execution binding: ${ref.kind}:${ref.id}`);
+      }
+    }
+  }
+  out.push("");
+  out.push("== Workspace Safety ==");
+  out.push(`preflight: ${packet.workspacePreflight.ok ? "PASS" : "REFUSE"} mode=${packet.workspacePreflight.mode}`);
+  out.push(`canonical remote: ${packet.workspacePreflight.canonical_remote || "(unavailable)"}`);
+  for (const item of packet.workspacePreflight.issues) out.push(`- ${item.code}: ${item.message}`);
+  if (packet.runStates.length) {
+    out.push("runs:");
+    for (const run of packet.runStates) {
+      const binding = run.execution_ref ? ` execution=${run.execution_ref.kind}:${run.execution_ref.id}` : "";
+      out.push(`- ${run.state} ${run.run_id} tool=${run.tool}${binding}`);
+      if (run.quarantine_reason) out.push(`  quarantine: ${run.quarantine_reason}`);
+    }
   }
   out.push("");
   out.push("== Workbench ==");
@@ -271,7 +374,12 @@ try {
     process.exit(0);
   }
   if (args.notice) {
-    process.stdout.write(renderNotice(readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary)));
+    const root = gitRoot(args.root);
+    const safety = collectSafety(args, root);
+    process.stdout.write(renderNotice(
+      readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
+      safety,
+    ));
     process.exit(0);
   }
   const packet = collect(args);

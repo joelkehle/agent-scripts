@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+"use strict";
+
+const {
+  DEFAULT_FOCUS_FILE,
+  FocusValidationError,
+  loadFocus,
+  resolveException,
+  resolveGoal,
+} = require("../lib/weekly-focus");
+
+function usage() {
+  console.log(`Usage:
+  agent-focus validate [--file PATH] [--json]
+  agent-focus list [--file PATH] [--json]
+  agent-focus resolve GOAL_ID [--file PATH] [--json]
+  agent-focus exception --category CATEGORY --reason TEXT [--file PATH] [--json]
+
+Valid exception categories:
+  production_incident
+  security_exposure
+  data_loss_risk
+  immovable_external_deadline`);
+}
+
+function parseArgs(argv) {
+  const args = {
+    command: argv.shift() || "list",
+    file: DEFAULT_FOCUS_FILE,
+    goalId: "",
+    category: "",
+    reason: "",
+    json: false,
+    help: false,
+  };
+  if (args.command === "show") args.command = "list";
+  if (args.command === "resolve" && argv[0] && !argv[0].startsWith("-")) args.goalId = argv.shift();
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--help" || arg === "-h") args.help = true;
+    else if (arg === "--json") args.json = true;
+    else if (arg === "--file") args.file = argv[++index];
+    else if (arg === "--goal") args.goalId = argv[++index];
+    else if (arg === "--category") args.category = argv[++index];
+    else if (arg === "--reason") args.reason = argv[++index];
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  return args;
+}
+
+function printText(command, value) {
+  if (command === "validate") {
+    console.log(`agent-focus: valid week_ending=${value.week_ending} goals=${value.goals.length} file=${value.file}`);
+    return;
+  }
+  if (command === "list") {
+    console.log(`Weekly focus through ${value.week_ending}`);
+    for (const goal of value.goals) {
+      console.log(`${goal.id}`);
+      console.log(`  done: ${goal.done}`);
+      console.log(`  required milestone: ${goal.required_milestone}`);
+      console.log(`  fallback: ${goal.fallback}`);
+      for (const ref of goal.execution_refs || []) {
+        console.log(`  execution: ${ref.kind}:${ref.id}`);
+      }
+    }
+    if (value.not_this_week.length) {
+      console.log("Not this week:");
+      for (const item of value.not_this_week) console.log(`- ${item}`);
+    }
+    return;
+  }
+  if (value.kind === "goal") {
+    console.log(`agent-focus: resolved goal ${value.goal_id} through ${value.week_ending}`);
+    console.log(`done: ${value.done}`);
+    console.log(`required milestone: ${value.required_milestone}`);
+    console.log(`fallback: ${value.fallback}`);
+    for (const ref of value.execution_refs || []) console.log(`execution: ${ref.kind}:${ref.id}`);
+  } else {
+    console.log(`agent-focus: resolved exception ${value.exception.category} through ${value.week_ending}`);
+    console.log(`reason: ${value.exception.reason}`);
+  }
+}
+
+try {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    process.exit(0);
+  }
+  if (!["validate", "list", "resolve", "exception"].includes(args.command)) {
+    throw new Error(`unknown command: ${args.command}`);
+  }
+  const focus = loadFocus(args.file);
+  let value = focus;
+  if (args.command === "resolve") value = resolveGoal(focus, args.goalId);
+  if (args.command === "exception") value = resolveException(focus, args.category, args.reason);
+  if (args.json) console.log(JSON.stringify(value, null, 2));
+  else printText(args.command, value);
+} catch (error) {
+  if (error instanceof FocusValidationError) {
+    console.error(`agent-focus: ${error.message}`);
+    process.exit(1);
+  }
+  console.error(`agent-focus: ${error.message}`);
+  usage();
+  process.exit(2);
+}
