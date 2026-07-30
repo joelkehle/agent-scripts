@@ -72,6 +72,8 @@ conditional docs, skills, hooks, or live discovery:
 - Oracle GPT-5.6 Pro second-model reviews: use the `oracle` skill and
   `docs/oracle.md`.
 - User-visible UI or walkthroughs: use the `design-walkthrough` skill.
+- Composing any email, chat message, or letter sent as Joel, or building an
+  agent that drafts them: `docs/joel-email-voice.md`.
 - Services, ports, auth, HTTP ingress, telemetry, and alerts:
   `docs/service-runtime-policy.md`.
 - Local commands and special tools: `tools.md`.
