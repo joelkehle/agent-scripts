@@ -3,23 +3,37 @@
   "observed_at": "2026-08-01T12:00:00Z",
   "observed_by": "ghl-010-pilot",
   "source": "fixture",
-  "note": "Both required commits are present, but the coordinator build is dirty and the Manager build reports no activation time. A build that is merely present is not an activated build.",
+  "note": "Both required commits are present, but the coordinator build is dirty and the Manager build reports no activation time. A build that is merely present is not an activated build. Re-pinned to the ACT-REV-05/ACT-REV-06 required commits.",
   "services": [
     {
       "service": "contribution-coordinator",
-      "commit": "7c1ce0d743cad0ca127479d1167d170b02cd1121",
+      "commit": "2e2dff9a2203428aba60d890e4b3f5985cb7623f",
       "dirty": true,
       "activated_at": "2026-08-01T11:30:00Z"
     },
     {
       "service": "manager",
-      "commit": "c5329aa5419da2a0a0d5277af913b19836438768",
+      "commit": "0292acdef0aae50337e3e78a4100ffaea0295bc1",
       "dirty": false,
       "activated_at": ""
     }
   ],
   "checkpoint_receipts": [
-    { "checkpoint_id": "ACT-REV-01", "receipt_ref": "act-rev-01/bootstrap-mission-policies" },
-    { "checkpoint_id": "ACT-REV-02", "receipt_ref": "act-rev-02/review-repair" }
+    {
+      "checkpoint_id": "ACT-REV-01",
+      "receipt_ref": "act-rev-01/bootstrap-mission-policies"
+    },
+    {
+      "checkpoint_id": "ACT-REV-02",
+      "receipt_ref": "act-rev-02/review-repair"
+    },
+    {
+      "checkpoint_id": "ACT-REV-03",
+      "receipt_ref": "act-rev-03/manager-c5329aa-activation"
+    },
+    {
+      "checkpoint_id": "ACT-REV-04",
+      "receipt_ref": "act-rev-04/coordinator-7c1ce0d-repin"
+    }
   ]
 }

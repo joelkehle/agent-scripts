@@ -3,18 +3,18 @@
   "observed_at": "2026-08-01T12:00:00Z",
   "observed_by": "ghl-010-pilot",
   "source": "fixture",
-  "note": "Synthetic state in which both required builds are activated exactly. This fixture describes a deployment that has not happened; it exists to prove the preflight accepts an exact match, and it is never evidence that activation occurred.",
+  "note": "Synthetic state in which both required builds are activated exactly. This fixture describes a deployment that has not happened; it exists to prove the preflight accepts an exact match, and it is never evidence that activation occurred. Re-pinned to the ACT-REV-05/ACT-REV-06 required commits.",
   "services": [
     {
       "service": "contribution-coordinator",
-      "commit": "7c1ce0d743cad0ca127479d1167d170b02cd1121",
+      "commit": "2e2dff9a2203428aba60d890e4b3f5985cb7623f",
       "dirty": false,
       "activated_at": "2026-08-01T11:30:00Z",
       "endpoint": "http://beelink:8114/health"
     },
     {
       "service": "manager",
-      "commit": "c5329aa5419da2a0a0d5277af913b19836438768",
+      "commit": "0292acdef0aae50337e3e78a4100ffaea0295bc1",
       "dirty": false,
       "activated_at": "2026-08-01T11:00:00Z",
       "endpoint": "http://beelink:8080/health"
@@ -30,6 +30,16 @@
       "checkpoint_id": "ACT-REV-02",
       "receipt_ref": "act-rev-02/review-repair",
       "recorded_at": "2026-07-14T00:00:00Z"
+    },
+    {
+      "checkpoint_id": "ACT-REV-03",
+      "receipt_ref": "act-rev-03/manager-c5329aa-activation",
+      "recorded_at": "2026-07-27T00:00:00Z"
+    },
+    {
+      "checkpoint_id": "ACT-REV-04",
+      "receipt_ref": "act-rev-04/coordinator-7c1ce0d-repin",
+      "recorded_at": "2026-07-28T00:00:00Z"
     }
   ]
 }

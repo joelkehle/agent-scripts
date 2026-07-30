@@ -1,48 +1,52 @@
 {
   "schema": "github-lifecycle-activation-spec.v1",
-  "spec_version": "1.0.0",
+  "spec_version": "1.1.0",
   "notes": [
     "The exact deployed build identities the live canary requires. `ghl-pilot preflight` compares this against what the health endpoints actually report and refuses live mode unless every checkpoint matches exactly.",
     "`required_commit` is the reviewed revision that must be built and activated. A revision being merged and reviewed is not activation; only a health endpoint reporting that commit, clean and activated, satisfies a checkpoint.",
-    "ACT-REV-01 and ACT-REV-02 are the historical bootstrap and review-repair checkpoints. Their receipts must already be recorded; ACT-REV-03 and ACT-REV-04 supersede them.",
+    "ACT-REV-01 through ACT-REV-04 are historical checkpoints: 01/02 are the bootstrap and review-repair pair, 03/04 the first live-activated pair. Their receipts must already be recorded; ACT-REV-05 and ACT-REV-06 supersede them.",
     "A satisfied preflight is a precondition for the canary, never an authorization for it. Activation and the canary each require Joel's separate approval."
   ],
   "checkpoints": [
     {
-      "checkpoint_id": "ACT-REV-03",
-      "title": "Manager build carrying the bounded mission policies and the lifecycle request surface",
+      "checkpoint_id": "ACT-REV-05",
+      "title": "Manager build carrying the bounded mission policies, the lifecycle request surface, self-reported build identity, and the GHL-013 review budget gate",
       "service": "manager",
       "repository": "joelkehle/manager",
-      "required_commit": "c5329aa5419da2a0a0d5277af913b19836438768",
+      "required_commit": "0292acdef0aae50337e3e78a4100ffaea0295bc1",
       "contains_issues": [
         "GHL-001",
-        "GHL-005"
+        "GHL-005",
+        "GHL-013",
+        "manager#8"
       ],
       "requires_receipts": [
-        "ACT-REV-01"
+        "ACT-REV-03"
       ],
       "rollback": "Re-activate the previously running Manager build and confirm its health endpoint reports the prior commit, clean and activated. The lifecycle request surface is additive, so a rollback leaves the operator start_agent_mission path intact; no mission state migration is required.",
       "smoke_checks": [
         "preflight_agent_mission returns allowed for each of the three target project IDs and refused for a wrong-scope pair, with the registry and policy hashes matching the reviewed build.",
         "request_agent_mission refuses shared-manager with the phase-0 message while the operator start path still succeeds.",
-        "check_agent_mission from a foreign connector scope is indistinguishable from an unknown mission id."
+        "check_agent_mission from a foreign connector scope is indistinguishable from an unknown mission id.",
+        "/health reports a build block whose commit equals required_commit with dirty false, so this checkpoint is satisfiable by live observation rather than by a written activation receipt."
       ],
-      "note": "Activated and verified 2026-07-27/28 (harness lane): production runs c5329aa5419da2a0a0d5277af913b19836438768; the GHL-005 merge 39a7959 is a verified ancestor; delta to f874741 is docs plus one ops config file with zero Go changes. Completion evidence and idempotency note: joelkehle/manager issue #7 (closed 2026-07-28T01:57Z, comment 5099033541); status doc commit f2e06ee. Rollback pairing staged: d695bc24 binary with ce25675 registry."
+      "note": "Ratified by Joel as ACT-REV-05 on 2026-07-30, re-pinned from the superseded ACT-REV-03 pin c5329aa5419da2a0a0d5277af913b19836438768. Production beelink Manager was activated at 2026-07-29 19:58:40 PDT and :8228/health self-reports {\"build\":{\"commit\":\"0292acdef0aae50337e3e78a4100ffaea0295bc1\",\"time\":\"2026-07-30T02:40:23Z\",\"dirty\":false},\"started_at\":\"2026-07-30T02:58:40Z\"}. c5329aa is a verified ancestor, so every ACT-REV-03 issue remains carried. Delta c5329aa..0292acd adds the build-identity endpoint (3fe1216, joelkehle/manager issue #8, closed 2026-07-30 comment 5126419716), the GHL-013 review budget evidence and dispatch-stop fixes (c2987c0, 1fd3565), tracked agent plugin skills (523ba33), alert dispatcher routing, and the Keystone Keymaster broker. This is the first Manager checkpoint verifiable from the running process itself. Rollback target is the ACT-REV-03 build c5329aa with its staged d695bc24/ce25675 pairing still valid as a deeper fallback."
     },
     {
-      "checkpoint_id": "ACT-REV-04",
-      "title": "Contribution coordinator and review build carrying the claim reducer, conductor, and scope routing",
+      "checkpoint_id": "ACT-REV-06",
+      "title": "Contribution coordinator and review build carrying the claim reducer, conductor, scope routing, and the GHL-013 review budget gate",
       "service": "contribution-coordinator",
       "repository": "joelkehle/ucla-tdg-ip-agents",
-      "required_commit": "7c1ce0d743cad0ca127479d1167d170b02cd1121",
+      "required_commit": "2e2dff9a2203428aba60d890e4b3f5985cb7623f",
       "contains_issues": [
         "GHL-002",
         "GHL-004",
         "GHL-006",
-        "GHL-008"
+        "GHL-008",
+        "GHL-013"
       ],
       "requires_receipts": [
-        "ACT-REV-02"
+        "ACT-REV-04"
       ],
       "rollback": "Re-activate the last known-good coordinator build and confirm its health endpoint reports that commit, clean and activated. Before rolling back, release any open claim so no lease is held by a build that no longer runs; claim and attention state is reconstructed from GitHub events, so no local state is lost.",
       "smoke_checks": [
@@ -51,7 +55,7 @@
         "A personal-scope attention route records an owner-attention.v1 event on the pull request and makes no UCLA Project Manager call.",
         "Write paths remain disabled until the canary step that enables them."
       ],
-      "note": "Re-pinned 2026-07-28 to the GHL-FUP-06 merge (kehle-tdg-dev/ucla-tdg-ip-agents PR #46): the prior pin 4bf52e38a7ad6add66edd30a388e514f6954ce43 lacked the git binary and the PUBLICATION_* compose pass-through that canary publication requires. Delta is Dockerfile (apk add git in the coordinator stage) and deploy/docker-compose.yml only; no Go changes, so the Go suites verified at PR #41 head a1e24ac remain binding. Conductor and write gates still default off. Rollback target remains 4fc77c8; prior reviewed build 4bf52e38 is also a valid fallback."
+      "note": "Ratified by Joel as ACT-REV-06 on 2026-07-30, re-pinned from the superseded ACT-REV-04 pin 7c1ce0d743cad0ca127479d1167d170b02cd1121. Deployed :8247/health reports {\"agent_id\":\"ucla.contribution-coordinator\",\"version\":\"ghl013-main-2e2dff9\",\"build\":{\"commit\":\"2e2dff9a2203428aba60d890e4b3f5985cb7623f\",\"time\":\"2026-07-30T02:50:37Z\",\"dirty\":false},\"status\":\"ready\"}. 7c1ce0d is a verified ancestor, so every ACT-REV-04 issue remains carried; the delta is the GHL-013 review budget gate (bd43a0f, PR #50), one supervised mission candidate (1221bfa), and a patent-screen golden-case runner (e5e47a6). The coordinator health endpoint reports no activation timestamp field, so activated_at is derived from its uptime_seconds at observation time; adding a real activation timestamp there is the coordinator-side analogue of the Manager change closed as joelkehle/manager issue #8. Rollback target is the ACT-REV-04 build 7c1ce0d; 4fc77c8 and 4bf52e38 remain deeper fallbacks. Prior ACT-REV-04 pin note retained for history: re-pinned 2026-07-28 to the GHL-FUP-06 merge (kehle-tdg-dev/ucla-tdg-ip-agents PR #46): the prior pin 4bf52e38a7ad6add66edd30a388e514f6954ce43 lacked the git binary and the PUBLICATION_* compose pass-through that canary publication requires. Delta is Dockerfile (apk add git in the coordinator stage) and deploy/docker-compose.yml only; no Go changes, so the Go suites verified at PR #41 head a1e24ac remain binding. Conductor and write gates still default off. Rollback target remains 4fc77c8; prior reviewed build 4bf52e38 is also a valid fallback."
     }
   ]
 }

@@ -75,10 +75,14 @@ root-caused; treat any claim resting on those tests as unproven until it is.
 ## Live-mode refusal preflight
 
 `docs/github-lifecycle/ghl-activation-spec.v1.json` states the build identity
-the canary requires: `ACT-REV-03`, the Manager build containing `GHL-001` and
-`GHL-005`, and `ACT-REV-04`, the coordinator and review build containing
-`GHL-002`, `GHL-004`, `GHL-006`, and `GHL-008`. Each checkpoint names the
-historical receipt it supersedes, its smoke checks, and its rollback.
+the canary requires: `ACT-REV-05`, the Manager build containing `GHL-001`,
+`GHL-005`, `GHL-013`, and `manager#8`, and `ACT-REV-06`, the coordinator and
+review build containing `GHL-002`, `GHL-004`, `GHL-006`, `GHL-008`, and
+`GHL-013`. Each checkpoint names the historical receipt it supersedes, its
+smoke checks, and its rollback. `ACT-REV-05` and `ACT-REV-06` were ratified
+2026-07-30 and superseded `ACT-REV-03` and `ACT-REV-04`; since `manager#8`,
+the Manager checkpoint is satisfiable from the running process's own `/health`
+build block rather than from a written activation receipt.
 
 ```bash
 ghl-pilot preflight observed.json            # exit 1 refuses, exit 0 permits
@@ -111,7 +115,7 @@ Do not begin until all four hold:
    recorded.
 2. `ghl-pilot preflight` exits 0 against **real** health-endpoint output, not a
    fixture.
-3. `ACT-REV-03` and `ACT-REV-04` are activated, with their smoke checks run and
+3. `ACT-REV-05` and `ACT-REV-06` are activated, with their smoke checks run and
    their receipts recorded.
 4. Joel has given canary authorization **for this specific issue**, separately
    from approving activation.
@@ -140,7 +144,7 @@ waits.
 ### Rollback and abort points
 
 - **Before step 1** — abort costs nothing. Deactivate by rolling back
-  `ACT-REV-03` and `ACT-REV-04` per the rollback each names in the activation
+  `ACT-REV-05` and `ACT-REV-06` per the rollback each names in the activation
   spec.
 - **After step 2, before step 3** — release the claim so no lease is held.
   Claim state is reconstructed from GitHub events, so nothing local is lost.

@@ -542,7 +542,7 @@ describe("live-mode refusal preflight", () => {
 
   it("accepts the checked-in activation spec", () => {
     assert.deepEqual(validateActivationSpec(spec).errors, []);
-    assert.deepEqual(spec.checkpoints.map((checkpoint) => checkpoint.checkpoint_id), ["ACT-REV-03", "ACT-REV-04"]);
+    assert.deepEqual(spec.checkpoints.map((checkpoint) => checkpoint.checkpoint_id), ["ACT-REV-05", "ACT-REV-06"]);
   });
 
   it("requires every checkpoint to name a rollback", () => {
@@ -564,7 +564,7 @@ describe("live-mode refusal preflight", () => {
       PREFLIGHT_REFUSAL_CODES.MISSING_CHECKPOINT_RECEIPT,
     ]);
 
-    const coordinator = preflight.checkpoints.find((checkpoint) => checkpoint.checkpoint_id === "ACT-REV-04");
+    const coordinator = preflight.checkpoints.find((checkpoint) => checkpoint.checkpoint_id === "ACT-REV-06");
 
     assert.equal(coordinator.observed_commit, "4fc77c8");
     assert.ok(
