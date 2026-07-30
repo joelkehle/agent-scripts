@@ -150,6 +150,10 @@ an unbuilt recruitment/vendor need.
 - Stage an upstream file in `/tmp` and integrate it deliberately; never
   overwrite tracked work blindly.
 - Use `gh pr view/diff` for PRs. Address review threads only after fixes land.
+- Always give Joel the full PR URL whenever a PR is opened, updated, or
+  referenced. A bare number makes him search for it. When a report mentions
+  several, link every one, and repeat the links in any later summary rather
+  than assuming he still has them scrolled back.
 
 ## State And Secrets
 
