@@ -1,0 +1,347 @@
+#!/usr/bin/env node
+
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+function usage() {
+  console.log(`Usage: branch-collision [BRANCH] [--base REF] [--repo DIR] [--json]
+
+Read-only pre-flight probe for a branch that has drifted behind its base.
+Answers "is this still landable, and what will fight me?" before work starts.
+
+  BRANCH    branch/ref to probe (default: current HEAD)
+  --base    base ref to compare against (default: origin/main)
+  --repo    repository directory (default: cwd)
+  --json    machine-readable output
+
+Reports five signals:
+  1. position     ahead/behind and how stale the merge-base is
+  2. redundancy   commits already landed on base under a different hash
+  3. deleted      files the branch edits that base deleted   (delete/modify)
+  4. renamed      files the branch edits that base renamed
+  5. symbols      declarations one side dropped while the other kept editing
+                  the same file (divergent-refactor signal)
+
+Exit status is 0 whenever the probe runs; read the verdict, not the code.
+`);
+}
+
+function parseArgs(argv) {
+  const args = { base: "origin/main", repo: process.cwd(), json: false, branch: null };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "-h" || arg === "--help") {
+      args.help = true;
+    } else if (arg === "--json") {
+      args.json = true;
+    } else if (arg === "--base") {
+      if (i + 1 >= argv.length) throw new Error("--base requires a ref");
+      args.base = argv[(i += 1)];
+    } else if (arg === "--repo") {
+      if (i + 1 >= argv.length) throw new Error("--repo requires a directory");
+      args.repo = argv[(i += 1)];
+    } else if (arg.startsWith("-")) {
+      throw new Error(`unknown argument: ${arg}`);
+    } else if (args.branch === null) {
+      args.branch = arg;
+    } else {
+      throw new Error(`unexpected argument: ${arg}`);
+    }
+  }
+  return args;
+}
+
+function git(repo, gitArgs, { allowFail = false } = {}) {
+  try {
+    return execFileSync("git", ["-C", repo, ...gitArgs], {
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    if (allowFail) return null;
+    const stderr = error.stderr ? String(error.stderr).trim() : error.message;
+    throw new Error(`git ${gitArgs.join(" ")}: ${stderr}`);
+  }
+}
+
+function lines(text) {
+  if (!text) return [];
+  return text.split("\n").map((line) => line.trimEnd()).filter(Boolean);
+}
+
+// Heuristic top-level declaration extraction. Deliberately shallow: it is a
+// signal for "the same name went away on one side", not a parser.
+const DECL_PATTERNS = [
+  /^\s*func\s+(?:\([^)]*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)/, // go
+  /^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)/, // go / ts
+  /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)/, // js/ts
+  /^\s*(?:export\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][A-Za-z0-9_$]*)/, // js/ts/py
+  /^\s*(?:export\s+)?interface\s+([A-Za-z_$][A-Za-z0-9_$]*)/, // ts
+  /^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)/, // python
+  /^\s*(?:pub\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)/, // rust
+];
+
+const SOURCE_EXT = new Set([
+  ".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".py", ".rs", ".rb", ".java", ".kt",
+]);
+
+function isSourceFile(file) {
+  return SOURCE_EXT.has(path.extname(file));
+}
+
+function declsAt(repo, ref, file) {
+  const blob = git(repo, ["show", `${ref}:${file}`], { allowFail: true });
+  if (blob === null) return null; // absent at this ref
+  const names = new Set();
+  for (const line of blob.split("\n")) {
+    for (const pattern of DECL_PATTERNS) {
+      const match = pattern.exec(line);
+      if (match) {
+        names.add(match[1]);
+        break;
+      }
+    }
+  }
+  return names;
+}
+
+function probe(args) {
+  const repo = args.repo;
+  const branch = args.branch || git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+  const base = args.base;
+
+  if (!git(repo, ["rev-parse", "--verify", "--quiet", branch], { allowFail: true })) {
+    throw new Error(`branch not found: ${branch}`);
+  }
+  if (!git(repo, ["rev-parse", "--verify", "--quiet", base], { allowFail: true })) {
+    throw new Error(`base not found: ${base} (fetch first?)`);
+  }
+
+  const mergeBase = git(repo, ["merge-base", base, branch]).trim();
+  const ahead = Number(git(repo, ["rev-list", "--count", `${base}..${branch}`]).trim());
+  const behind = Number(git(repo, ["rev-list", "--count", `${branch}..${base}`]).trim());
+  const mergeBaseDate = git(repo, ["log", "-1", "--format=%cI", mergeBase]).trim();
+  const staleDays = Math.floor((Date.now() - Date.parse(mergeBaseDate)) / 86400000);
+
+  // 1. Redundancy. git cherry compares by patch-id: '-' means already upstream.
+  const cherry = lines(git(repo, ["cherry", base, branch]));
+  const alreadyLanded = [];
+  const uniqueCommits = [];
+  for (const row of cherry) {
+    const mark = row.slice(0, 1);
+    const sha = row.slice(2).trim();
+    const subject = git(repo, ["log", "-1", "--format=%h %s", sha], { allowFail: true });
+    const entry = { sha, subject: subject ? subject.trim() : sha };
+    if (mark === "-") alreadyLanded.push(entry);
+    else uniqueCommits.push(entry);
+  }
+
+  // Files the branch touches, and files the base touched, since the merge-base.
+  const branchFiles = lines(git(repo, ["diff", "--name-only", `${mergeBase}..${branch}`]));
+  const baseFiles = new Set(lines(git(repo, ["diff", "--name-only", `${mergeBase}..${base}`])));
+
+  // 2. Delete/modify: existed at merge-base, branch edits it, base removed it.
+  const deleted = [];
+  for (const file of branchFiles) {
+    const atMergeBase = git(repo, ["cat-file", "-e", `${mergeBase}:${file}`], { allowFail: true });
+    if (atMergeBase === null) continue; // new on the branch, not a collision
+    const atBase = git(repo, ["cat-file", "-e", `${base}:${file}`], { allowFail: true });
+    if (atBase === null) deleted.push(file);
+  }
+
+  // 3. Renames on the base side that hit files the branch edits.
+  const renamed = [];
+  const renameLog = git(
+    repo,
+    ["log", "--diff-filter=R", "--name-status", "-M", "--format=", `${mergeBase}..${base}`],
+    { allowFail: true },
+  );
+  const branchFileSet = new Set(branchFiles);
+  for (const row of lines(renameLog)) {
+    const parts = row.split("\t");
+    if (parts.length < 3 || !parts[0].startsWith("R")) continue;
+    const [, from, to] = parts;
+    if (branchFileSet.has(from)) renamed.push({ from, to });
+  }
+
+  // 4. Textual conflicts, via a trial merge that touches no working tree.
+  let conflicts = [];
+  let mergeClean = true;
+  try {
+    execFileSync("git", ["-C", repo, "merge-tree", "--write-tree", "--name-only", base, branch], {
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    mergeClean = false;
+    const out = String(error.stdout || "");
+    const rows = out.split("\n");
+    // line 0 is the tree oid; conflicted paths follow until a blank line.
+    for (let i = 1; i < rows.length; i += 1) {
+      const row = rows[i].trim();
+      if (!row) break;
+      conflicts.push(row);
+    }
+    conflicts = [...new Set(conflicts)];
+  }
+
+  // 5. Symbol divergence on co-edited source files. Two distinct patterns, and
+  // the second is the one a delete/modify check cannot see:
+  //
+  //   renamed   one side dropped a declaration the other side still has
+  //   parallel  neither side dropped anything, but BOTH independently added
+  //             declarations to the same conflicted file - i.e. they invented
+  //             different names for the same concept. This is what a merge-base
+  //             comparison misses entirely, because at the merge-base neither
+  //             name existed.
+  //
+  // The parallel case is gated on the file also being textually conflicted,
+  // which keeps it to files that will actually have to be reconciled by hand.
+  const conflictSet = new Set(conflicts);
+  const symbolDivergence = [];
+  for (const file of branchFiles) {
+    if (!baseFiles.has(file) || !isSourceFile(file)) continue;
+    if (deleted.includes(file)) continue;
+    const mb = declsAt(repo, mergeBase, file);
+    const br = declsAt(repo, branch, file);
+    const bs = declsAt(repo, base, file);
+    if (!mb || !br || !bs) continue;
+    const droppedByBranch = [...mb].filter((n) => !br.has(n) && bs.has(n));
+    const droppedByBase = [...mb].filter((n) => !bs.has(n) && br.has(n));
+    const addedByBranch = [...br].filter((n) => !mb.has(n) && !bs.has(n));
+    const addedByBase = [...bs].filter((n) => !mb.has(n) && !br.has(n));
+    const isRename = droppedByBranch.length > 0 || droppedByBase.length > 0;
+    const isParallel =
+      conflictSet.has(file) && addedByBranch.length > 0 && addedByBase.length > 0;
+    if (isRename || isParallel) {
+      symbolDivergence.push({
+        file,
+        kind: isRename ? "renamed" : "parallel",
+        droppedByBranch,
+        droppedByBase,
+        addedByBranch,
+        addedByBase,
+      });
+    }
+  }
+
+  return {
+    repo,
+    branch,
+    base,
+    mergeBase,
+    mergeBaseDate,
+    staleDays,
+    ahead,
+    behind,
+    alreadyLanded,
+    uniqueCommits,
+    deleted,
+    renamed,
+    mergeClean,
+    conflicts,
+    symbolDivergence,
+  };
+}
+
+function verdict(r) {
+  if (r.ahead === 0) return "NOTHING TO LAND - branch has no commits beyond base";
+  if (r.uniqueCommits.length === 0) {
+    return "REDUNDANT - every commit is already on base under a different hash; drop the branch";
+  }
+  if (r.deleted.length || r.renamed.length) {
+    return (
+      "STRUCTURAL COLLISION - base deleted or renamed ground this branch builds on; " +
+      "expect a port onto the new location, not a merge"
+    );
+  }
+  if (r.symbolDivergence.length) {
+    return (
+      `DIVERGENT REFACTOR - ${r.symbolDivergence.length} file(s) where both sides named the same ` +
+      "ground differently; mergeable, but budget for hand-unioning interfaces and tests"
+    );
+  }
+  if (!r.mergeClean) return "CONFLICTS - ordinary textual drift; resolvable merge";
+  return "CLEAN - merges without conflict";
+}
+
+function report(r) {
+  const out = [];
+  out.push(`branch-collision: ${r.branch} vs ${r.base}`);
+  out.push(`  repo         ${r.repo}`);
+  out.push(`  merge-base   ${r.mergeBase.slice(0, 12)}  ${r.mergeBaseDate}  (${r.staleDays} days stale)`);
+  out.push(`  position     ahead ${r.ahead}, behind ${r.behind}`);
+  out.push("");
+  out.push(`  redundancy   ${r.alreadyLanded.length} already landed, ${r.uniqueCommits.length} unique`);
+  for (const c of r.alreadyLanded.slice(0, 10)) out.push(`                 already: ${c.subject}`);
+  if (r.alreadyLanded.length > 10) out.push(`                 ... ${r.alreadyLanded.length - 10} more`);
+  out.push("");
+  out.push(`  deleted      ${r.deleted.length} file(s) the branch edits were deleted on base`);
+  for (const f of r.deleted.slice(0, 15)) out.push(`                 ${f}`);
+  if (r.deleted.length > 15) out.push(`                 ... ${r.deleted.length - 15} more`);
+  out.push("");
+  out.push(`  renamed      ${r.renamed.length} file(s) the branch edits were renamed on base`);
+  for (const m of r.renamed.slice(0, 15)) out.push(`                 ${m.from} -> ${m.to}`);
+  out.push("");
+  out.push(`  conflicts    ${r.mergeClean ? "none (trial merge is clean)" : `${r.conflicts.length} file(s)`}`);
+  for (const f of r.conflicts.slice(0, 20)) out.push(`                 ${f}`);
+  if (r.conflicts.length > 20) out.push(`                 ... ${r.conflicts.length - 20} more`);
+  out.push("");
+  out.push(`  symbols      ${r.symbolDivergence.length} co-edited file(s) with declaration divergence`);
+  for (const s of r.symbolDivergence.slice(0, 10)) {
+    out.push(`                 [${s.kind}] ${s.file}`);
+    if (s.droppedByBranch.length) {
+      out.push(`                   branch dropped (base still has): ${s.droppedByBranch.slice(0, 8).join(", ")}`);
+    }
+    if (s.droppedByBase.length) {
+      out.push(`                   base dropped (branch still has): ${s.droppedByBase.slice(0, 8).join(", ")}`);
+    }
+    if (s.addedByBranch.length) out.push(`                   branch added: ${s.addedByBranch.slice(0, 8).join(", ")}`);
+    if (s.addedByBase.length) out.push(`                   base added:   ${s.addedByBase.slice(0, 8).join(", ")}`);
+    if (s.kind === "parallel") {
+      out.push("                   -> both sides named the same ground differently; union by hand");
+    }
+  }
+  out.push("");
+  out.push(`  VERDICT      ${verdict(r)}`);
+  out.push("");
+  out.push("  Not detected by this probe: semantic conflicts with no textual or");
+  out.push("  declaration footprint - a policy gate one side added that the other");
+  out.push("  side's output violates, behaviour changes behind an unchanged");
+  out.push("  signature, or a fix on base that the branch silently reverts. A clean");
+  out.push("  verdict means 'no known structural collision', not 'safe to merge'.");
+  return out.join("\n");
+}
+
+function main() {
+  let args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    process.stderr.write(`branch-collision: ${error.message}\n`);
+    usage();
+    process.exit(2);
+  }
+  if (args.help) {
+    usage();
+    process.exit(0);
+  }
+  let result;
+  try {
+    result = probe(args);
+  } catch (error) {
+    process.stderr.write(`branch-collision: ${error.message}\n`);
+    process.exit(2);
+  }
+  if (args.json) {
+    process.stdout.write(`${JSON.stringify({ ...result, verdict: verdict(result) }, null, 2)}\n`);
+  } else {
+    process.stdout.write(`${report(result)}\n`);
+  }
+}
+
+if (require.main === module) main();
+
+module.exports = { parseArgs, probe, verdict };

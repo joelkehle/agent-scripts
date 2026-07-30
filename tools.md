@@ -70,6 +70,15 @@ Local tool catalog for this machine.
 - Location: ~/Projects/shared/agent-scripts/bin/dirty-audit
 - Examples: `dirty-audit`, `dirty-audit ~/Projects`, `dirty-audit ~/Projects --json`
 
+## branch-collision
+- Purpose: read-only pre-flight probe for a branch that has drifted behind its base. Answers "is this still landable, and what will fight me?" before a lane starts work on it.
+- Location: ~/Projects/shared/agent-scripts/bin/branch-collision
+- Reports: position (ahead/behind, merge-base age); redundancy (commits already on base under a different hash, via `git cherry`); delete/modify collisions; base-side renames of files the branch edits; textual conflicts from a trial merge; and declaration divergence on co-edited files.
+- Verdicts: `NOTHING TO LAND`, `REDUNDANT`, `STRUCTURAL COLLISION` (base deleted/renamed the ground - port, do not merge), `DIVERGENT REFACTOR` (both sides named the same ground differently - mergeable, budget for hand-unioning), `CONFLICTS`, `CLEAN`.
+- Examples: `branch-collision`, `branch-collision feat/x --base origin/main`, `branch-collision feat/x --repo ~/Projects/jk/llm-wiki --json`
+- Run it before investing in a stale branch, not after the merge stalls. Fetch first so the base ref is current.
+- Limits: a clean verdict means "no known structural collision", not "safe to merge". It cannot see semantic conflicts with no textual or declaration footprint - a policy gate one side added that the other side's output violates, a behaviour change behind an unchanged signature, or a fix on base that the branch silently reverts.
+
 ## loop-receipt
 - Purpose: write structured evidence from a completed loop for the next turn.
 - Location: ~/Projects/shared/agent-scripts/bin/loop-receipt

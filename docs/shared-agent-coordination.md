@@ -57,6 +57,37 @@ Do not start an independent long-running Codex or Claude Code session on macmini
 
 Git remains source of truth for source code. Local disks remain source of truth for active builds.
 
+## Before Resuming A Stale Branch
+
+Claims stop two agents editing the same tree at the same time. They do not stop
+one lane from building on ground another lane later renamed, deleted, or
+reinvented under a different name. That damage shows up weeks later, when the
+branch is finally landed.
+
+Run `branch-collision` before investing in any branch whose base has moved:
+
+```bash
+git -C <repo> fetch origin
+branch-collision <branch> --base origin/main --repo <repo>
+```
+
+Act on the verdict:
+
+- `REDUNDANT` - the work already landed under a different hash. Drop the branch;
+  do not re-land it. Confirm with the `redundancy` list before deleting.
+- `STRUCTURAL COLLISION` - base deleted or renamed files the branch builds on.
+  This is a port onto the new location, not a merge, and usually needs a product
+  decision first about whether the branch's goal is still live.
+- `DIVERGENT REFACTOR` - both sides named the same ground differently. Mergeable,
+  but budget for hand-unioning interfaces, fakes, and tests.
+- `CONFLICTS` / `CLEAN` - ordinary drift.
+
+A clean verdict is not a safety guarantee. The probe cannot see a policy gate one
+side added that the other side's output violates, a behaviour change behind an
+unchanged signature, or a base-side fix the branch silently reverts. Read the
+diff of anything the probe flags as co-edited, and re-run the owning repo's gate
+after resolving.
+
 ## Directory Contract
 
 ```text
