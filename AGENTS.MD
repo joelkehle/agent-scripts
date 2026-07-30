@@ -39,7 +39,9 @@ Git language: never call working-tree changes "dirt" or "dirty." Say
    `~/Projects/shared/manager/bin/machine-compliance --agent-startup --format text`.
    Surface every `WARN` and `FAIL`.
 3. Read the nearest `AGENTS.md`, run `docs-list` (or the repo equivalent),
-   follow matching `read_when` hints, and inspect `git status --short`.
+   follow matching `read_when` hints, and inspect `git status --short` and the
+   checked-out branch (`git branch --show-current`) — unexpected branches
+   belong to another lane.
 4. For email, calendar, IP, llm-wiki, triage, or other agentic capability work,
    run `bus-discover` early and summarize relevant agent IDs, capabilities,
    safety classes, and read-only/write-capable status before architecture or

@@ -54,6 +54,7 @@ last_commit_error=''
 run_git_commit() {
   local stderr_log
   stderr_log=$(mktemp)
+  printf 'committer: branch=%s\n' "$(git rev-parse --abbrev-ref HEAD)" >&2
   if git commit -m "$commit_message" -- "${files[@]}" 2> >(tee "$stderr_log" >&2); then
     rm -f "$stderr_log"
     last_commit_error=''

@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#
+# Blocks pushing any branch tip other than the commit currently checked out
+# as HEAD. Added 2026-07-29 after an agent ran `git push origin main` while
+# HEAD was on a different branch, publishing unreviewed commits on main.
+# Compliance check: shared/manager config/compliance (id: git_hooks_path).
+set -euo pipefail
+
+remote_name="${1:-}"
+remote_url="${2:-}"
+
+# Capture stdin before doing anything else so it can be replayed to a
+# chained repo-local pre-push hook further down.
+stdin_data="$(cat)"
+
+allow_nonhead=0
+if [ "${GIT_PUSH_ALLOW_NONHEAD:-}" = "1" ]; then
+  allow_nonhead=1
+  printf 'pre-push: GIT_PUSH_ALLOW_NONHEAD=1 set; allowing all ref updates\n' >&2
+fi
+
+head_oid="$(git rev-parse -q --verify HEAD^{commit} 2>/dev/null || true)"
+head_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
+blocked=0
+
+if [ -z "$head_oid" ]; then
+  printf 'pre-push: warning: could not resolve HEAD commit; allowing push\n' >&2
+else
+  while IFS=' ' read -r local_ref local_oid remote_ref remote_oid; do
+    [ -z "$local_ref" ] && continue
+
+    # Deletions (local_oid is all zeros) are always allowed.
+    if [[ "$local_oid" =~ ^0+$ ]]; then
+      continue
+    fi
+
+    # Only branches (refs/heads/*) are subject to the guard; tags and other
+    # ref namespaces pass through untouched.
+    case "$remote_ref" in
+      refs/heads/*) : ;;
+      *) continue ;;
+    esac
+
+    if [ "$allow_nonhead" -eq 1 ]; then
+      continue
+    fi
+
+    if [ "$local_oid" = "$head_oid" ]; then
+      continue
+    fi
+
+    blocked=1
+    short_local="${local_oid:0:12}"
+    short_head="${head_oid:0:12}"
+    {
+      printf 'pre-push: REFUSED %s (%s)\n' "$remote_ref" "$short_local"
+      printf 'pre-push: checked-out branch is %s (%s)\n' "${head_branch:-unknown}" "$short_head"
+      printf 'pre-push: you are pushing a branch other than the one checked out\n'
+      printf 'pre-push: remediation: check out the branch that owns %s before pushing\n' "$short_local"
+      printf 'pre-push: remediation: or set GIT_PUSH_ALLOW_NONHEAD=1 if Joel approved this push\n'
+    } >&2
+  done <<EOF
+$stdin_data
+EOF
+fi
+
+if [ "$blocked" -eq 1 ]; then
+  exit 1
+fi
+
+# Chaining: run a repo-local pre-push hook if one exists and isn't this same
+# file, so installing this hook globally doesn't shadow a repo's own hook.
+resolve_path() {
+  local target="$1" dir base
+  if [ -d "$target" ]; then
+    (cd "$target" 2>/dev/null && pwd -P)
+    return
+  fi
+  dir="$(dirname -- "$target")"
+  base="$(basename -- "$target")"
+  dir="$(cd "$dir" 2>/dev/null && pwd -P || true)"
+  if [ -n "$dir" ]; then
+    printf '%s/%s\n' "$dir" "$base"
+  else
+    printf '%s\n' "$target"
+  fi
+}
+
+common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+if [ -n "$common_dir" ]; then
+  local_hook="$common_dir/hooks/pre-push"
+  if [ -x "$local_hook" ]; then
+    self_resolved="$(resolve_path "$0")"
+    other_resolved="$(resolve_path "$local_hook")"
+    if [ "$self_resolved" != "$other_resolved" ]; then
+      printf '%s\n' "$stdin_data" | "$local_hook" "$remote_name" "$remote_url"
+      exit "$?"
+    fi
+  fi
+fi
+
+exit 0
