@@ -6,6 +6,7 @@ const {
   WorkspaceRunError,
   beginRun,
   reconcileRuns,
+  resolveRun,
   sealRun,
 } = require("../lib/agent-workspace");
 const { DEFAULT_FOCUS_FILE } = require("../lib/weekly-focus");
@@ -20,6 +21,7 @@ function usage() {
   agent-workspace begin --root DIR --goal GOAL_ID --tool TOOL [options]
   agent-workspace begin --root DIR --exception-category CATEGORY --exception-reason TEXT --tool TOOL [options]
   agent-workspace seal --run-id RUN_ID [--exit-code CODE] [--state-root DIR] [--json]
+  agent-workspace resolve --run-id RUN_ID --reason TEXT [--state-root DIR] [--json]
   agent-workspace reconcile [--state-root DIR] [--json]
 
 Begin options:
@@ -48,6 +50,7 @@ function parseArgs(argv) {
     tool: "",
     pid: null,
     runId: "",
+    reason: "",
     exitCode: 0,
     focusFile: DEFAULT_FOCUS_FILE,
     agentcoordRoot: DEFAULT_AGENTCOORD_ROOT,
@@ -75,6 +78,7 @@ function parseArgs(argv) {
     else if (arg === "--tool") args.tool = argv[++index];
     else if (arg === "--pid") args.pid = Number(argv[++index]);
     else if (arg === "--run-id") args.runId = argv[++index];
+    else if (arg === "--reason") args.reason = argv[++index];
     else if (arg === "--exit-code") args.exitCode = Number(argv[++index]);
     else if (arg === "--focus-file") args.focusFile = argv[++index];
     else if (arg === "--agentcoord-root") args.agentcoordRoot = argv[++index];
@@ -118,6 +122,17 @@ function renderSeal(result) {
   return `${lines.join("\n")}\n`;
 }
 
+function renderResolve(result) {
+  const manifest = result.manifest;
+  return [
+    `agent-workspace: resolved run=${manifest.run_id}`,
+    `resolved HEAD: ${manifest.resolved_head}`,
+    `resolution reason: ${manifest.resolution_reason}`,
+    `manifest: ${result.file}`,
+    "",
+  ].join("\n");
+}
+
 function renderReconcile(results) {
   if (!results.length) return "agent-workspace: no active runs to reconcile\n";
   const lines = [];
@@ -134,18 +149,22 @@ try {
     usage();
     process.exit(0);
   }
-  if (!["begin", "seal", "reconcile"].includes(args.command)) {
+  if (!["begin", "seal", "resolve", "reconcile"].includes(args.command)) {
     throw new Error(`unknown command: ${args.command || "(missing)"}`);
   }
   let result;
   if (args.command === "begin") result = beginRun(args);
   else if (args.command === "seal") {
     if (!args.runId) throw new Error("--run-id is required");
-    result = sealRun(args);
+    result = sealRun({ ...args, pid: args.pid || process.ppid });
+  } else if (args.command === "resolve") {
+    if (!args.runId) throw new Error("--run-id is required");
+    result = resolveRun({ ...args, pid: args.pid || process.ppid });
   } else result = reconcileRuns(args);
   if (args.json) console.log(JSON.stringify(result, null, 2));
   else if (args.command === "begin") process.stdout.write(renderBegin(result));
   else if (args.command === "seal") process.stdout.write(renderSeal(result));
+  else if (args.command === "resolve") process.stdout.write(renderResolve(result));
   else {
     process.stdout.write(renderReconcile(result));
   }

@@ -50,11 +50,13 @@ function parseArgs(argv) {
 
 function printText(command, value) {
   if (command === "validate") {
-    console.log(`agent-focus: valid week_ending=${value.week_ending} goals=${value.goals.length} file=${value.file}`);
+    console.log(`agent-focus: ${value.expired ? "EXPIRED" : "valid"} week_ending=${value.week_ending} current_date=${value.current_date} time_zone=${value.time_zone} goals=${value.goals.length} file=${value.file}`);
     return;
   }
   if (command === "list") {
-    console.log(`Weekly focus through ${value.week_ending}`);
+    console.log(value.expired
+      ? `Weekly focus EXPIRED after ${value.week_ending} in ${value.time_zone}; current date ${value.current_date}`
+      : `Weekly focus through ${value.week_ending} in ${value.time_zone}`);
     for (const goal of value.goals) {
       console.log(`${goal.id}`);
       console.log(`  done: ${goal.done}`);
@@ -91,12 +93,14 @@ try {
   if (!["validate", "list", "resolve", "exception"].includes(args.command)) {
     throw new Error(`unknown command: ${args.command}`);
   }
-  const focus = loadFocus(args.file);
+  const allowExpired = ["validate", "list", "exception"].includes(args.command);
+  const focus = loadFocus(args.file, { allowExpired });
   let value = focus;
   if (args.command === "resolve") value = resolveGoal(focus, args.goalId);
   if (args.command === "exception") value = resolveException(focus, args.category, args.reason);
   if (args.json) console.log(JSON.stringify(value, null, 2));
   else printText(args.command, value);
+  if (focus.expired && ["validate", "list"].includes(args.command)) process.exitCode = 1;
 } catch (error) {
   if (error instanceof FocusValidationError) {
     console.error(`agent-focus: ${error.message}`);

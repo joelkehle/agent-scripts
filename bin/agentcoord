@@ -3,9 +3,14 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const {
+  SAFETY,
+  normalizeTimestamp,
+  readClaim,
+  readClaims,
+} = require("../lib/agentcoord-claims");
 
 const DEFAULT_ROOT = "/mnt/synology-share1/AgentCoord";
-const SAFETY = new Set(["read", "propose", "write"]);
 
 function usage() {
   console.log(`Usage:
@@ -113,32 +118,6 @@ function claimsRoot(root) { return path.join(root, "claims"); }
 function handoffsRoot(root) { return path.join(root, "handoffs"); }
 function tmpRoot(root) { return path.join(root, "tmp"); }
 
-function walk(dir) {
-  if (!fs.existsSync(dir)) return [];
-  const out = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walk(full));
-    else if (entry.isFile() && entry.name.endsWith(".json")) out.push(full);
-  }
-  return out.sort((a, b) => a.localeCompare(b));
-}
-
-function parseTimestamp(value) {
-  if (!value || typeof value !== "string") return null;
-  const direct = Date.parse(value);
-  if (Number.isFinite(direct)) return new Date(direct);
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})(Z|[+-]\d{2}:?\d{2})$/);
-  if (!match) return null;
-  const parsed = Date.parse(`${match[1]}T${match[2]}:${match[3]}:${match[4]}${match[5]}`);
-  return Number.isFinite(parsed) ? new Date(parsed) : null;
-}
-
-function normalizeTimestamp(value) {
-  const date = parseTimestamp(value);
-  return date ? iso(date) : value || "";
-}
-
 function safeSlug(value) {
   return String(value || "")
     .trim()
@@ -157,33 +136,6 @@ function claimPath(root, claim) {
   const host = safeSlug(claim.host || os.hostname().split(".")[0]);
   return path.join(repoDir(root, claim.repo), `${safeSlug(claim.slug)}.${agent}.${host}.json`);
 }
-
-function readClaim(file, now = new Date()) {
-  const issues = [];
-  let data = null;
-  try {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (error) {
-    return { file, data: null, status: "invalid", issues: [`invalid JSON: ${error.message}`] };
-  }
-
-  for (const field of ["repo", "slug", "agent", "host", "safety", "scope", "started_at", "expires_at", "next_action"]) {
-    if (data[field] === undefined || data[field] === null || data[field] === "") issues.push(`missing ${field}`);
-  }
-  if (data.safety && !SAFETY.has(data.safety)) issues.push(`invalid safety ${data.safety}`);
-  if (data.scope && !Array.isArray(data.scope)) issues.push("scope must be an array");
-
-  const started = parseTimestamp(data.started_at);
-  const expires = parseTimestamp(data.expires_at);
-  if (!started) issues.push("invalid started_at");
-  if (!expires) issues.push("invalid expires_at");
-
-  let status = "invalid";
-  if (!issues.length) status = data.released_at ? "released" : expires.getTime() < now.getTime() ? "stale" : "active";
-  return { file, data, status, issues, started, expires };
-}
-
-function readClaims(root) { return walk(claimsRoot(root)).map((file) => readClaim(file)); }
 
 function matches(entry, args) {
   if (args.repo && entry.data?.repo !== args.repo) return false;
@@ -354,7 +306,10 @@ function commandSweep(args) {
           stale_since: normalizeTimestamp(entry.data.expires_at),
         };
         atomicWrite(args.root, entry.file, data);
-        const updated = readClaim(entry.file);
+        const updated = readClaim(entry.file, {
+          claimsRoot: claimsRoot(args.root),
+          now,
+        });
         updated.stale_age_days = age;
         released.push(updated);
       } catch (error) {

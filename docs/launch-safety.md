@@ -51,6 +51,13 @@ coding control plane remains authoritative for existence, repository
 compatibility, status, descendants, budgets, and evidence. Weekly focus carries
 priority metadata above that hierarchy; it does not add an execution layer.
 
+`week_ending` remains current through that complete calendar date in
+`America/Los_Angeles`. On the next Los Angeles calendar date, validation and
+list output mark the registry `EXPIRED`, goal resolution fails closed, and a
+goal-based workspace begin is refused. Structurally valid emergency exceptions
+remain available after expiry so urgent incidents are not forced to masquerade
+as weekly goals.
+
 Commands:
 
 ```bash
@@ -102,8 +109,12 @@ For write mode, preflight refuses:
 
 `github.com/kehle-tdg-dev/*` is the TDG development namespace. AgentCoord
 relative scopes are interpreted only after the claim repository matches the
-repository being checked. Preflight only diagnoses. It never modifies a remote
-or checkout.
+repository being checked. `agentcoord` and preflight share one claim validator.
+An unreadable or invalid claim blocks write preflight only when either its
+parsed repository identity or its claim-directory identity matches the checked
+repository. Quarantine entries use exact normalized repository or absolute-path
+identity; prefix siblings do not collide. Preflight only diagnoses. It never
+modifies a remote or checkout.
 
 Read mode does not block on write hazards, but still reports them and sets
 `shouldSurface=true`. A non-Git root remains a refusal in either mode.
@@ -163,8 +174,29 @@ Seal with the process exit code:
 agent-workspace seal --run-id RUN_ID --exit-code 0
 ```
 
-A readable checkout without uncommitted changes becomes `sealed`. Uncommitted
-or ambiguous repository state becomes `quarantined`; no cleanup is attempted.
+The launcher/controller process recorded by `begin` owns the run. The same
+living controller must remain the parent of the later `seal`, or its PID may be
+passed explicitly with `--pid`. Seal verifies the exact PID, process-start
+token, and host. Another controller is refused. A dead owner must go through
+`reconcile`, not `seal`. A readable checkout without uncommitted changes becomes
+`sealed`. Uncommitted or ambiguous repository state becomes `quarantined`; no
+cleanup is attempted.
+
+Resolve a quarantined observation only after the controller has exited and the
+repository has been inspected:
+
+```bash
+agent-workspace resolve \
+  --run-id RUN_ID \
+  --reason "Repository inspected; intended changes committed."
+```
+
+Resolution requires a dead recorded owner, a readable clean repository, no
+other living run for the same Git common directory, and a nonempty reason. It
+atomically records terminal state `resolved`, `resolved_at`,
+`resolution_reason`, `resolved_head`, and resolver PID/start-token/host while
+preserving the original quarantine reason. It never deletes the manifest or
+changes repository contents. Resolved runs no longer block preflight.
 
 Reconcile dead owners explicitly:
 
@@ -188,6 +220,7 @@ States:
 - `sealed`
 - `quarantined`
 - `abandoned`
+- `resolved`
 
 These local manifests are disposable coordination observations. Git owns source
 and commits; AgentCoord owns cross-host claims; weekly focus owns current
@@ -209,4 +242,7 @@ quarantined run state. `--notice` stays silent when clean and surfaces focus,
 origin, uncommitted-work, collision, or quarantine failures for launch wrappers.
 
 Manager may later validate that an opaque execution ID exists and belongs to
-the selected repository. That integration is outside this version.
+the selected repository. Its future launcher wrapper must remain alive as the
+controller across `begin`, child-agent execution, and `seal`; it must not invoke
+begin and seal from unrelated short-lived processes. That integration is
+outside this version.

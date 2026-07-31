@@ -9,7 +9,10 @@ const test = require("node:test");
 const { Worker } = require("node:worker_threads");
 
 const {
+  calendarDate,
   FocusValidationError,
+  focusStatus,
+  loadFocus,
   parseFocusYaml,
   resolveException,
   resolveGoal,
@@ -18,6 +21,7 @@ const {
 const {
   evaluateWorkspace,
   preflightWorkspace,
+  quarantineMatch,
   readClaims,
 } = require("../lib/workspace-preflight");
 const {
@@ -25,14 +29,15 @@ const {
   entranceClaimPath,
   readManifest,
   reconcileRuns,
+  resolveRun,
   sealRun,
 } = require("../lib/agent-workspace");
 const { processIdentity } = require("../lib/process-owner");
 
 const repoRoot = path.resolve(__dirname, "..");
 
-function focusYaml(execution = "") {
-  return `week_ending: 2026-08-02
+function focusYaml(execution = "", weekEnding = "2099-08-02") {
+  return `week_ending: ${weekEnding}
 goals:
   - id: W31-CORE
     done: Core is validated.
@@ -211,6 +216,68 @@ test("goal and exception resolution validate declared IDs and reasons", () => {
   assert.throws(() => resolveException(focus, "security_exposure", ""), /reason is required/);
 });
 
+test("weekly focus expires only after week_ending in America/Los_Angeles", (t) => {
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), "weekly-focus-expiry-"));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const file = path.join(support, "weekly-focus.yaml");
+  fs.writeFileSync(file, focusYaml("", "2026-08-02"));
+  const before = new Date("2026-08-02T06:59:59Z");
+  const onDate = new Date("2026-08-03T06:59:59Z");
+  const after = new Date("2026-08-03T07:00:00Z");
+
+  assert.equal(calendarDate(before), "2026-08-01");
+  assert.equal(calendarDate(onDate), "2026-08-02");
+  assert.equal(calendarDate(after), "2026-08-03");
+  assert.equal(focusStatus({ week_ending: "2026-08-02" }, before).expired, false);
+  assert.equal(focusStatus({ week_ending: "2026-08-02" }, onDate).expired, false);
+  assert.equal(focusStatus({ week_ending: "2026-08-02" }, after).expired, true);
+
+  const current = loadFocus(file, { now: onDate });
+  assert.equal(resolveGoal(current, "W31-CORE", { now: onDate }).goal_id, "W31-CORE");
+  assert.throws(() => loadFocus(file, { now: after }), /expired.*America\/Los_Angeles/);
+  const expired = loadFocus(file, { now: after, allowExpired: true });
+  assert.throws(() => resolveGoal(expired, "W31-CORE", { now: after }), /expired/);
+  assert.equal(
+    resolveException(expired, "production_incident", "Production is unavailable.", { now: after })
+      .focus_status,
+    "expired",
+  );
+});
+
+test("agent-focus validate and list report expired focus while exception remains available", (t) => {
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), "weekly-focus-cli-expiry-"));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const file = path.join(support, "weekly-focus.yaml");
+  fs.writeFileSync(file, focusYaml("", "2000-01-01"));
+  for (const command of ["validate", "list"]) {
+    const result = spawnSync("node", [
+      path.join(repoRoot, "bin/agent-focus"),
+      command,
+      "--file", file,
+    ], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /EXPIRED/);
+    assert.match(result.stdout, /America\/Los_Angeles/);
+  }
+  const goal = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"),
+    "resolve", "W31-CORE",
+    "--file", file,
+  ], { encoding: "utf8" });
+  assert.equal(goal.status, 1);
+  assert.match(goal.stderr, /expired/);
+
+  const exception = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"),
+    "exception",
+    "--category", "production_incident",
+    "--reason", "Production is unavailable.",
+    "--file", file,
+  ], { encoding: "utf8" });
+  assert.equal(exception.status, 0, exception.stderr);
+  assert.match(exception.stdout, /resolved exception production_incident/);
+});
+
 test("write preflight accepts canonical development origin and a clean primary", () => {
   assert.equal(evaluateWorkspace(baseObservation(), "write").ok, true);
 });
@@ -312,6 +379,91 @@ test("AgentCoord matches repository identity before interpreting relative scope"
   assert.deepEqual(result.active.map(({ claim }) => claim.repo), ["shared/core"]);
 });
 
+test("AgentCoord canonical validation blocks relevant invalid claims only", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-invalid-claims-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const claims = path.join(root, "claims");
+  const claim = {
+    repo: "shared/core",
+    slug: "writer",
+    agent: "codex",
+    host: "beelink",
+    safety: "write",
+    scope: ["README.md"],
+    started_at: "2026-07-30T00:00:00Z",
+    expires_at: "2099-01-01T00:00:00Z",
+    next_action: "test",
+  };
+  const write = (repoDirectory, name, value) => {
+    const directory = path.join(claims, ...repoDirectory.split("/"));
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(
+      path.join(directory, `${name}.json`),
+      typeof value === "string" ? value : JSON.stringify(value),
+    );
+  };
+  write("shared/core", "malformed", "{not-json");
+  write("misc", "missing-expiry", { ...claim, expires_at: undefined });
+  write("shared/core", "invalid-scope", { ...claim, scope: "README.md" });
+  write("shared/unrelated", "malformed", "{not-json");
+  write("shared/unrelated", "invalid", {
+    ...claim,
+    repo: "shared/unrelated",
+    expires_at: undefined,
+  });
+
+  const result = readClaims(
+    root,
+    new Set(["shared/core", "/workspace/core"]),
+    "/workspace/core",
+    new Date("2026-07-30T12:00:00Z"),
+  );
+  assert.equal(result.active.length, 0);
+  assert.deepEqual(
+    result.invalid.map((entry) => path.basename(entry.file)).sort(),
+    ["invalid-scope.json", "malformed.json", "missing-expiry.json"],
+  );
+  assert.ok(result.invalid.some((entry) => entry.errors.some((error) => /invalid JSON/.test(error))));
+  assert.ok(result.invalid.some((entry) => entry.errors.includes("missing expires_at")));
+  assert.ok(result.invalid.some((entry) => entry.errors.includes("scope must be an array")));
+
+  const preflight = evaluateWorkspace(baseObservation({ claims: result }), "write");
+  assert.equal(preflight.ok, false);
+  assert.ok(preflight.issues.some((item) => item.code === "agentcoord_claim_ambiguous"));
+
+  const canonical = spawnSync("node", [
+    path.join(repoRoot, "bin/agentcoord"),
+    "validate",
+    "--root", root,
+  ], { encoding: "utf8" });
+  assert.equal(canonical.status, 1);
+  assert.match(canonical.stdout, /invalid JSON/);
+  assert.match(canonical.stdout, /missing expires_at/);
+  assert.match(canonical.stdout, /scope must be an array/);
+});
+
+test("quarantine matching uses exact normalized repository and path identities", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-quarantine-match-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const registry = path.join(root, "registry.md");
+  const aliases = new Set(["owner/app", "/path/app"]);
+  fs.writeFileSync(registry, [
+    "owner/app2 | QUARANTINED",
+    "/path/app2 | QUARANTINED",
+    "",
+  ].join("\n"));
+  assert.deepEqual(quarantineMatch(root, aliases).matches, []);
+
+  fs.appendFileSync(registry, [
+    "owner/app | QUARANTINED",
+    "path=/path/app state=quarantined",
+    "",
+  ].join("\n"));
+  const matches = quarantineMatch(root, aliases).matches;
+  assert.equal(matches.length, 2);
+  assert.deepEqual(matches.map((match) => match.line), [3, 4]);
+});
+
 test("write preflight rejects explicit quarantine and an active overlapping writer", () => {
   const quarantined = evaluateWorkspace(baseObservation({
     quarantine: { available: true, matches: [{ file: "registry.md", line: 4 }] },
@@ -359,6 +511,36 @@ test("begin rejects simultaneous goal and exception fields", (t) => {
     tool: "codex",
     pid: process.pid,
   }), /mutually exclusive/);
+});
+
+test("expired focus blocks goal begin but permits a structured emergency exception", (t) => {
+  const fixture = makeRunFixture(t, "expired-begin");
+  fs.writeFileSync(fixture.focusFile, focusYaml("", "2026-08-02"));
+  const now = new Date("2026-08-03T07:00:00Z");
+  assert.throws(() => beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    now,
+  }), /expired/);
+
+  const begun = beginRun({
+    ...fixture,
+    exceptionCategory: "production_incident",
+    exceptionReason: "Production is unavailable.",
+    tool: "codex",
+    pid: process.pid,
+    runId: "expired-exception",
+    now,
+  });
+  assert.equal(begun.manifest.state, "active");
+  assert.equal(begun.manifest.goal_id, null);
+  assert.deepEqual(begun.manifest.exception, {
+    category: "production_incident",
+    reason: "Production is unavailable.",
+  });
+  assert.equal(begun.focus.focus_status, "expired");
 });
 
 test("atomic repository entrance permits only one concurrent begin", async (t) => {
@@ -460,6 +642,215 @@ test("run manifest with execution_ref validates syntax and quarantines uncommitt
   const sealed = sealRun({ stateRoot: fixture.stateRoot, runId: "quarantine", exitCode: 1 });
   assert.equal(sealed.manifest.state, "quarantined");
   assert.match(sealed.manifest.quarantine_reason, /uncommitted changes/);
+});
+
+test("seal accepts only the exact living controller identity", (t) => {
+  const fixture = makeRunFixture(t, "seal-owner");
+  const begun = beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "seal-owner",
+  });
+  assert.throws(() => sealRun({
+    stateRoot: fixture.stateRoot,
+    runId: "seal-owner",
+    controllerIdentity: {
+      pid: process.pid + 1000000,
+      process_start_token: "linux:other",
+      host: begun.manifest.host,
+    },
+  }), /owned by another controller/);
+  assert.equal(readManifest(begun.file).state, "active");
+
+  const sealed = sealRun({
+    stateRoot: fixture.stateRoot,
+    runId: "seal-owner",
+    pid: process.pid,
+    exitCode: 0,
+  });
+  assert.equal(sealed.manifest.state, "sealed");
+});
+
+test("seal refuses dead and ambiguous owners for reconcile", (t) => {
+  const deadFixture = makeRunFixture(t, "seal-dead-owner");
+  const dead = beginRun({
+    ...deadFixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "seal-dead-owner",
+  });
+  fs.writeFileSync(dead.file, `${JSON.stringify({
+    ...dead.manifest,
+    process_start_token: "linux:dead",
+  }, null, 2)}\n`);
+  assert.throws(() => sealRun({
+    stateRoot: deadFixture.stateRoot,
+    runId: "seal-dead-owner",
+    pid: process.pid,
+  }), /use agent-workspace reconcile/);
+  assert.equal(reconcileRuns({ stateRoot: deadFixture.stateRoot })[0].action, "marked_abandoned");
+
+  const ambiguousFixture = makeRunFixture(t, "seal-ambiguous-owner");
+  const ambiguous = beginRun({
+    ...ambiguousFixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "seal-ambiguous-owner",
+  });
+  fs.writeFileSync(ambiguous.file, `${JSON.stringify({
+    ...ambiguous.manifest,
+    host: "another-host",
+  }, null, 2)}\n`);
+  assert.throws(() => sealRun({
+    stateRoot: ambiguousFixture.stateRoot,
+    runId: "seal-ambiguous-owner",
+    pid: process.pid,
+  }), /ownership is ambiguous/);
+  assert.equal(readManifest(ambiguous.file).state, "active");
+});
+
+test("quarantined run resolution is guarded, terminal, and preserves evidence", (t) => {
+  const fixture = makeRunFixture(t, "resolve-quarantine");
+  const begun = beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "resolve-quarantine",
+  });
+  fs.appendFileSync(path.join(fixture.root, "README.md"), "changed\n");
+  const quarantined = sealRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    pid: process.pid,
+    exitCode: 1,
+  });
+  const originalReason = quarantined.manifest.quarantine_reason;
+
+  assert.throws(() => resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "",
+  }), /resolution reason is required/);
+  fs.writeFileSync(path.join(fixture.root, "README.md"), "initial\n");
+  assert.throws(() => resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "Repository inspected and restored.",
+  }), /owner is still living/);
+
+  const deadManifest = {
+    ...readManifest(begun.file),
+    process_start_token: "linux:dead",
+  };
+  fs.writeFileSync(begun.file, `${JSON.stringify(deadManifest, null, 2)}\n`);
+  fs.writeFileSync(begun.file, `${JSON.stringify({
+    ...deadManifest,
+    repository_root: path.join(path.dirname(fixture.stateRoot), "missing-repository"),
+  }, null, 2)}\n`);
+  assert.throws(() => resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "Repository inspected and restored.",
+  }), /repository status is unreadable/);
+  fs.writeFileSync(begun.file, `${JSON.stringify(deadManifest, null, 2)}\n`);
+  fs.appendFileSync(path.join(fixture.root, "README.md"), "changed again\n");
+  assert.throws(() => resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "Repository inspected and restored.",
+  }), /uncommitted changes/);
+  fs.writeFileSync(path.join(fixture.root, "README.md"), "initial\n");
+
+  const livingIdentity = processIdentity(process.pid);
+  const otherFile = path.join(fixture.stateRoot, "other-living.json");
+  fs.writeFileSync(otherFile, `${JSON.stringify({
+    ...deadManifest,
+    run_id: "other-living",
+    state: "active",
+    ...livingIdentity,
+    exit_code: null,
+    ending_head: null,
+    quarantine_reason: null,
+  }, null, 2)}\n`);
+  assert.throws(() => resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "Repository inspected and restored.",
+  }), /living run other-living owns the same Git common directory/);
+  fs.writeFileSync(otherFile, `${JSON.stringify({
+    ...readManifest(otherFile),
+    state: "sealed",
+    exit_code: 0,
+    ending_head: git(fixture.root, "rev-parse", "HEAD"),
+    sealed_at: "2026-08-03T07:00:00Z",
+  }, null, 2)}\n`);
+
+  const result = resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "Repository inspected and restored.",
+    pid: process.pid,
+    now: new Date("2026-08-03T08:00:00Z"),
+  });
+  assert.equal(result.manifest.state, "resolved");
+  assert.equal(result.manifest.quarantine_reason, originalReason);
+  assert.equal(result.manifest.resolution_reason, "Repository inspected and restored.");
+  assert.equal(result.manifest.resolved_at, "2026-08-03T08:00:00Z");
+  assert.equal(result.manifest.resolved_head, git(fixture.root, "rev-parse", "HEAD"));
+  assert.deepEqual(result.manifest.resolver, processIdentity(process.pid));
+  assert.equal(fs.existsSync(begun.file), true);
+  assert.equal(fs.readFileSync(path.join(fixture.root, "README.md"), "utf8"), "initial\n");
+
+  const preflight = preflightWorkspace(fixture.root, "write", fixture);
+  assert.equal(preflight.ok, true);
+  assert.equal(preflight.issues.some((item) => item.code === "quarantined_run"), false);
+  assert.throws(() => resolveRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-quarantine",
+    reason: "Resolve twice.",
+  }), /is resolved, not quarantined/);
+});
+
+test("agent-workspace resolve command records resolver identity", (t) => {
+  const fixture = makeRunFixture(t, "resolve-cli");
+  const begun = beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "resolve-cli",
+  });
+  fs.appendFileSync(path.join(fixture.root, "README.md"), "changed\n");
+  sealRun({
+    stateRoot: fixture.stateRoot,
+    runId: "resolve-cli",
+    pid: process.pid,
+    exitCode: 1,
+  });
+  fs.writeFileSync(path.join(fixture.root, "README.md"), "initial\n");
+  fs.writeFileSync(begun.file, `${JSON.stringify({
+    ...readManifest(begun.file),
+    process_start_token: "linux:dead",
+  }, null, 2)}\n`);
+
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-workspace"),
+    "resolve",
+    "--run-id", "resolve-cli",
+    "--reason", "Repository inspected and clean.",
+    "--state-root", fixture.stateRoot,
+    "--pid", String(process.pid),
+  ], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /agent-workspace: resolved run=resolve-cli/);
+  const resolved = readManifest(begun.file);
+  assert.equal(resolved.state, "resolved");
+  assert.deepEqual(resolved.resolver, processIdentity(process.pid));
 });
 
 test("run manifest rejects an invalid execution_ref", (t) => {

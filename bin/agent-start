@@ -213,22 +213,32 @@ function buildSurface(packet) {
 
 function collectWeeklyFocus(args) {
   try {
-    const focus = loadFocus(args.focusFile);
+    const focus = loadFocus(args.focusFile, { allowExpired: true });
     const selected = args.goalId ? resolveGoal(focus, args.goalId) : null;
     return {
-      ok: true,
+      ok: !focus.expired,
       file: focus.file,
       week_ending: focus.week_ending,
+      status: focus.status,
+      expired: focus.expired,
+      current_date: focus.current_date,
+      time_zone: focus.time_zone,
       goals: focus.goals,
       selected,
       not_this_week: focus.not_this_week,
-      error: null,
+      error: focus.expired
+        ? `week_ending ${focus.week_ending} expired in ${focus.time_zone}; current date is ${focus.current_date}`
+        : null,
     };
   } catch (error) {
     return {
       ok: false,
       file: args.focusFile,
       week_ending: null,
+      status: "invalid",
+      expired: false,
+      current_date: null,
+      time_zone: "America/Los_Angeles",
       goals: [],
       selected: null,
       not_this_week: [],
