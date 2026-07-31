@@ -97,6 +97,7 @@ authority.
 
 For write mode, preflight refuses:
 
+- a detached current worktree;
 - a primary checkout with uncommitted changes;
 - another linked worktree with uncommitted or ambiguous changes and no living
   PID/start-token run owner;
@@ -110,11 +111,14 @@ For write mode, preflight refuses:
 `github.com/kehle-tdg-dev/*` is the TDG development namespace. AgentCoord
 relative scopes are interpreted only after the claim repository matches the
 repository being checked. `agentcoord` and preflight share one claim validator.
+Claims require at least one scope entry.
 An unreadable or invalid claim blocks write preflight only when either its
 parsed repository identity or its claim-directory identity matches the checked
-repository. Quarantine entries use exact normalized repository or absolute-path
-identity; prefix siblings do not collide. Preflight only diagnoses. It never
-modifies a remote or checkout.
+repository. Mirror policy applies to parsed GitHub URL identity, including
+standard URL forms with explicit ports. Quarantine entries use exact normalized
+repository or absolute-path identity across the current and linked worktrees;
+prefix siblings do not collide. Preflight only diagnoses. It never modifies a
+remote or checkout.
 
 Read mode does not block on write hazards, but still reports them and sets
 `shouldSurface=true`. A non-Git root remains a refusal in either mode.

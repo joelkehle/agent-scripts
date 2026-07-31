@@ -20,6 +20,7 @@ const {
 } = require("../lib/weekly-focus");
 const {
   evaluateWorkspace,
+  githubRemote,
   preflightWorkspace,
   quarantineMatch,
   readClaims,
@@ -189,6 +190,11 @@ test("valid weekly focus supports several mixed execution_refs", () => {
   ]);
 });
 
+test("valid weekly focus accepts an explicitly empty execution_refs list", () => {
+  const focus = parseValidFocus(focusYaml("    execution_refs: []\n"));
+  assert.deepEqual(focus.goals[0].execution_refs, []);
+});
+
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
   const missing = parseFocusYaml("week_ending: 2026-08-02\ngoals: []\n");
   assert.equal(validateFocus(missing.focus, missing.errors).ok, false);
@@ -203,6 +209,13 @@ test("weekly focus rejects invalid files, execution kinds, and missing execution
       - kind: mission
 `));
   assert.match(validateFocus(missingId.focus, missingId.errors).errors.join("\n"), /id must be/);
+});
+
+test("weekly focus rejects goal IDs with surrounding whitespace", () => {
+  const parsed = parseFocusYaml(focusYaml().replace("id: W31-CORE", 'id: " W31-CORE "'));
+  const result = validateFocus(parsed.focus, parsed.errors);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /id must not contain leading or trailing whitespace/);
 });
 
 test("goal and exception resolution validate declared IDs and reasons", () => {
@@ -305,6 +318,19 @@ test("write preflight rejects a mirror push URL behind a development fetch URL",
   assert.equal(result.ok, false);
 });
 
+test("write preflight enforces mirror policy for GitHub URLs with explicit ports", (t) => {
+  assert.deepEqual(githubRemote("https://github.com:443/ucla-tdg/core.git"), {
+    owner: "ucla-tdg",
+    repo: "core",
+  });
+  const fixture = makeRunFixture(t, "explicit-port");
+  git(fixture.root, "config", "remote.origin.url", "https://github.com:443/ucla-tdg/explicit-port.git");
+  const result = preflightWorkspace(fixture.root, "write", fixture);
+  assert.equal(result.ok, false);
+  assert.ok(result.issues.some((item) => item.code === "read_only_mirror_origin"));
+  assert.ok(result.issues.some((item) => item.code === "read_only_mirror_push"));
+});
+
 test("write preflight rejects primary uncommitted changes", () => {
   const observation = baseObservation();
   observation.worktrees[0] = { ...observation.worktrees[0], has_changes: true, status: " M README.md" };
@@ -346,6 +372,26 @@ test("divergence blocks write mode but remains visible in read mode", () => {
   const read = evaluateWorkspace(observation, "read");
   assert.equal(read.ok, true);
   assert.ok(read.issues.some((item) => item.code === "primary_divergent"));
+});
+
+test("write preflight and begin refuse a detached current worktree", (t) => {
+  const fixture = makeRunFixture(t, "detached-current");
+  const linked = path.join(path.dirname(fixture.stateRoot), "detached-worktree");
+  git(fixture.root, "worktree", "add", "--detach", linked, "HEAD");
+
+  const preflight = preflightWorkspace(linked, "write", fixture);
+  assert.equal(preflight.ok, false);
+  assert.equal(preflight.branch, null);
+  assert.ok(preflight.issues.some((item) => item.code === "detached_current_worktree"));
+  assert.throws(() => beginRun({
+    ...fixture,
+    root: linked,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "detached-current",
+  }), /workspace preflight refused begin/);
+  assert.equal(fs.existsSync(path.join(fixture.stateRoot, "detached-current.json")), false);
 });
 
 test("AgentCoord matches repository identity before interpreting relative scope", (t) => {
@@ -442,6 +488,44 @@ test("AgentCoord canonical validation blocks relevant invalid claims only", (t) 
   assert.match(canonical.stdout, /scope must be an array/);
 });
 
+test("AgentCoord empty scope is a relevant invalid claim that blocks write preflight", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-empty-scope-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const directory = path.join(root, "claims", "shared", "core");
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, "empty-scope.json"), JSON.stringify({
+    repo: "shared/core",
+    slug: "writer",
+    agent: "codex",
+    host: "beelink",
+    safety: "write",
+    scope: [],
+    started_at: "2026-07-30T00:00:00Z",
+    expires_at: "2099-01-01T00:00:00Z",
+    next_action: "test",
+  }));
+
+  const claims = readClaims(
+    root,
+    new Set(["shared/core", "/workspace/core"]),
+    "/workspace/core",
+    new Date("2026-07-30T12:00:00Z"),
+  );
+  assert.equal(claims.active.length, 0);
+  assert.equal(claims.invalid.length, 1);
+  assert.ok(claims.invalid[0].errors.includes("scope must contain at least one entry"));
+  const preflight = evaluateWorkspace(baseObservation({ claims }), "write");
+  assert.equal(preflight.ok, false);
+  assert.ok(preflight.issues.some((item) => item.code === "agentcoord_claim_ambiguous"));
+  const canonical = spawnSync("node", [
+    path.join(repoRoot, "bin/agentcoord"),
+    "validate",
+    "--root", root,
+  ], { encoding: "utf8" });
+  assert.equal(canonical.status, 1);
+  assert.match(canonical.stdout, /scope must contain at least one entry/);
+});
+
 test("quarantine matching uses exact normalized repository and path identities", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-quarantine-match-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -462,6 +546,23 @@ test("quarantine matching uses exact normalized repository and path identities",
   const matches = quarantineMatch(root, aliases).matches;
   assert.equal(matches.length, 2);
   assert.deepEqual(matches.map((match) => match.line), [3, 4]);
+});
+
+test("linked worktree quarantine paths are included in repository aliases", (t) => {
+  const fixture = makeRunFixture(t, "linked-quarantine");
+  const linked = path.join(path.dirname(fixture.stateRoot), "linked-worktree");
+  git(fixture.root, "worktree", "add", "-b", "linked-quarantine", linked, "HEAD");
+  fs.writeFileSync(
+    path.join(fixture.quarantineRoot, "registry.md"),
+    `${linked} | QUARANTINED\n`,
+  );
+
+  const linkedPreflight = preflightWorkspace(linked, "write", fixture);
+  assert.equal(linkedPreflight.ok, false);
+  assert.ok(linkedPreflight.issues.some((item) => item.code === "repository_quarantined"));
+  const primaryPreflight = preflightWorkspace(fixture.root, "write", fixture);
+  assert.equal(primaryPreflight.ok, false);
+  assert.ok(primaryPreflight.issues.some((item) => item.code === "repository_quarantined"));
 });
 
 test("write preflight rejects explicit quarantine and an active overlapping writer", () => {
