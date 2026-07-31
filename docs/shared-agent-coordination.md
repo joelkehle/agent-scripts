@@ -121,6 +121,13 @@ agentcoord list --all
 agentcoord check
 ```
 
+Local launch/run ownership is complementary, not a replacement for AgentCoord.
+`workspace-preflight` reads active AgentCoord write claims and
+`agent-workspace` records PID/start-token ownership under
+`~/.local/state/agent-workspaces/`. Cross-host claims remain here; local process
+entrance, exit, and dead-owner reconciliation are documented in
+`docs/launch-safety.md`.
+
 ## Claim Contract
 
 Before overlapping write work, create a claim. Claims are coordination hints, not permanent locks.

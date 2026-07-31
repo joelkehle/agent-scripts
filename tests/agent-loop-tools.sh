@@ -341,6 +341,31 @@ assert_contains "$agent_start_json" '"workbench"'
 assert_contains "$agent_start_json" '"results"'
 
 workbench_summary="$tmp/workbench-summary.json"
+notice_repo="$tmp/notice-repo"
+notice_quarantine="$tmp/notice-quarantine"
+notice_state="$tmp/notice-state"
+notice_focus="$tmp/notice-weekly-focus.yaml"
+mkdir -p "$notice_repo" "$notice_quarantine" "$notice_state"
+git -C "$notice_repo" init -q -b main
+git -C "$notice_repo" config user.email "agent-loop-test@example.com"
+git -C "$notice_repo" config user.name "Agent Loop Test"
+printf 'notice fixture\n' > "$notice_repo/README.md"
+git -C "$notice_repo" add README.md
+git -C "$notice_repo" commit -q -m "init"
+git -C "$notice_repo" remote add origin https://github.com/kehle-tdg-dev/notice-repo.git
+notice_head="$(git -C "$notice_repo" rev-parse HEAD)"
+git -C "$notice_repo" update-ref refs/remotes/origin/main "$notice_head"
+git -C "$notice_repo" branch --set-upstream-to=origin/main main >/dev/null
+cat > "$notice_focus" <<'YAML'
+week_ending: 2026-08-02
+goals:
+  - id: NOTICE
+    done: Notice remains quiet.
+    required_milestone: Safety fixtures pass.
+    fallback: Use read-only output.
+not_this_week:
+  - Production writes
+YAML
 cat > "$workbench_summary" <<'JSON'
 {
   "summary": {
@@ -357,7 +382,12 @@ cat > "$workbench_summary" <<'JSON'
   }
 }
 JSON
-notice_clean="$(agent-start --notice --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
+notice_clean="$(
+  AGENT_FOCUS_FILE="$notice_focus" AGENT_QUARANTINE_ROOT="$notice_quarantine" \
+    AGENT_WORKSPACE_STATE_ROOT="$notice_state" AGENTCOORD_ROOT="$coord_root" \
+    agent-start --notice --mode read --root "$notice_repo" \
+      --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/
+)"
 [ "$notice_clean" = "" ] || fail "clean notice should be quiet, got: $notice_clean"
 
 cat > "$workbench_summary" <<'JSON'
@@ -379,11 +409,21 @@ cat > "$workbench_summary" <<'JSON'
   }
 }
 JSON
-notice_warn="$(agent-start --notice --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/)"
+notice_warn="$(
+  AGENT_FOCUS_FILE="$notice_focus" AGENT_QUARANTINE_ROOT="$notice_quarantine" \
+    AGENT_WORKSPACE_STATE_ROOT="$notice_state" AGENTCOORD_ROOT="$coord_root" \
+    agent-start --notice --mode read --root "$notice_repo" \
+      --workbench-summary "$workbench_summary" --workbench-url http://fallback.test/latest/
+)"
 assert_contains "$notice_warn" "Agent workbench warning: 2 issues"
 assert_contains "$notice_warn" "- missing tool: codex"
 assert_contains "$notice_warn" "Proof: http://example.test/workbench/latest/"
-notice_missing="$(agent-start --notice --workbench-summary "$tmp/missing-workbench.json" --workbench-url http://fallback.test/latest/)"
+notice_missing="$(
+  AGENT_FOCUS_FILE="$notice_focus" AGENT_QUARANTINE_ROOT="$notice_quarantine" \
+    AGENT_WORKSPACE_STATE_ROOT="$notice_state" AGENTCOORD_ROOT="$coord_root" \
+    agent-start --notice --mode read --root "$notice_repo" \
+      --workbench-summary "$tmp/missing-workbench.json" --workbench-url http://fallback.test/latest/
+)"
 assert_contains "$notice_missing" "Agent workbench warning: workbench summary unavailable"
 assert_contains "$notice_missing" "Proof: http://fallback.test/latest/"
 

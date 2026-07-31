@@ -32,9 +32,29 @@ Local tool catalog for this machine.
 - Examples: `bus-discover`, `bus-discover --capability events-list`, `bus-discover --format json`
 
 ## agent-start
-- Purpose: read-only coding-agent startup packet with WWI, compliance, bus discovery, AgentCoord claims, docs, git state, validation dry-run, and loop receipt context.
+- Purpose: read-only coding-agent startup packet with weekly focus, workspace
+  preflight, run state, WWI, compliance, bus discovery, AgentCoord claims, docs,
+  git state, and validation dry-run.
 - Location: ~/Projects/shared/agent-scripts/bin/agent-start
 - Docs: ~/Projects/shared/agent-scripts/docs/agent-start.md
+
+## agent-focus
+- Purpose: validate, list, and resolve the current weekly-focus contract or a
+  bounded declared exception.
+- Location: ~/Projects/shared/agent-scripts/bin/agent-focus
+- Docs: ~/Projects/shared/agent-scripts/docs/launch-safety.md
+
+## workspace-preflight
+- Purpose: read-only repository authority, worktree ownership, divergence,
+  AgentCoord collision, and quarantine diagnosis for `read|write` mode.
+- Location: ~/Projects/shared/agent-scripts/bin/workspace-preflight
+- Docs: ~/Projects/shared/agent-scripts/docs/launch-safety.md
+
+## agent-workspace
+- Purpose: atomic local begin, seal, and dead-owner reconcile manifests for
+  coding-agent runs.
+- Location: ~/Projects/shared/agent-scripts/bin/agent-workspace
+- Docs: ~/Projects/shared/agent-scripts/docs/launch-safety.md
 
 ## agentcoord
 - Purpose: AgentCoord claim lifecycle and validation CLI.
@@ -44,6 +64,13 @@ Local tool catalog for this machine.
 ## agent-env-install
 - Purpose: install user-level command shims for coding-agent tools; production host-level links are owned by shared/manager.
 - Location: ~/Projects/shared/agent-scripts/bin/agent-env-install
+- Side effect: even with a custom `--prefix`, it also runs
+  `install-claude-agents` for the invoking user and writes symlinks under
+  `${CLAUDE_AGENTS_DIR:-~/.claude/agents}`.
+- Tests and restricted sandboxes: always set `CLAUDE_AGENTS_DIR` to a temporary
+  directory. `ln: failed to create symbolic link ... Read-only file system`
+  means the caller failed to isolate this intentional user-level write; it is
+  not evidence of an implementation test failure.
 
 ## codex-bg
 - Purpose: durable background runner for long Codex-adjacent jobs; captures logs, writes resume metadata, and can send completion email through `jk-gmail-ingest`.

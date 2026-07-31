@@ -88,7 +88,9 @@ ensure_dir
 for tool in \
   agent-check \
   agent-env-install \
+  agent-focus \
   agent-start \
+  agent-workspace \
   agentcoord \
   bus-discover \
   codex-bg \
@@ -102,6 +104,7 @@ for tool in \
   loop-receipt \
   loop-resume \
   machine-compliance \
+  workspace-preflight \
   trash
 do
   link_file "$script_dir/$tool" "$tool"
@@ -142,7 +145,7 @@ cat <<VERIFY
 
 agent-env-install: installed shims into $prefix
 agent-env-install: verify with:
-  ssh beelink 'command -v agent-start agentcoord machine-compliance committer contributor-agent docs-list bus-discover wwi claude codex'
+  ssh beelink 'command -v agent-start agent-focus workspace-preflight agent-workspace agentcoord machine-compliance committer contributor-agent docs-list bus-discover wwi claude codex'
 VERIFY
 
 if [ "$dry_run" -eq 0 ]; then

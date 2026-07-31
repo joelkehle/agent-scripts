@@ -1,0 +1,179 @@
+#!/usr/bin/env node
+"use strict";
+
+const path = require("node:path");
+const {
+  WorkspaceRunError,
+  beginRun,
+  reconcileRuns,
+  resolveRun,
+  sealRun,
+} = require("../lib/agent-workspace");
+const { DEFAULT_FOCUS_FILE } = require("../lib/weekly-focus");
+const {
+  DEFAULT_AGENTCOORD_ROOT,
+  DEFAULT_QUARANTINE_ROOT,
+  DEFAULT_STATE_ROOT,
+} = require("../lib/workspace-preflight");
+
+function usage() {
+  console.log(`Usage:
+  agent-workspace begin --root DIR --goal GOAL_ID --tool TOOL [options]
+  agent-workspace begin --root DIR --exception-category CATEGORY --exception-reason TEXT --tool TOOL [options]
+  agent-workspace seal --run-id RUN_ID [--exit-code CODE] [--state-root DIR] [--json]
+  agent-workspace resolve --run-id RUN_ID --reason TEXT [--state-root DIR] [--json]
+  agent-workspace reconcile [--state-root DIR] [--json]
+
+Begin options:
+  --execution-kind mission|initiative|campaign
+  --execution-id ID
+  --pid PID
+  --focus-file PATH
+  --agentcoord-root DIR
+  --quarantine-root DIR
+  --state-root DIR
+
+This command never stashes, resets, cleans, commits, deletes, or creates/removes
+a worktree. Supervised execution references are opaque bindings only.`);
+}
+
+function parseArgs(argv) {
+  const args = {
+    command: argv.shift() || "",
+    root: "",
+    goalId: "",
+    exceptionCategory: "",
+    exceptionReason: "",
+    exceptionSpecified: false,
+    executionKind: "",
+    executionId: "",
+    tool: "",
+    pid: null,
+    runId: "",
+    reason: "",
+    exitCode: 0,
+    focusFile: DEFAULT_FOCUS_FILE,
+    agentcoordRoot: DEFAULT_AGENTCOORD_ROOT,
+    quarantineRoot: DEFAULT_QUARANTINE_ROOT,
+    stateRoot: DEFAULT_STATE_ROOT,
+    json: false,
+    help: false,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--help" || arg === "-h") args.help = true;
+    else if (arg === "--json") args.json = true;
+    else if (arg === "--root") args.root = path.resolve(argv[++index]);
+    else if (arg === "--goal") args.goalId = argv[++index];
+    else if (arg === "--exception-category") {
+      args.exceptionCategory = argv[++index];
+      args.exceptionSpecified = true;
+    }
+    else if (arg === "--exception-reason") {
+      args.exceptionReason = argv[++index];
+      args.exceptionSpecified = true;
+    }
+    else if (arg === "--execution-kind") args.executionKind = argv[++index];
+    else if (arg === "--execution-id") args.executionId = argv[++index];
+    else if (arg === "--tool") args.tool = argv[++index];
+    else if (arg === "--pid") args.pid = Number(argv[++index]);
+    else if (arg === "--run-id") args.runId = argv[++index];
+    else if (arg === "--reason") args.reason = argv[++index];
+    else if (arg === "--exit-code") args.exitCode = Number(argv[++index]);
+    else if (arg === "--focus-file") args.focusFile = argv[++index];
+    else if (arg === "--agentcoord-root") args.agentcoordRoot = argv[++index];
+    else if (arg === "--quarantine-root") args.quarantineRoot = argv[++index];
+    else if (arg === "--state-root") args.stateRoot = argv[++index];
+    else throw new Error(`unknown argument: ${arg}`);
+  }
+  if (args.executionKind || args.executionId) {
+    args.executionRef = { kind: args.executionKind, id: args.executionId };
+  } else {
+    args.executionRef = null;
+  }
+  return args;
+}
+
+function renderBegin(result) {
+  const manifest = result.manifest;
+  const lines = [
+    `agent-workspace: active run=${manifest.run_id}`,
+    `root: ${manifest.repository_root}`,
+    `origin fetch: ${manifest.canonical_remote}`,
+    `origin push: ${(manifest.origin_push_urls || [manifest.canonical_remote]).join(", ")}`,
+    `goal: ${manifest.goal_id || `exception:${manifest.exception.category}`}`,
+  ];
+  if (manifest.execution_ref) {
+    lines.push(`execution: ${manifest.execution_ref.kind}:${manifest.execution_ref.id}`);
+  }
+  lines.push(`manifest: ${result.file}`);
+  return `${lines.join("\n")}\n`;
+}
+
+function renderSeal(result) {
+  const manifest = result.manifest;
+  const lines = [
+    `agent-workspace: ${manifest.state} run=${manifest.run_id} exit_code=${manifest.exit_code}`,
+    `starting HEAD: ${manifest.starting_head}`,
+    `ending HEAD: ${manifest.ending_head || "(unavailable)"}`,
+  ];
+  if (manifest.quarantine_reason) lines.push(`quarantine: ${manifest.quarantine_reason}`);
+  lines.push(`manifest: ${result.file}`);
+  return `${lines.join("\n")}\n`;
+}
+
+function renderResolve(result) {
+  const manifest = result.manifest;
+  return [
+    `agent-workspace: resolved run=${manifest.run_id}`,
+    `resolved HEAD: ${manifest.resolved_head}`,
+    `resolution reason: ${manifest.resolution_reason}`,
+    `manifest: ${result.file}`,
+    "",
+  ].join("\n");
+}
+
+function renderReconcile(results) {
+  if (!results.length) return "agent-workspace: no active runs to reconcile\n";
+  const lines = [];
+  for (const item of results) {
+    lines.push(`agent-workspace: ${item.action} run=${item.run_id || "(unknown)"} file=${item.file}`);
+    for (const error of item.errors || []) lines.push(`  error: ${error}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+try {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    process.exit(0);
+  }
+  if (!["begin", "seal", "resolve", "reconcile"].includes(args.command)) {
+    throw new Error(`unknown command: ${args.command || "(missing)"}`);
+  }
+  let result;
+  if (args.command === "begin") result = beginRun(args);
+  else if (args.command === "seal") {
+    if (!args.runId) throw new Error("--run-id is required");
+    result = sealRun({ ...args, pid: args.pid || process.ppid });
+  } else if (args.command === "resolve") {
+    if (!args.runId) throw new Error("--run-id is required");
+    result = resolveRun({ ...args, pid: args.pid || process.ppid });
+  } else result = reconcileRuns(args);
+  if (args.json) console.log(JSON.stringify(result, null, 2));
+  else if (args.command === "begin") process.stdout.write(renderBegin(result));
+  else if (args.command === "seal") process.stdout.write(renderSeal(result));
+  else if (args.command === "resolve") process.stdout.write(renderResolve(result));
+  else {
+    process.stdout.write(renderReconcile(result));
+  }
+  if (args.command === "reconcile" &&
+      result.some((item) => item.action === "invalid_manifest")) process.exitCode = 1;
+} catch (error) {
+  console.error(`agent-workspace: ${error.message}`);
+  if (error instanceof WorkspaceRunError && error.details) {
+    console.error(JSON.stringify(error.details, null, 2));
+  }
+  process.exit(error instanceof WorkspaceRunError ? 1 : 2);
+}
