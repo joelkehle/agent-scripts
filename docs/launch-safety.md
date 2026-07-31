@@ -83,8 +83,10 @@ workspace-preflight --root /path/to/repo --mode write
 workspace-preflight --root /path/to/repo --mode write --json
 ```
 
-Every result reports the actual `origin` URL as `canonical_remote`. Local
-directory names never establish repository authority.
+Every result reports the actual `origin` fetch URL and every effective
+`origin` push URL. `canonical_remote` remains the machine-readable fetch URL
+for v1 compatibility. Local directory names never establish repository
+authority.
 
 For write mode, preflight refuses:
 
@@ -95,10 +97,16 @@ For write mode, preflight refuses:
 - missing or divergent canonical `origin/*` tracking state;
 - an active overlapping AgentCoord writer;
 - a living, stale, or quarantined local run collision;
-- `github.com/ucla-tdg/*`, which is a read-only mirror namespace.
+- an `origin` fetch URL or any effective `origin` push URL under
+  `github.com/ucla-tdg/*`, which is a read-only mirror namespace.
 
-`github.com/kehle-tdg-dev/*` is the TDG development namespace. Preflight only
-diagnoses. It never modifies a remote or checkout.
+`github.com/kehle-tdg-dev/*` is the TDG development namespace. AgentCoord
+relative scopes are interpreted only after the claim repository matches the
+repository being checked. Preflight only diagnoses. It never modifies a remote
+or checkout.
+
+Read mode does not block on write hazards, but still reports them and sets
+`shouldSurface=true`. A non-Git root remains a refusal in either mode.
 
 Fixture/test overrides:
 
@@ -138,12 +146,16 @@ agent-workspace begin \
   --pid "$$"
 ```
 
-`begin` first requires a successful write preflight, atomically records
-`starting`, then atomically advances to `active`. The manifest records schema,
+`begin` first requires a successful write preflight, atomically acquires a
+short-lived entrance claim keyed by the canonical Git common directory, and
+reruns preflight while holding that claim. It then atomically records `starting`
+and atomically advances to `active` before releasing the entrance claim. The
+claim carries PID/start-token ownership; a complete dead claim is reclaimed,
+while an unreadable claim fails closed. The manifest records schema,
 run ID, repository root and Git common directory, actual origin, goal or
 exception, optional single execution reference, tool, PID/start token, host,
 branch, starting HEAD, timestamp, state, exit code, ending HEAD, and any
-quarantine reason.
+quarantine reason. Goal and exception arguments are mutually exclusive.
 
 Seal with the process exit code:
 
@@ -159,6 +171,10 @@ Reconcile dead owners explicitly:
 ```bash
 agent-workspace reconcile
 ```
+
+Every manifest is fully validated on every read. A relevant malformed,
+unreadable, or ambiguous manifest fails closed in preflight and is reported by
+reconciliation without being rewritten.
 
 PID plus process-start-token identity prevents PID reuse from impersonating the
 original owner. A dead owner with a clean checkout becomes `abandoned`.

@@ -48,7 +48,8 @@ function render(result) {
   const lines = [
     `workspace-preflight: ${result.ok ? "PASS" : "REFUSE"} mode=${result.mode}`,
     `root: ${result.repository_root}`,
-    `canonical remote: ${result.canonical_remote || "(unavailable)"}`,
+    `origin fetch: ${result.origin_fetch_url || "(unavailable)"}`,
+    `origin push: ${result.origin_push_urls.length ? result.origin_push_urls.join(", ") : "(unavailable)"}`,
     `branch: ${result.branch || "(detached)"} head=${result.starting_head || "(unavailable)"}`,
   ];
   if (result.tracking_branch) {

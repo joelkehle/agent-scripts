@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { Worker } = require("node:worker_threads");
 
 const {
   FocusValidationError,
@@ -14,13 +15,19 @@ const {
   resolveGoal,
   validateFocus,
 } = require("../lib/weekly-focus");
-const { evaluateWorkspace } = require("../lib/workspace-preflight");
+const {
+  evaluateWorkspace,
+  preflightWorkspace,
+  readClaims,
+} = require("../lib/workspace-preflight");
 const {
   beginRun,
+  entranceClaimPath,
   readManifest,
   reconcileRuns,
   sealRun,
 } = require("../lib/agent-workspace");
+const { processIdentity } = require("../lib/process-owner");
 
 const repoRoot = path.resolve(__dirname, "..");
 
@@ -51,7 +58,10 @@ function baseObservation(overrides = {}) {
     current_root: "/workspace/core",
     primary_root: "/workspace/core",
     canonical_remote: "https://github.com/kehle-tdg-dev/core.git",
+    origin_fetch_url: "https://github.com/kehle-tdg-dev/core.git",
+    origin_push_urls: ["https://github.com/kehle-tdg-dev/core.git"],
     github: { owner: "kehle-tdg-dev", repo: "core" },
+    push_github: [{ owner: "kehle-tdg-dev", repo: "core" }],
     branch: "main",
     starting_head: "a".repeat(40),
     tracking_branch: "origin/main",
@@ -66,6 +76,7 @@ function baseObservation(overrides = {}) {
     claims: { available: true, active: [], invalid: [] },
     quarantine: { available: true, matches: [] },
     runs: [],
+    invalid_runs: [],
     ...overrides,
   };
 }
@@ -102,6 +113,45 @@ function makeRunFixture(t, name) {
   fs.mkdirSync(quarantineRoot, { recursive: true });
   fs.writeFileSync(focusFile, focusYaml());
   return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot };
+}
+
+function makeAgentStartSupport(fixture) {
+  const stubDir = path.join(path.dirname(fixture.stateRoot), "stubs");
+  fs.mkdirSync(stubDir, { recursive: true });
+  for (const command of [
+    "agent-start",
+    "agent-focus",
+    "workspace-preflight",
+    "agent-workspace",
+    "agentcoord",
+    "machine-compliance",
+    "committer",
+    "docs-list",
+    "bus-discover",
+    "wwi",
+    "claude",
+    "codex",
+    "agent-check",
+  ]) {
+    const file = path.join(stubDir, command);
+    fs.writeFileSync(file, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  }
+  const workbench = path.join(path.dirname(fixture.stateRoot), "workbench.json");
+  fs.writeFileSync(workbench, JSON.stringify({
+    summary: { shouldSurface: false, surfaceReasons: [] },
+    artifacts: { latestUrl: "http://example.test/proof/" },
+  }));
+  return {
+    stubDir,
+    workbench,
+    env: {
+      ...process.env,
+      PATH: `${stubDir}:${process.env.PATH}`,
+      AGENTCOORD_ROOT: fixture.agentcoordRoot,
+      AGENT_QUARANTINE_ROOT: fixture.quarantineRoot,
+      AGENT_WORKSPACE_STATE_ROOT: fixture.stateRoot,
+    },
+  };
 }
 
 test("valid weekly focus supports no execution_refs", () => {
@@ -168,10 +218,24 @@ test("write preflight accepts canonical development origin and a clean primary",
 test("write preflight rejects the ucla-tdg mirror origin", () => {
   const result = evaluateWorkspace(baseObservation({
     canonical_remote: "https://github.com/ucla-tdg/core.git",
+    origin_fetch_url: "https://github.com/ucla-tdg/core.git",
+    origin_push_urls: ["https://github.com/ucla-tdg/core.git"],
     github: { owner: "ucla-tdg", repo: "core" },
+    push_github: [{ owner: "ucla-tdg", repo: "core" }],
   }), "write");
   assert.equal(result.ok, false);
-  assert.equal(result.issues[0].code, "read_only_mirror_origin");
+  assert.ok(result.issues.some((item) => item.code === "read_only_mirror_origin"));
+  assert.ok(result.issues.some((item) => item.code === "read_only_mirror_push"));
+});
+
+test("write preflight rejects a mirror push URL behind a development fetch URL", (t) => {
+  const fixture = makeRunFixture(t, "split-push");
+  git(fixture.root, "config", "--add", "remote.origin.pushurl", "https://github.com/ucla-tdg/split-push.git");
+  const result = preflightWorkspace(fixture.root, "write", fixture);
+  assert.equal(result.origin_fetch_url, "https://github.com/kehle-tdg-dev/split-push.git");
+  assert.deepEqual(result.origin_push_urls, ["https://github.com/ucla-tdg/split-push.git"]);
+  assert.ok(result.issues.some((item) => item.code === "read_only_mirror_push"));
+  assert.equal(result.ok, false);
 });
 
 test("write preflight rejects primary uncommitted changes", () => {
@@ -207,6 +271,47 @@ test("write preflight rejects unowned linked changes and accepts a living owner"
   assert.equal(accepted.ok, true);
 });
 
+test("divergence blocks write mode but remains visible in read mode", () => {
+  const observation = baseObservation({ divergence: { ahead: 1, behind: 0 } });
+  const write = evaluateWorkspace(observation, "write");
+  assert.equal(write.ok, false);
+  assert.ok(write.issues.some((item) => item.code === "primary_divergent"));
+  const read = evaluateWorkspace(observation, "read");
+  assert.equal(read.ok, true);
+  assert.ok(read.issues.some((item) => item.code === "primary_divergent"));
+});
+
+test("AgentCoord matches repository identity before interpreting relative scope", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-claims-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const claims = path.join(root, "claims");
+  const expires = "2099-01-01T00:00:00Z";
+  const base = {
+    slug: "writer",
+    agent: "codex",
+    host: "beelink",
+    safety: "write",
+    started_at: "2026-07-30T00:00:00Z",
+    expires_at: expires,
+    next_action: "test",
+  };
+  const writeClaim = (repo, name, scope) => {
+    const dir = path.join(claims, ...repo.split("/"));
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify({ ...base, repo, scope }));
+  };
+  writeClaim("shared/core", "same", ["lib/core.js"]);
+  writeClaim("shared/unrelated", "other", ["README.md"]);
+  writeClaim("other/core", "same-basename", ["README.md"]);
+  const result = readClaims(
+    root,
+    new Set(["shared/core", "kehle-tdg-dev/core", "/workspace/core"]),
+    "/workspace/core",
+    new Date("2026-07-30T12:00:00Z"),
+  );
+  assert.deepEqual(result.active.map(({ claim }) => claim.repo), ["shared/core"]);
+});
+
 test("write preflight rejects explicit quarantine and an active overlapping writer", () => {
   const quarantined = evaluateWorkspace(baseObservation({
     quarantine: { available: true, matches: [{ file: "registry.md", line: 4 }] },
@@ -235,6 +340,111 @@ test("run manifest without execution_ref begins and seals cleanly", (t) => {
   assert.equal(sealed.manifest.ending_head, sealed.manifest.starting_head);
 });
 
+test("begin rejects simultaneous goal and exception fields", (t) => {
+  const fixture = makeRunFixture(t, "mixed-focus");
+  assert.throws(() => beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    exceptionCategory: "production_incident",
+    exceptionReason: "Production is unavailable.",
+    tool: "codex",
+    pid: process.pid,
+  }), /mutually exclusive/);
+  assert.throws(() => beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    exceptionSpecified: true,
+    exceptionCategory: "",
+    exceptionReason: "",
+    tool: "codex",
+    pid: process.pid,
+  }), /mutually exclusive/);
+});
+
+test("atomic repository entrance permits only one concurrent begin", async (t) => {
+  const fixture = makeRunFixture(t, "concurrent-begin");
+  const gate = new SharedArrayBuffer(4);
+  const messages = [];
+  const worker = new Worker(`
+    const { parentPort, workerData } = require("node:worker_threads");
+    const { beginRun } = require(workerData.module);
+    try {
+      const result = beginRun({
+        ...workerData.options,
+        pid: process.pid,
+        runId: "concurrent-first",
+        afterEntranceClaim() {
+          parentPort.postMessage({ phase: "locked" });
+          Atomics.wait(new Int32Array(workerData.gate), 0, 0);
+        },
+      });
+      parentPort.postMessage({ phase: "result", ok: true, run_id: result.manifest.run_id });
+    } catch (error) {
+      parentPort.postMessage({ phase: "result", ok: false, error: error.message });
+    }
+  `, {
+    eval: true,
+    workerData: {
+      module: path.join(repoRoot, "lib/agent-workspace.js"),
+      options: { ...fixture, goalId: "W31-CORE", tool: "codex" },
+      gate,
+    },
+  });
+  worker.on("message", (message) => messages.push(message));
+  await new Promise((resolve, reject) => {
+    const onMessage = (message) => {
+      if (message.phase === "locked") {
+        worker.off("error", reject);
+        worker.off("message", onMessage);
+        resolve();
+      }
+    };
+    worker.on("message", onMessage);
+    worker.once("error", reject);
+  });
+  assert.throws(() => beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "claude",
+    pid: process.pid,
+    runId: "concurrent-second",
+  }), /entrance is already in progress/);
+  const workerExit = new Promise((resolve, reject) => {
+    worker.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`worker exited ${code}`)));
+    worker.once("error", reject);
+  });
+  Atomics.store(new Int32Array(gate), 0, 1);
+  Atomics.notify(new Int32Array(gate), 0);
+  await workerExit;
+  const outcomes = messages.filter((message) => message.phase === "result");
+  assert.deepEqual(outcomes, [{ phase: "result", ok: true, run_id: "concurrent-first" }]);
+  assert.equal(fs.existsSync(path.join(fixture.stateRoot, "concurrent-second.json")), false);
+});
+
+test("atomic entrance safely reclaims a dead complete claim", (t) => {
+  const fixture = makeRunFixture(t, "dead-entrance");
+  const commonDir = fs.realpathSync(path.join(fixture.root, ".git"));
+  const claim = entranceClaimPath(fixture.stateRoot, commonDir);
+  fs.mkdirSync(path.dirname(claim), { recursive: true });
+  fs.writeFileSync(claim, JSON.stringify({
+    schema: "agent-workspace-entrance.v1",
+    git_common_dir: commonDir,
+    acquired_at: "2026-07-30T12:00:00Z",
+    pid: process.pid,
+    process_start_token: "linux:dead",
+    host: os.hostname().split(".")[0],
+  }));
+  const begun = beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "dead-entrance",
+  });
+  assert.equal(begun.manifest.state, "active");
+  assert.equal(fs.existsSync(claim), false);
+});
+
 test("run manifest with execution_ref validates syntax and quarantines uncommitted changes", (t) => {
   const fixture = makeRunFixture(t, "quarantine");
   const begun = beginRun({
@@ -261,6 +471,51 @@ test("run manifest rejects an invalid execution_ref", (t) => {
     tool: "codex",
     pid: process.pid,
   }), /kind must be mission/);
+});
+
+test("manifest reads, preflight, and reconciliation fail closed on invalid records", (t) => {
+  const fixture = makeRunFixture(t, "invalid-record");
+  const begun = beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    executionRef: { kind: "mission", id: "mission-valid" },
+    tool: "codex",
+    pid: process.pid,
+    runId: "invalid-record",
+  });
+  fs.writeFileSync(begun.file, `${JSON.stringify({
+    ...begun.manifest,
+    execution_ref: { kind: "program", id: "" },
+  }, null, 2)}\n`);
+  assert.throws(() => readManifest(begun.file), /execution_ref.kind|kind must be mission/);
+  let preflight = preflightWorkspace(fixture.root, "write", fixture);
+  assert.ok(preflight.issues.some((item) => item.code === "run_manifest_ambiguous"));
+  let reconciled = reconcileRuns({ stateRoot: fixture.stateRoot });
+  assert.ok(reconciled.some((item) => item.action === "invalid_manifest"));
+
+  fs.writeFileSync(path.join(fixture.stateRoot, "unreadable.json"), "{not-json\n");
+  preflight = preflightWorkspace(fixture.root, "read", fixture);
+  assert.equal(preflight.ok, true);
+  assert.equal(preflight.shouldSurface, true);
+  assert.ok(preflight.issues.some((item) => item.code === "run_manifest_ambiguous"));
+  reconciled = reconcileRuns({ stateRoot: fixture.stateRoot });
+  assert.equal(reconciled.filter((item) => item.action === "invalid_manifest").length, 2);
+  const cli = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-workspace"),
+    "reconcile",
+    "--state-root", fixture.stateRoot,
+  ], { encoding: "utf8" });
+  assert.equal(cli.status, 1);
+  assert.match(cli.stdout, /invalid_manifest/);
+  assert.match(cli.stdout, /cannot read manifest/);
+  const jsonCli = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-workspace"),
+    "reconcile",
+    "--state-root", fixture.stateRoot,
+    "--json",
+  ], { encoding: "utf8" });
+  assert.equal(jsonCli.status, 1);
+  assert.match(jsonCli.stdout, /"action": "invalid_manifest"/);
 });
 
 test("reconcile keeps a living owner active", (t) => {
@@ -320,47 +575,17 @@ test("agent-start displays weekly focus, execution binding, and clean workspace 
       - kind: mission
         id: mission-start-1
 `));
-  const stubDir = path.join(path.dirname(fixture.stateRoot), "stubs");
-  fs.mkdirSync(stubDir, { recursive: true });
-  for (const command of [
-    "agent-start",
-    "agent-focus",
-    "workspace-preflight",
-    "agent-workspace",
-    "agentcoord",
-    "machine-compliance",
-    "committer",
-    "docs-list",
-    "bus-discover",
-    "wwi",
-    "claude",
-    "codex",
-    "agent-check",
-  ]) {
-    const file = path.join(stubDir, command);
-    fs.writeFileSync(file, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-  }
-  const workbench = path.join(path.dirname(fixture.stateRoot), "workbench.json");
-  fs.writeFileSync(workbench, JSON.stringify({
-    summary: { shouldSurface: false, surfaceReasons: [] },
-    artifacts: { latestUrl: "http://example.test/proof/" },
-  }));
+  const support = makeAgentStartSupport(fixture);
   const result = spawnSync("node", [
     path.join(repoRoot, "bin/agent-start"),
     "--root", fixture.root,
     "--goal", "W31-CORE",
     "--focus-file", fixture.focusFile,
     "--no-bus",
-    "--workbench-summary", workbench,
+    "--workbench-summary", support.workbench,
   ], {
     encoding: "utf8",
-    env: {
-      ...process.env,
-      PATH: `${stubDir}:${process.env.PATH}`,
-      AGENTCOORD_ROOT: fixture.agentcoordRoot,
-      AGENT_QUARANTINE_ROOT: fixture.quarantineRoot,
-      AGENT_WORKSPACE_STATE_ROOT: fixture.stateRoot,
-    },
+    env: support.env,
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /goal: W31-CORE \[selected\]/);
@@ -368,5 +593,78 @@ test("agent-start displays weekly focus, execution binding, and clean workspace 
   assert.match(result.stdout, /required milestone: Targeted tests pass/);
   assert.match(result.stdout, /execution binding: mission:mission-start-1/);
   assert.match(result.stdout, /preflight: PASS mode=write/);
-  assert.match(result.stdout, /canonical remote: https:\/\/github\.com\/kehle-tdg-dev\/agent-start\.git/);
+  assert.match(result.stdout, /origin fetch: https:\/\/github\.com\/kehle-tdg-dev\/agent-start\.git/);
+  assert.match(result.stdout, /origin push: https:\/\/github\.com\/kehle-tdg-dev\/agent-start\.git/);
+});
+
+test("agent-start read mode permits but surfaces repository hazards", (t) => {
+  const fixture = makeRunFixture(t, "agent-start-read-hazard");
+  const support = makeAgentStartSupport(fixture);
+  git(fixture.root, "config", "--add", "remote.origin.pushurl", "https://github.com/ucla-tdg/agent-start-read-hazard.git");
+  git(fixture.root, "commit", "--allow-empty", "-q", "-m", "ahead");
+  fs.appendFileSync(path.join(fixture.root, "README.md"), "uncommitted\n");
+  fs.writeFileSync(
+    path.join(fixture.quarantineRoot, "registry.md"),
+    `${fixture.root} | QUARANTINED\n`,
+  );
+  const claimDir = path.join(
+    fixture.agentcoordRoot,
+    "claims",
+    "kehle-tdg-dev",
+    "agent-start-read-hazard",
+  );
+  fs.mkdirSync(claimDir, { recursive: true });
+  fs.writeFileSync(path.join(claimDir, "writer.json"), JSON.stringify({
+    repo: "kehle-tdg-dev/agent-start-read-hazard",
+    slug: "writer",
+    agent: "codex",
+    host: "beelink",
+    safety: "write",
+    scope: ["README.md"],
+    started_at: "2026-07-30T00:00:00Z",
+    expires_at: "2099-01-01T00:00:00Z",
+    next_action: "test",
+  }));
+  fs.mkdirSync(fixture.stateRoot, { recursive: true });
+  const identity = processIdentity(process.pid);
+  fs.writeFileSync(path.join(fixture.stateRoot, "active-hazard.json"), JSON.stringify({
+    schema: "agent-workspace-run.v1",
+    run_id: "active-hazard",
+    repository_root: fixture.root,
+    git_common_dir: fs.realpathSync(path.join(fixture.root, ".git")),
+    canonical_remote: "https://github.com/kehle-tdg-dev/agent-start-read-hazard.git",
+    origin_push_urls: ["https://github.com/ucla-tdg/agent-start-read-hazard.git"],
+    goal_id: "W31-CORE",
+    exception: null,
+    execution_ref: null,
+    tool: "codex",
+    ...identity,
+    branch: "main",
+    starting_head: git(fixture.root, "rev-parse", "HEAD"),
+    created_at: "2026-07-30T12:00:00Z",
+    state: "active",
+    exit_code: null,
+    ending_head: null,
+    quarantine_reason: null,
+  }));
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--mode", "read",
+    "--focus-file", fixture.focusFile,
+    "--no-bus",
+    "--workbench-summary", support.workbench,
+  ], {
+    encoding: "utf8",
+    env: support.env,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /shouldSurface=true/);
+  assert.match(result.stdout, /preflight: PASS mode=read/);
+  assert.match(result.stdout, /primary_has_changes/);
+  assert.match(result.stdout, /primary_divergent/);
+  assert.match(result.stdout, /read_only_mirror_push/);
+  assert.match(result.stdout, /repository_quarantined/);
+  assert.match(result.stdout, /active_agentcoord_writer/);
+  assert.match(result.stdout, /active_run_collision/);
 });

@@ -42,6 +42,7 @@ function parseArgs(argv) {
     goalId: "",
     exceptionCategory: "",
     exceptionReason: "",
+    exceptionSpecified: false,
     executionKind: "",
     executionId: "",
     tool: "",
@@ -61,8 +62,14 @@ function parseArgs(argv) {
     else if (arg === "--json") args.json = true;
     else if (arg === "--root") args.root = path.resolve(argv[++index]);
     else if (arg === "--goal") args.goalId = argv[++index];
-    else if (arg === "--exception-category") args.exceptionCategory = argv[++index];
-    else if (arg === "--exception-reason") args.exceptionReason = argv[++index];
+    else if (arg === "--exception-category") {
+      args.exceptionCategory = argv[++index];
+      args.exceptionSpecified = true;
+    }
+    else if (arg === "--exception-reason") {
+      args.exceptionReason = argv[++index];
+      args.exceptionSpecified = true;
+    }
     else if (arg === "--execution-kind") args.executionKind = argv[++index];
     else if (arg === "--execution-id") args.executionId = argv[++index];
     else if (arg === "--tool") args.tool = argv[++index];
@@ -88,7 +95,8 @@ function renderBegin(result) {
   const lines = [
     `agent-workspace: active run=${manifest.run_id}`,
     `root: ${manifest.repository_root}`,
-    `canonical remote: ${manifest.canonical_remote}`,
+    `origin fetch: ${manifest.canonical_remote}`,
+    `origin push: ${(manifest.origin_push_urls || [manifest.canonical_remote]).join(", ")}`,
     `goal: ${manifest.goal_id || `exception:${manifest.exception.category}`}`,
   ];
   if (manifest.execution_ref) {
@@ -112,7 +120,12 @@ function renderSeal(result) {
 
 function renderReconcile(results) {
   if (!results.length) return "agent-workspace: no active runs to reconcile\n";
-  return `${results.map((item) => `agent-workspace: ${item.action} run=${item.run_id}`).join("\n")}\n`;
+  const lines = [];
+  for (const item of results) {
+    lines.push(`agent-workspace: ${item.action} run=${item.run_id || "(unknown)"} file=${item.file}`);
+    for (const error of item.errors || []) lines.push(`  error: ${error}`);
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 try {
@@ -133,7 +146,11 @@ try {
   if (args.json) console.log(JSON.stringify(result, null, 2));
   else if (args.command === "begin") process.stdout.write(renderBegin(result));
   else if (args.command === "seal") process.stdout.write(renderSeal(result));
-  else process.stdout.write(renderReconcile(result));
+  else {
+    process.stdout.write(renderReconcile(result));
+  }
+  if (args.command === "reconcile" &&
+      result.some((item) => item.action === "invalid_manifest")) process.exitCode = 1;
 } catch (error) {
   console.error(`agent-workspace: ${error.message}`);
   if (error instanceof WorkspaceRunError && error.details) {

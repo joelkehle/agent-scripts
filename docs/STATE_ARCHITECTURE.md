@@ -26,7 +26,7 @@ projection.
 | Identity and IP docket nouns | `ucla-tdg-assistant-db` — hosted on beelink Postgres + PostgREST `127.0.0.1:8239` since 2026-06-10 (cloud Supabase is a frozen legacy copy pending teardown; do NOT write to it) | people, organizations, agreements, technologies, IP sequences, patent/application matters, interested parties, funding assertions, imported source dates, their IDs and relationships | a cache with a pointer back |
 | UCLA work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical UCLA `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds, and owner-attention state | a proposal *into* it |
 | Repository engineering lifecycle | GitHub issues and PRs, including versioned `issue-claim.v1` issue-comment events and `owner-attention.v1` PR events | issue definitions and claim leases for repo engineering; personal/shared repo-bound ready-for-Joel attention and disposition by exact head | assignment, label, dashboard, coordinator cursor, or private receipt projection |
-| Supervised coding orchestration | Manager Projects MCP durable state under `~/.local/state/claude-projects-mcp/agent-{missions,initiatives,programs}/` | exact mission, initiative, and program lifecycle records; contiguous audit journals; bounded parent/child intent; supervised child-run references; validation and independent-review receipts; immutable ready packets; terminal outcomes and recovery evidence | non-authoritative disposable standalone agent-run working state, or a dashboard, metric, WWI breadcrumb, GitHub artifact, or narrative summary |
+| Supervised coding orchestration | Manager Projects MCP durable state under `~/.local/state/claude-projects-mcp/agent-{missions,initiatives,campaigns}/` | exact mission, initiative, and campaign lifecycle records; contiguous audit journals; bounded parent/child intent; supervised child-run references; validation and independent-review receipts; immutable ready packets; terminal outcomes and recovery evidence | non-authoritative disposable standalone agent-run working state, or a dashboard, metric, WWI breadcrumb, GitHub artifact, or narrative summary |
 | Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
 | Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
@@ -104,7 +104,7 @@ projection.
   attention has no owner under this ruling and must fail closed.
 - **supervised coding orchestration (added 2026-07-27):** Manager's Projects
   MCP owns the durable truth that a bounded supervised coding mission,
-  single-repository initiative, or named cross-repository program entered and
+  single-repository initiative, or named cross-repository campaign entered and
   completed each required conductor stage. Its private snapshots, contiguous
   journals, exact-SHA validation/review receipts, parent/child dispatch intent,
   terminal outcome, and immutable ready packet are one control-plane state
@@ -115,7 +115,7 @@ projection.
   adjudication. Manager orchestration records grant no external-write
   authority, including GitHub or Gmail writes, business-data or service
   changes, push, deploy, merge, migration, restart, or Joel impersonation.
-  Program state may reference child packet hashes and bounded exact-diff
+  Campaign state may reference child packet hashes and bounded exact-diff
   evidence, but never owns business nouns, source evidence, credentials, raw
   model logs, or external-system truth.
 - **IP docket vs project-manager:** assistant-db owns the imported technology,
@@ -375,7 +375,7 @@ projection.
   `~/.local/state/csub/` — disposable Codex-session log projections plus
   authoritative append-only usage receipts.
 - 1.22 (2026-07-27): register Manager Projects MCP durable mission, initiative,
-  and program lifecycle records as one supervised-coding control-plane state
+  and campaign lifecycle records as one supervised-coding control-plane state
   family; retain standalone runs as non-authoritative disposable working state
   and retain code, GitHub, business-noun, evidence, and adjudication authority
   in their existing owners.

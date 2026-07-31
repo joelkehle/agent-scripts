@@ -25,8 +25,8 @@ The packet includes:
 
 - active weekly goals, definitions of done, required milestones, and optional
   mission/initiative/campaign bindings;
-- the actual `origin` URL and `workspace-preflight` result for `read` or
-  `write` mode;
+- the actual `origin` fetch URL, every effective push URL, and
+  `workspace-preflight` result for `read` or `write` mode;
 - active and quarantined local workspace-run manifests;
 - command availability for the core agent workbench tools;
 - `wwi` open loops;
@@ -79,7 +79,8 @@ Proof: http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/lat
 
 Notice mode does not run the full startup packet. It is intentionally cheap and
 safe to call before handing control to `codex` or `claude`. It defaults to
-`--mode write`; use `--mode read` for a deliberately read-only launch.
+`--mode write`; use `--mode read` for a deliberately read-only launch. Read
+mode permits write hazards but still surfaces them.
 
 See `docs/launch-safety.md` for focus validation, repository authority,
 preflight refusal reasons, and atomic begin/seal/reconcile manifests.
