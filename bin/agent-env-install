@@ -4,47 +4,29 @@ set -euo pipefail
 prefix="/usr/local/bin"
 dry_run=0
 use_sudo=0
+verify=0
+manifest_name=".agent-env-manifest.tsv"
 
 usage() {
   cat <<'USAGE'
-Usage: agent-env-install [--prefix DIR] [--sudo] [--dry-run]
+Usage: agent-env-install [--prefix DIR] [--sudo] [--dry-run] [--verify]
 
-Installs stable command shims for Joel's coding-agent control plane.
-
-Default target is /usr/local/bin so noninteractive SSH commands can find the
-same tools that interactive shells get from ~/Projects/shared/agent-scripts/bin.
+Materializes a self-contained coding-agent tool set as regular files.
+Use --verify to check the installed files against their SHA256 manifest.
 USAGE
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --prefix)
-      [ "$#" -ge 2 ] || { printf 'agent-env-install: --prefix requires a directory\n' >&2; exit 2; }
-      prefix="$2"
-      shift 2
-      ;;
-    --sudo)
-      use_sudo=1
-      shift
-      ;;
-    --dry-run)
-      dry_run=1
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      printf 'agent-env-install: unknown argument: %s\n' "$1" >&2
-      usage >&2
-      exit 2
-      ;;
+    --prefix) [ "$#" -ge 2 ] || { printf 'agent-env-install: --prefix requires a directory\n' >&2; exit 2; }; prefix="$2"; shift 2 ;;
+    --sudo) use_sudo=1; shift ;;
+    --dry-run) dry_run=1; shift ;;
+    --verify) verify=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'agent-env-install: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
-# Resolve the real script location so this also works when invoked through
-# its own installed prefix symlink (e.g. /usr/local/bin/agent-env-install).
 self="${BASH_SOURCE[0]}"
 while [ -L "$self" ]; do
   self_dir="$(cd -P "$(dirname "$self")" && pwd)"
@@ -53,101 +35,124 @@ while [ -L "$self" ]; do
 done
 script_dir="$(cd -P "$(dirname "$self")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-
-run() {
-  printf 'agent-env-install: %s\n' "$*"
-  if [ "$dry_run" -eq 0 ]; then
-    "$@"
-  fi
-}
+manifest="$prefix/$manifest_name"
 
 run_privileged() {
-  if [ "$use_sudo" -eq 1 ]; then
-    run sudo -n "$@"
-  else
-    run "$@"
-  fi
+  printf 'agent-env-install:'
+  printf ' %q' "$@"
+  printf '\n'
+  [ "$dry_run" -eq 1 ] && return 0
+  if [ "$use_sudo" -eq 1 ]; then sudo -n "$@"; else "$@"; fi
 }
 
-ensure_dir() {
-  [ -d "$prefix" ] || run_privileged mkdir -p "$prefix"
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}';
+  else shasum -a 256 "$1" | awk '{print $1}'; fi
 }
 
-link_file() {
-  local source="$1"
-  local name="$2"
-  if [ ! -e "$source" ]; then
-    printf 'agent-env-install: skip %s, missing source %s\n' "$name" "$source" >&2
-    return
-  fi
-  run_privileged ln -sfn "$source" "$prefix/$name"
-}
-
-ensure_dir
-
-for tool in \
-  agent-check \
-  agent-env-install \
-  agent-focus \
-  agent-start \
-  agent-workspace \
-  agentcoord \
-  bus-discover \
-  codex-bg \
-  committer \
-  contributor-agent \
-  csub \
-  dirty-audit \
-  docs-list \
-  install-claude-agents \
-  loop-audit \
-  loop-receipt \
-  loop-resume \
-  machine-compliance \
-  workspace-preflight \
-  trash
-do
-  link_file "$script_dir/$tool" "$tool"
-done
-
-# Install the tracked Claude Code agent definitions for the invoking user
-# (symlinks into ~/.claude/agents). Runs unprivileged on purpose: the target
-# is per-user state, not the prefix.
-run "$script_dir/install-claude-agents"
-
-for external in claude codex wwi anchor; do
-  candidate=""
-  for candidate_path in \
-    "$HOME/.local/bin/$external" \
-    "$HOME/go/bin/$external" \
-    "$HOME/.npm-global/bin/$external" \
-    "/usr/local/bin/$external" \
-    "/usr/bin/$external" \
-    "/opt/homebrew/bin/$external"
-  do
-    if [ -x "$candidate_path" ]; then
-      candidate="$candidate_path"
-      break
+verify_install() {
+  [ -f "$manifest" ] && [ ! -L "$manifest" ] || {
+    printf 'agent-env-install: MISSING %s\n' "$manifest_name" >&2
+    return 1
+  }
+  local failures=0 kind expected path actual
+  while IFS=$'\t' read -r kind expected path; do
+    [ "$kind" = "file" ] || continue
+    if [ ! -f "$prefix/$path" ] || [ -L "$prefix/$path" ]; then
+      printf 'agent-env-install: MISSING %s\n' "$path" >&2
+      failures=1
+      continue
     fi
-  done
-  if [ -n "$candidate" ]; then
-    if [ "$candidate" = "$prefix/$external" ]; then
-      printf 'agent-env-install: keep %s already at %s\n' "$external" "$candidate"
-    else
-      link_file "$candidate" "$external"
+    actual="$(sha256_file "$prefix/$path")"
+    if [ "$actual" != "$expected" ]; then
+      printf 'agent-env-install: CHANGED %s\n' "$path" >&2
+      failures=1
     fi
-  else
-    printf 'agent-env-install: skip %s, no known executable found\n' "$external" >&2
-  fi
-done
+  done < "$manifest"
+  [ "$failures" -eq 0 ] || return 1
+  printf 'agent-env-install: verification passed for %s\n' "$prefix"
+}
 
-cat <<VERIFY
-
-agent-env-install: installed shims into $prefix
-agent-env-install: verify with:
-  ssh beelink 'command -v agent-start agent-focus workspace-preflight agent-workspace agentcoord machine-compliance committer contributor-agent docs-list bus-discover wwi claude codex'
-VERIFY
-
-if [ "$dry_run" -eq 0 ]; then
-  printf 'agent-env-install: repo=%s\n' "$repo_root" >/dev/null
+if [ "$verify" -eq 1 ]; then
+  [ "$dry_run" -eq 0 ] || { printf 'agent-env-install: --verify and --dry-run cannot be combined\n' >&2; exit 2; }
+  verify_install
+  exit
 fi
+
+if [ -L "$prefix" ]; then
+  printf 'agent-env-install: REFUSING install root symlink: %s\n' "$prefix" >&2
+  exit 1
+fi
+run_privileged mkdir -p "$prefix"
+
+# Directory links can hide writes outside the install root. Old command-file
+# links are safe to replace and are migrated below.
+for directory in bin lib workspace-roots workspace-roots/projects workspace-roots/projects/.agents; do
+  if [ -L "$prefix/$directory" ]; then
+    printf 'agent-env-install: REFUSING directory symlink in install root: %s\n' "$prefix/$directory" >&2
+    exit 1
+  fi
+done
+
+commands=(
+  agent-check agent-env-install agent-focus agent-start agent-workspace agentcoord
+  bus-discover codex-bg committer contributor-agent csub dirty-audit docs-list
+  install-claude-agents loop-audit loop-receipt loop-resume machine-compliance
+  workspace-preflight trash
+)
+
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-env-install.XXXXXX")"
+trap 'rm -rf "$tmp_dir"' EXIT
+stage="$tmp_dir/payload"
+mkdir -p "$stage/bin" "$stage/lib" "$stage/workspace-roots/projects/.agents"
+
+copy_regular() {
+  local source="$1" destination="$2"
+  [ -f "$source" ] && [ ! -L "$source" ] || {
+    printf 'agent-env-install: source is not a regular file: %s\n' "$source" >&2
+    exit 1
+  }
+  mkdir -p "$(dirname "$destination")"
+  install -m "$(stat -c '%a' "$source" 2>/dev/null || stat -f '%Lp' "$source")" "$source" "$destination"
+}
+
+for command in "${commands[@]}"; do
+  copy_regular "$repo_root/bin/$command" "$stage/bin/$command"
+  cat > "$stage/$command" <<LAUNCHER
+#!/usr/bin/env sh
+set -eu
+install_root=\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd -P)
+exec "\$install_root/bin/$command" "\$@"
+LAUNCHER
+  chmod 755 "$stage/$command"
+done
+
+while IFS= read -r relative; do
+  copy_regular "$repo_root/$relative" "$stage/$relative"
+done < <(git -C "$repo_root" ls-files 'lib/**' 'workspace-roots/projects/.agents/**' | LC_ALL=C sort)
+
+source_revision="$(git -C "$repo_root" rev-parse HEAD)"
+stage_manifest="$tmp_dir/$manifest_name"
+{
+  printf 'source_revision\t%s\n' "$source_revision"
+  while IFS= read -r file; do
+    relative="${file#"$stage/"}"
+    printf 'file\t%s\t%s\n' "$(sha256_file "$file")" "$relative"
+  done < <(find "$stage" -type f -print | LC_ALL=C sort)
+} > "$stage_manifest"
+
+if [ "$dry_run" -eq 1 ]; then
+  printf 'agent-env-install: would materialize %s regular files into %s\n' "$(find "$stage" -type f | wc -l)" "$prefix"
+  exit
+fi
+
+while IFS= read -r file; do
+  relative="${file#"$stage/"}"
+  run_privileged mkdir -p "$(dirname "$prefix/$relative")"
+  run_privileged install -m "$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file")" "$file" "$prefix/$relative"
+done < <(find "$stage" -type f -print | LC_ALL=C sort)
+run_privileged install -m 644 "$stage_manifest" "$manifest"
+
+verify_install
+printf 'agent-env-install: installed regular-file payload into %s\n' "$prefix"
+printf 'agent-env-install: source revision %s\n' "$source_revision"

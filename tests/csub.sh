@@ -461,22 +461,14 @@ grep -q 'skipping untracked zz-rogue-test.md' "$tmp/rogue-err" || fail "untracke
 ROGUE_CLEANUP=""
 fi
 
-# --- 19. bootstrap installs agents, and works through its own shim -----------
+# --- 19. bootstrap materializes agents and verifies through its launcher -----
 boot_agents="$tmp/boot-agents"
 CLAUDE_AGENTS_DIR="$boot_agents" bash "$repo/bin/agent-env-install" --prefix "$tmp/boot-prefix" >/dev/null 2>&1 \
   || fail "agent-env-install failed in test prefix"
-[ -L "$tmp/boot-prefix/csub" ] || fail "bootstrap did not link csub"
-for name in grunt.md mech.md; do
-  [ -L "$boot_agents/$name" ] || fail "bootstrap did not install $name"
-done
-# invoked through its own installed symlink, sources must still resolve to the repo
-ln -s "$repo/bin/agent-env-install" "$tmp/bin/agent-env-install"
-boot2_agents="$tmp/boot2-agents"
-CLAUDE_AGENTS_DIR="$boot2_agents" "$tmp/bin/agent-env-install" --prefix "$tmp/boot2-prefix" >/dev/null 2>&1 \
-  || fail "agent-env-install failed when invoked through a prefix symlink"
-[ -L "$tmp/boot2-prefix/csub" ] || fail "symlinked bootstrap did not link csub"
-target=$(readlink "$tmp/boot2-prefix/csub")
-[ "$target" = "$repo/bin/csub" ] || fail "symlinked bootstrap linked csub from wrong source ($target)"
-[ -L "$boot2_agents/grunt.md" ] || fail "symlinked bootstrap did not install agents"
+[ -f "$tmp/boot-prefix/csub" ] && [ ! -L "$tmp/boot-prefix/csub" ] || fail "bootstrap did not copy csub launcher"
+[ -f "$tmp/boot-prefix/workspace-roots/projects/.agents/skills/ship-loop/SKILL.md" ] ||
+  fail "bootstrap did not materialize workspace agents"
+"$tmp/boot-prefix/agent-env-install" --verify --prefix "$tmp/boot-prefix" >/dev/null 2>&1 \
+  || fail "installed bootstrap could not verify its payload"
 
 printf 'csub tests OK\n'

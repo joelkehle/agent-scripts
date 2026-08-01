@@ -102,6 +102,24 @@ Noninteractive SSH does not source Joel's interactive shell PATH. Install stable
 ~/Projects/shared/agent-scripts/bin/agent-env-install --sudo
 ```
 
+## Self-Contained Install
+
+`agent-env-install` uses regular file copies for its internal commands, needed
+library files, and workspace `.agents` files. This is the simplest safe choice:
+
+- File symlinks are small, but they break when the source checkout is moved,
+  renamed, or removed. They also let source edits change installed behavior.
+- Hard links survive a source rename, but they do not work across file systems.
+  An in-place source edit can also change the installed file without a new
+  install.
+- Regular copies work across file systems and keep working when the source is
+  gone. Source edits cannot silently change the installed bytes.
+
+The installer writes a manifest with the source Git revision and a SHA256 hash
+for every payload file. Run `agent-env-install --verify --prefix DIR` to find
+a changed or missing installed file. A second install from the same revision is
+safe and produces the same payload.
+
 Manager wraps this via `~/Projects/shared/manager/bin/install-agent-system-links` so bootstrap and runbooks do not depend on the agent-scripts implementation path.
 
 On beelink, the manager installer also wires the `codex` and `claude` shims to

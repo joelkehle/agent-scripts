@@ -200,10 +200,10 @@ assert_contains "$wrong_credential_output" "Git selected a credential other than
 install_dir="$tmp/install"
 CLAUDE_AGENTS_DIR="$tmp/claude-agents" \
   "$repo_root/bin/agent-env-install" --prefix "$install_dir" >/dev/null
-[ -L "$install_dir/contributor-agent" ] || fail "installer omitted contributor-agent"
-[ -L "$tmp/claude-agents/grunt.md" ] || fail "installer omitted isolated Claude agent definitions"
-[ "$(readlink "$install_dir/contributor-agent")" = "$wrapper" ] ||
-  fail "installer linked contributor-agent to the wrong source"
+[ -f "$install_dir/contributor-agent" ] && [ ! -L "$install_dir/contributor-agent" ] ||
+  fail "installer omitted regular contributor-agent launcher"
+[ -f "$install_dir/bin/contributor-agent" ] && [ ! -L "$install_dir/bin/contributor-agent" ] ||
+  fail "installer omitted regular contributor-agent command"
 
 if grep -Eq '^agent-env\.sh|^codex-agent\.sh|Use `bin/agent-env\.sh`|Verify `agent-env\.sh' \
   "$repo_root/docs/infisical-agent-auth.md"; then
