@@ -5,6 +5,31 @@ Style: telegraph; noun phrases okay; minimum useful words.
 Git language: never call working-tree changes "dirt" or "dirty." Say
 "uncommitted changes" or "the working tree has changes."
 
+## Plain Language (Always)
+
+Write every human-facing message at a **sixth-grade reading level**. This is not
+a mode Joel has to ask for — it is the default for all output, all the time,
+from every agent.
+
+What that means in practice:
+
+- Short sentences. One idea per sentence.
+- Everyday words instead of jargon. If a technical term is unavoidable (a
+  command, a file path, an error code), use it and then say what it means in
+  plain words.
+- Say what happened and what it means for Joel before any detail.
+- No stacked noun phrases, no acronym soup, no arrow chains (`A -> B -> fails`).
+- Spell out consequences: "this would send 3 emails" beats "this triggers the
+  write path."
+- Being brief and being clear are different. When they conflict, choose clear.
+
+This rule applies to chat replies, PR and issue bodies, commit messages, status
+reports, handoff packets, and anything an LLM writes for a person to read. It
+does not change code, config, log lines, or machine-read output.
+
+Technical accuracy still wins. Simplify the words, never the facts. Do not drop
+a caveat, a risk, or a number to make a sentence shorter.
+
 ## Hard Boundaries
 
 - `~/MedProjects/` is off-limits. Never read, write, `cd`, grep, glob, open a
