@@ -120,6 +120,13 @@ for every payload file. Run `agent-env-install --verify --prefix DIR` to find
 a changed or missing installed file. A second install from the same revision is
 safe and produces the same payload.
 
+The installer refuses tracked or staged payload changes before it copies any
+files. This makes the manifest revision proof of the installed source bytes.
+
+`machine-compliance` is not part of the Agent Scripts payload. It is a required
+Manager component. The Manager installer must provide the real compliance
+command. Agent Scripts does not provide a fallback or a passing stub.
+
 Manager wraps this via `~/Projects/shared/manager/bin/install-agent-system-links` so bootstrap and runbooks do not depend on the agent-scripts implementation path.
 
 On beelink, the manager installer also wires the `codex` and `claude` shims to

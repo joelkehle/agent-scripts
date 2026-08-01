@@ -18,6 +18,16 @@ git -C "$source_fixture" add bin lib workspace-roots/projects/.agents
 git -C "$source_fixture" commit -qm fixture
 revision="$(git -C "$source_fixture" rev-parse HEAD)"
 
+printf '\nchanged tracked source\n' >> "$source_fixture/bin/docs-list"
+set +e
+source_changed_output="$("$source_fixture/bin/agent-env-install" --prefix "$install_root" 2>&1)"
+source_changed_status=$?
+set -e
+[ "$source_changed_status" -ne 0 ]
+grep -q 'REFUSING tracked or staged payload changes' <<<"$source_changed_output"
+[ ! -e "$install_root" ] || { echo "install began before source refusal" >&2; exit 1; }
+git -C "$source_fixture" checkout -q -- bin/docs-list
+
 "$source_fixture/bin/agent-env-install" --prefix "$install_root" >/dev/null
 first_manifest="$(sha256sum "$install_root/.agent-env-manifest.tsv")"
 "$source_fixture/bin/agent-env-install" --prefix "$install_root" >/dev/null
@@ -45,9 +55,8 @@ mv "$source_fixture" "$tmp/source-hidden"
 mkdir -p "$tmp/doc-check/docs"
 printf '%s\n' '# Test' > "$tmp/doc-check/docs/README.md"
 (cd "$tmp/doc-check" && "$install_root/docs-list" >/dev/null)
-"$install_root/machine-compliance" --help >"$tmp/machine.out" 2>&1 && machine_status=0 || machine_status=$?
-[ "$machine_status" -eq 1 ]
-grep -q 'machine-compliance: missing' "$tmp/machine.out"
+[ ! -e "$install_root/machine-compliance" ]
+[ ! -e "$install_root/bin/machine-compliance" ]
 test -r "$install_root/workspace-roots/projects/.agents/skills/ship-loop/SKILL.md"
 
 printf '\nchanged\n' >> "$install_root/bin/docs-list"

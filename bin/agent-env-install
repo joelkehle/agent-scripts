@@ -79,6 +79,27 @@ if [ "$verify" -eq 1 ]; then
   exit
 fi
 
+commands=(
+  agent-check agent-env-install agent-focus agent-start agent-workspace agentcoord
+  bus-discover codex-bg committer contributor-agent csub dirty-audit docs-list
+  install-claude-agents loop-audit loop-receipt loop-resume workspace-preflight
+  trash
+)
+
+payload_paths=()
+for command in "${commands[@]}"; do
+  payload_paths+=("bin/$command")
+done
+while IFS= read -r relative; do
+  payload_paths+=("$relative")
+done < <(git -C "$repo_root" ls-files 'lib/**' 'workspace-roots/projects/.agents/**' | LC_ALL=C sort)
+
+source_revision="$(git -C "$repo_root" rev-parse HEAD)"
+if ! git -C "$repo_root" diff --quiet "$source_revision" -- "${payload_paths[@]}"; then
+  printf 'agent-env-install: REFUSING tracked or staged payload changes; commit them first\n' >&2
+  exit 1
+fi
+
 if [ -L "$prefix" ]; then
   printf 'agent-env-install: REFUSING install root symlink: %s\n' "$prefix" >&2
   exit 1
@@ -93,13 +114,6 @@ for directory in bin lib workspace-roots workspace-roots/projects workspace-root
     exit 1
   fi
 done
-
-commands=(
-  agent-check agent-env-install agent-focus agent-start agent-workspace agentcoord
-  bus-discover codex-bg committer contributor-agent csub dirty-audit docs-list
-  install-claude-agents loop-audit loop-receipt loop-resume machine-compliance
-  workspace-preflight trash
-)
 
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-env-install.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -127,11 +141,11 @@ LAUNCHER
   chmod 755 "$stage/$command"
 done
 
-while IFS= read -r relative; do
+for relative in "${payload_paths[@]}"; do
+  case "$relative" in bin/*) continue ;; esac
   copy_regular "$repo_root/$relative" "$stage/$relative"
-done < <(git -C "$repo_root" ls-files 'lib/**' 'workspace-roots/projects/.agents/**' | LC_ALL=C sort)
+done
 
-source_revision="$(git -C "$repo_root" rev-parse HEAD)"
 stage_manifest="$tmp_dir/$manifest_name"
 {
   printf 'source_revision\t%s\n' "$source_revision"
