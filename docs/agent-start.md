@@ -82,6 +82,11 @@ safe to call before handing control to `codex` or `claude`. It defaults to
 `--mode write`; use `--mode read` for a deliberately read-only launch. Read
 mode permits write hazards but still surfaces them.
 
+For an existing non-Git directory, the safety section labels the session as a
+read-only operator workspace with no code-write authority. A path inside a Git
+repository keeps repository launch checks. Missing paths and non-directories
+are refused.
+
 See `docs/launch-safety.md` for focus validation, repository authority,
 preflight refusal reasons, and atomic begin/seal/reconcile manifests.
 

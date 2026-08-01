@@ -98,11 +98,16 @@ function renderBegin(result) {
   const manifest = result.manifest;
   const lines = [
     `agent-workspace: active run=${manifest.run_id}`,
-    `root: ${manifest.repository_root}`,
-    `origin fetch: ${manifest.canonical_remote}`,
-    `origin push: ${(manifest.origin_push_urls || [manifest.canonical_remote]).join(", ")}`,
+    `session: ${manifest.session_kind}`,
+    `root: ${manifest.repository_root || manifest.workspace_root}`,
     `goal: ${manifest.goal_id || `exception:${manifest.exception.category}`}`,
   ];
+  if (manifest.session_kind === "workspace") {
+    lines.push(`authority: ${manifest.authority} safety=${manifest.safety_class}`);
+  } else {
+    lines.push(`origin fetch: ${manifest.canonical_remote}`);
+    lines.push(`origin push: ${(manifest.origin_push_urls || [manifest.canonical_remote]).join(", ")}`);
+  }
   if (manifest.execution_ref) {
     lines.push(`execution: ${manifest.execution_ref.kind}:${manifest.execution_ref.id}`);
   }
@@ -114,9 +119,11 @@ function renderSeal(result) {
   const manifest = result.manifest;
   const lines = [
     `agent-workspace: ${manifest.state} run=${manifest.run_id} exit_code=${manifest.exit_code}`,
-    `starting HEAD: ${manifest.starting_head}`,
-    `ending HEAD: ${manifest.ending_head || "(unavailable)"}`,
   ];
+  if (manifest.session_kind !== "workspace") {
+    lines.push(`starting HEAD: ${manifest.starting_head}`);
+    lines.push(`ending HEAD: ${manifest.ending_head || "(unavailable)"}`);
+  }
   if (manifest.quarantine_reason) lines.push(`quarantine: ${manifest.quarantine_reason}`);
   lines.push(`manifest: ${result.file}`);
   return `${lines.join("\n")}\n`;

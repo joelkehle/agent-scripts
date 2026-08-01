@@ -120,8 +120,11 @@ repository or absolute-path identity across the current and linked worktrees;
 prefix siblings do not collide. Preflight only diagnoses. It never modifies a
 remote or checkout.
 
-Read mode does not block on write hazards, but still reports them and sets
-`shouldSurface=true`. A non-Git root remains a refusal in either mode.
+Read mode does not block on repository write hazards, but still reports them
+and sets `shouldSurface=true`. A directory inside a Git repository keeps these
+rules. An existing directory outside Git starts a read-only operator session.
+It grants no code-write authority. Missing paths and non-directories remain
+refusals. No fake repository is made.
 
 Fixture/test overrides:
 
@@ -161,9 +164,11 @@ agent-workspace begin \
   --pid "$$"
 ```
 
-`begin` first requires a successful write preflight, atomically acquires a
-short-lived entrance claim keyed by the canonical Git common directory, and
-reruns preflight while holding that claim. It then atomically records `starting`
+`begin` first requires a successful preflight. Repository sessions acquire a
+short-lived entrance claim keyed by the canonical Git common directory.
+Workspace sessions use a separate claim domain keyed by the exact resolved
+workspace path. A workspace root and a child repository do not collide. The
+command reruns preflight while holding the claim, then records `starting`
 and atomically advances to `active` before releasing the entrance claim. The
 claim carries PID/start-token ownership; a complete dead claim is reclaimed,
 while an unreadable claim fails closed. The manifest records schema,
@@ -171,6 +176,13 @@ run ID, repository root and Git common directory, actual origin, goal or
 exception, optional single execution reference, tool, PID/start token, host,
 branch, starting HEAD, timestamp, state, exit code, ending HEAD, and any
 quarantine reason. Goal and exception arguments are mutually exclusive.
+
+New manifests use the `agent-workspace-run.v2` union with
+`session_kind=repository|workspace`. Old v1 repository manifests remain
+readable. Workspace records contain the exact resolved `workspace_root`, the
+chosen goal, optional execution context, process and state fields. They state
+`authority=operator` and `safety_class=read`. They omit all repository and Git
+fields, including remotes, branch, and HEAD values.
 
 Seal with the process exit code:
 
@@ -184,7 +196,8 @@ passed explicitly with `--pid`. Seal verifies the exact PID, process-start
 token, and host. Another controller is refused. A dead owner must go through
 `reconcile`, not `seal`. A readable checkout without uncommitted changes becomes
 `sealed`. Uncommitted or ambiguous repository state becomes `quarantined`; no
-cleanup is attempted.
+cleanup is attempted. Workspace sessions seal from controller identity and exit
+code only. They make no Git drift claim.
 
 Resolve a quarantined observation only after the controller has exited and the
 repository has been inspected:

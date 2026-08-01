@@ -24,6 +24,7 @@ const {
   preflightWorkspace,
   quarantineMatch,
   readClaims,
+  validateRunManifest,
 } = require("../lib/workspace-preflight");
 const {
   beginRun,
@@ -120,6 +121,98 @@ function makeRunFixture(t, name) {
   fs.writeFileSync(focusFile, focusYaml());
   return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot };
 }
+
+function makeWorkspaceFixture(t, name) {
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), `workspace-operator-${name}-`));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const root = path.join(support, "Projects");
+  fs.mkdirSync(path.join(root, "ucla-tdg"), { recursive: true });
+  const focusFile = path.join(support, "weekly-focus.yaml");
+  const stateRoot = path.join(support, "state");
+  const agentcoordRoot = path.join(support, "agentcoord");
+  const quarantineRoot = path.join(support, "quarantine");
+  fs.mkdirSync(agentcoordRoot);
+  fs.mkdirSync(quarantineRoot);
+  fs.writeFileSync(focusFile, focusYaml(`    execution_refs:\n      - kind: mission\n        id: mission-context\n`));
+  return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot };
+}
+
+test("existing non-Git Projects and nested ucla-tdg directories permit workspace operator sessions", (t) => {
+  const fixture = makeWorkspaceFixture(t, "shapes");
+  for (const root of [fixture.root, path.join(fixture.root, "ucla-tdg")]) {
+    const preflight = preflightWorkspace(root, "write", fixture);
+    assert.equal(preflight.ok, true);
+    assert.equal(preflight.session_kind, "workspace");
+    assert.equal(preflight.workspace_root, fs.realpathSync(root));
+    assert.match(preflight.issues.map((item) => item.code).join("\n"), /workspace_operator_session/);
+  }
+});
+
+test("missing paths and non-directories refuse without creating a repository", (t) => {
+  const fixture = makeWorkspaceFixture(t, "refuse");
+  const missing = path.join(fixture.root, "missing");
+  const file = path.join(fixture.root, "plain-file");
+  fs.writeFileSync(file, "not a directory\n");
+  assert.equal(preflightWorkspace(missing, "write", fixture).issues[0].code, "path_missing");
+  assert.equal(preflightWorkspace(file, "write", fixture).issues[0].code, "not_directory");
+  assert.equal(fs.existsSync(path.join(fixture.root, ".git")), false);
+  assert.equal(fs.existsSync(path.join(file, ".git")), false);
+});
+
+test("workspace manifest v2 is explicit, read-only, and omits Git-only fields", (t) => {
+  const fixture = makeWorkspaceFixture(t, "manifest");
+  const begun = beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    executionRef: { kind: "mission", id: "mission-context" },
+    tool: "codex",
+    pid: process.pid,
+    runId: "workspace-manifest",
+  });
+  assert.equal(begun.manifest.schema, "agent-workspace-run.v2");
+  assert.equal(begun.manifest.session_kind, "workspace");
+  assert.equal(begun.manifest.workspace_root, fs.realpathSync(fixture.root));
+  assert.equal(begun.manifest.goal_id, "W31-CORE");
+  assert.deepEqual(begun.manifest.execution_ref, { kind: "mission", id: "mission-context" });
+  assert.equal(begun.manifest.authority, "operator");
+  assert.equal(begun.manifest.safety_class, "read");
+  for (const field of ["repository_root", "git_common_dir", "canonical_remote", "origin_push_urls", "branch", "starting_head", "ending_head"]) {
+    assert.equal(Object.hasOwn(begun.manifest, field), false, field);
+  }
+  const sealed = sealRun({ stateRoot: fixture.stateRoot, runId: begun.manifest.run_id, pid: process.pid, exitCode: 7 });
+  assert.equal(sealed.manifest.state, "sealed");
+  assert.equal(sealed.manifest.exit_code, 7);
+  assert.equal(Object.hasOwn(sealed.manifest, "ending_head"), false);
+});
+
+test("old v1 repository manifests remain readable", () => {
+  const manifest = {
+    schema: "agent-workspace-run.v1", run_id: "legacy-v1",
+    repository_root: "/repo", git_common_dir: "/repo/.git",
+    canonical_remote: "https://github.com/example/repo.git",
+    goal_id: "W31-CORE", exception: null, execution_ref: null, tool: "codex",
+    pid: 1, process_start_token: "legacy", host: "host", branch: "main",
+    starting_head: "a".repeat(40), created_at: "2026-07-30T12:00:00Z",
+    state: "active", exit_code: null, ending_head: null, quarantine_reason: null,
+  };
+  assert.deepEqual(validateRunManifest(manifest), []);
+});
+
+test("workspace and child repository entrances do not collide in either order", (t) => {
+  for (const order of ["workspace-first", "repository-first"]) {
+    const fixture = makeWorkspaceFixture(t, order);
+    const repo = makeRepository(t, `child-${order}`);
+    const child = path.join(fixture.root, "child");
+    fs.renameSync(repo, child);
+    const workspaceOptions = { ...fixture, goalId: "W31-CORE", tool: "codex", pid: process.pid, runId: `${order}-workspace` };
+    const repositoryOptions = { ...fixture, root: child, goalId: "W31-CORE", tool: "codex", pid: process.pid, runId: `${order}-repository` };
+    const starts = order === "workspace-first"
+      ? [() => beginRun(workspaceOptions), () => beginRun(repositoryOptions)]
+      : [() => beginRun(repositoryOptions), () => beginRun(workspaceOptions)];
+    assert.doesNotThrow(starts[0]);
+    assert.doesNotThrow(starts[1]);
+  }
+});
 
 function makeAgentStartSupport(fixture) {
   const stubDir = path.join(path.dirname(fixture.stateRoot), "stubs");

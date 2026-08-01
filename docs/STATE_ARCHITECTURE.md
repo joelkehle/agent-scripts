@@ -9,7 +9,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.25 (2026-07-30)
+Version: 1.26 (2026-08-01)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -72,7 +72,10 @@ projection.
   abandonment, and quarantine observations. Git owns source and commits;
   AgentCoord claims own cross-host writer hints. Losing these manifests loses
   local collision/reconciliation context but no work noun, source, commit, or
-  supervised execution truth. Only `agent-workspace` writes this directory.
+  supervised execution truth. Version 2 records form a repository or workspace
+  union. Workspace records are read-only operator observations keyed by exact
+  resolved path and carry no Git facts. Version 1 repository records remain
+  readable. Only `agent-workspace` writes this directory.
 
 - **csub delegation logs and receipts (added 2026-07-28):**
   `~/.local/state/csub/` (override: `CSUB_LOG_DIR`) is owned by the `csub`
@@ -365,6 +368,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.26 (2026-08-01): extend disposable local workspace-run records with a
+  versioned repository/workspace union. Workspace sessions use exact-path
+  identity, declare read-only operator authority, and omit Git-only facts.
 - 1.25 (2026-07-30): register weekly focus as priority metadata above the
   existing mission/initiative/campaign hierarchy and local workspace manifests
   as disposable launch/reconciliation coordination state.

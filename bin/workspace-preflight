@@ -48,10 +48,15 @@ function render(result) {
   const lines = [
     `workspace-preflight: ${result.ok ? "PASS" : "REFUSE"} mode=${result.mode}`,
     `root: ${result.repository_root}`,
-    `origin fetch: ${result.origin_fetch_url || "(unavailable)"}`,
-    `origin push: ${result.origin_push_urls.length ? result.origin_push_urls.join(", ") : "(unavailable)"}`,
-    `branch: ${result.branch || "(detached)"} head=${result.starting_head || "(unavailable)"}`,
+    `session: ${result.session_kind || "unavailable"}`,
   ];
+  if (result.session_kind === "workspace") {
+    lines.push("authority: operator safety=read");
+  } else {
+    lines.push(`origin fetch: ${result.origin_fetch_url || "(unavailable)"}`);
+    lines.push(`origin push: ${result.origin_push_urls.length ? result.origin_push_urls.join(", ") : "(unavailable)"}`);
+    lines.push(`branch: ${result.branch || "(detached)"} head=${result.starting_head || "(unavailable)"}`);
+  }
   if (result.tracking_branch) {
     const divergence = result.divergence
       ? `ahead=${result.divergence.ahead} behind=${result.divergence.behind}`
