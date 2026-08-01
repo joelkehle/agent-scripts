@@ -18,6 +18,25 @@ git -C "$source_fixture" add bin lib workspace-roots/projects/.agents
 git -C "$source_fixture" commit -qm fixture
 revision="$(git -C "$source_fixture" rev-parse HEAD)"
 
+# Git records this as executable, but the local source is owner-only. The
+# installer must use the Git executable bit, not these local permission bits.
+chmod 700 "$source_fixture/bin/agent-env-install"
+fake_bin="$tmp/fake-bin"
+mkdir -p "$fake_bin"
+cat > "$fake_bin/sudo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$1" = -n ] && shift
+if [ "$1" = install ] && [[ "${*: -2:1}" == */payload/bin/agent-env-install ]]; then
+  staged_mode="$(stat -c '%a' "${*: -2:1}")"
+  [ "$staged_mode" = 755 ]
+  (( (0$staged_mode & 0055) == 0055 ))
+  : > "$STAGED_MODE_MARKER"
+fi
+exec "$@"
+EOF
+chmod 755 "$fake_bin/sudo"
+
 printf '\nchanged tracked source\n' >> "$source_fixture/bin/docs-list"
 set +e
 source_changed_output="$("$source_fixture/bin/agent-env-install" --prefix "$install_root" 2>&1)"
@@ -28,10 +47,36 @@ grep -q 'REFUSING tracked or staged payload changes' <<<"$source_changed_output"
 [ ! -e "$install_root" ] || { echo "install began before source refusal" >&2; exit 1; }
 git -C "$source_fixture" checkout -q -- bin/docs-list
 
-"$source_fixture/bin/agent-env-install" --prefix "$install_root" >/dev/null
+STAGED_MODE_MARKER="$tmp/staged-mode-ok" PATH="$fake_bin:$PATH" \
+  "$source_fixture/bin/agent-env-install" --sudo --prefix "$install_root" >/dev/null
+[ -f "$tmp/staged-mode-ok" ] || { echo "staged executable mode was not checked" >&2; exit 1; }
+installed_mode="$(stat -c '%a' "$install_root/bin/agent-env-install")"
+[ "$installed_mode" = 755 ]
+(( (0$installed_mode & 0055) == 0055 ))
+"$install_root/agent-env-install" --verify --prefix "$install_root" >/dev/null
 first_manifest="$(sha256sum "$install_root/.agent-env-manifest.tsv")"
 "$source_fixture/bin/agent-env-install" --prefix "$install_root" >/dev/null
 [ "$(sha256sum "$install_root/.agent-env-manifest.tsv")" = "$first_manifest" ]
+[ "$(stat -c '%a' "$install_root/.agent-env-manifest.tsv")" = 644 ]
+while IFS= read -r directory; do
+  [ "$(stat -c '%a' "$directory")" = 755 ] || { echo "directory mode is not 0755: $directory" >&2; exit 1; }
+done < <(find "$install_root" -type d -print)
+while IFS= read -r installed; do
+  relative="${installed#"$install_root/"}"
+  case "$relative" in
+    .agent-env-manifest.tsv) expected_mode=644 ;;
+    bin/*) expected_mode=755 ;;
+    */*)
+      git_mode="$(git -C "$source_fixture" ls-files -s -- "$relative" | awk 'NR == 1 { print $1 }')"
+      if [ "$git_mode" = 100755 ]; then expected_mode=755; else expected_mode=644; fi
+      ;;
+    *) expected_mode=755 ;;
+  esac
+  [ "$(stat -c '%a' "$installed")" = "$expected_mode" ] || {
+    echo "file mode is not 0$expected_mode: $relative" >&2
+    exit 1
+  }
+done < <(find "$install_root" -type f -print)
 grep -q "^source_revision$(printf '\t')$revision$" "$install_root/.agent-env-manifest.tsv"
 [ "$(grep -c '^file'$(printf '\t') "$install_root/.agent-env-manifest.tsv")" -eq "$(find "$install_root" -type f ! -name .agent-env-manifest.tsv | wc -l)" ]
 [ -z "$(find "$install_root" -type l -print -quit)" ] || { echo "symlink found in payload" >&2; exit 1; }

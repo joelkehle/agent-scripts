@@ -104,7 +104,7 @@ if [ -L "$prefix" ]; then
   printf 'agent-env-install: REFUSING install root symlink: %s\n' "$prefix" >&2
   exit 1
 fi
-run_privileged mkdir -p "$prefix"
+run_privileged install -d -m 755 "$prefix"
 
 # Directory links can hide writes outside the install root. Old command-file
 # links are safe to replace and are migrated below.
@@ -118,20 +118,32 @@ done
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-env-install.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 stage="$tmp_dir/payload"
-mkdir -p "$stage/bin" "$stage/lib" "$stage/workspace-roots/projects/.agents"
+install -d -m 755 "$stage/bin" "$stage/lib" "$stage/workspace-roots/projects/.agents"
+
+normalized_mode() {
+  local relative="$1" git_mode
+  case "$relative" in
+    bin/*|agent-check|agent-env-install|agent-focus|agent-start|agent-workspace|agentcoord|bus-discover|codex-bg|committer|contributor-agent|csub|dirty-audit|docs-list|install-claude-agents|loop-audit|loop-receipt|loop-resume|workspace-preflight|trash)
+      printf '755\n'
+      return
+      ;;
+  esac
+  git_mode="$(git -C "$repo_root" ls-files -s -- "$relative" | awk 'NR == 1 { print $1 }')"
+  if [ "$git_mode" = "100755" ]; then printf '755\n'; else printf '644\n'; fi
+}
 
 copy_regular() {
-  local source="$1" destination="$2"
+  local source="$1" destination="$2" relative="$3"
   [ -f "$source" ] && [ ! -L "$source" ] || {
     printf 'agent-env-install: source is not a regular file: %s\n' "$source" >&2
     exit 1
   }
-  mkdir -p "$(dirname "$destination")"
-  install -m "$(stat -c '%a' "$source" 2>/dev/null || stat -f '%Lp' "$source")" "$source" "$destination"
+  install -d -m 755 "$(dirname "$destination")"
+  install -m "$(normalized_mode "$relative")" "$source" "$destination"
 }
 
 for command in "${commands[@]}"; do
-  copy_regular "$repo_root/bin/$command" "$stage/bin/$command"
+  copy_regular "$repo_root/bin/$command" "$stage/bin/$command" "bin/$command"
   cat > "$stage/$command" <<LAUNCHER
 #!/usr/bin/env sh
 set -eu
@@ -143,7 +155,7 @@ done
 
 for relative in "${payload_paths[@]}"; do
   case "$relative" in bin/*) continue ;; esac
-  copy_regular "$repo_root/$relative" "$stage/$relative"
+  copy_regular "$repo_root/$relative" "$stage/$relative" "$relative"
 done
 
 stage_manifest="$tmp_dir/$manifest_name"
@@ -154,6 +166,7 @@ stage_manifest="$tmp_dir/$manifest_name"
     printf 'file\t%s\t%s\n' "$(sha256_file "$file")" "$relative"
   done < <(find "$stage" -type f -print | LC_ALL=C sort)
 } > "$stage_manifest"
+chmod 644 "$stage_manifest"
 
 if [ "$dry_run" -eq 1 ]; then
   printf 'agent-env-install: would materialize %s regular files into %s\n' "$(find "$stage" -type f | wc -l)" "$prefix"
@@ -162,8 +175,8 @@ fi
 
 while IFS= read -r file; do
   relative="${file#"$stage/"}"
-  run_privileged mkdir -p "$(dirname "$prefix/$relative")"
-  run_privileged install -m "$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file")" "$file" "$prefix/$relative"
+  run_privileged install -d -m 755 "$(dirname "$prefix/$relative")"
+  run_privileged install -m "$(normalized_mode "$relative")" "$file" "$prefix/$relative"
 done < <(find "$stage" -type f -print | LC_ALL=C sort)
 run_privileged install -m 644 "$stage_manifest" "$manifest"
 
