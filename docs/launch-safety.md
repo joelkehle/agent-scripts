@@ -97,6 +97,7 @@ authority.
 
 For write mode, preflight refuses:
 
+- any existing non-Git directory, because repository write checks are unavailable;
 - a detached current worktree;
 - a primary checkout with uncommitted changes;
 - another linked worktree with uncommitted or ambiguous changes and no living
@@ -121,10 +122,12 @@ prefix siblings do not collide. Preflight only diagnoses. It never modifies a
 remote or checkout.
 
 Read mode does not block on repository write hazards, but still reports them
-and sets `shouldSurface=true`. A directory inside a Git repository keeps these
-rules. An existing directory outside Git starts a read-only operator session.
-It grants no code-write authority. Missing paths and non-directories remain
-refusals. No fake repository is made.
+and sets `shouldSurface=true`. The default session kind is `repository`, so a
+non-Git root refuses in both modes. Operator admission is explicit through
+`agent-workspace begin --session-kind workspace` or
+`agent-start --session-kind workspace`. That workspace path always uses read
+safety and grants no code-write authority. Missing paths and non-directories
+remain refusals. No fake repository is made.
 
 Fixture/test overrides:
 
@@ -151,6 +154,21 @@ agent-workspace begin \
   --pid "$$"
 ```
 
+An operator session for an existing non-Git directory must be requested:
+
+```bash
+agent-workspace begin \
+  --session-kind workspace \
+  --root /path/to/workspace \
+  --goal W31-EXAMPLE \
+  --tool codex \
+  --pid "$$"
+```
+
+Without `--session-kind workspace`, `begin` keeps repository behavior and
+refuses a non-Git root. Workspace admission runs read preflight. It never runs
+write preflight against the operator directory.
+
 An optional supervised-execution binding is syntactically validated but not
 looked up or mutated:
 
@@ -166,7 +184,7 @@ agent-workspace begin \
 
 `begin` first requires a successful preflight. Repository sessions acquire a
 short-lived entrance claim keyed by the canonical Git common directory.
-Workspace sessions use a separate claim domain keyed by the exact resolved
+Explicit workspace sessions use a separate claim domain keyed by the exact resolved
 workspace path. A workspace root and a child repository do not collide. The
 command reruns preflight while holding the claim, then records `starting`
 and atomically advances to `active` before releasing the entrance claim. The

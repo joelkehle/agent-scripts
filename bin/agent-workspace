@@ -25,6 +25,7 @@ function usage() {
   agent-workspace reconcile [--state-root DIR] [--json]
 
 Begin options:
+  --session-kind repository|workspace
   --execution-kind mission|initiative|campaign
   --execution-id ID
   --pid PID
@@ -47,6 +48,7 @@ function parseArgs(argv) {
     exceptionSpecified: false,
     executionKind: "",
     executionId: "",
+    sessionKind: "repository",
     tool: "",
     pid: null,
     runId: "",
@@ -75,6 +77,7 @@ function parseArgs(argv) {
     }
     else if (arg === "--execution-kind") args.executionKind = argv[++index];
     else if (arg === "--execution-id") args.executionId = argv[++index];
+    else if (arg === "--session-kind") args.sessionKind = argv[++index];
     else if (arg === "--tool") args.tool = argv[++index];
     else if (arg === "--pid") args.pid = Number(argv[++index]);
     else if (arg === "--run-id") args.runId = argv[++index];
@@ -90,6 +93,9 @@ function parseArgs(argv) {
     args.executionRef = { kind: args.executionKind, id: args.executionId };
   } else {
     args.executionRef = null;
+  }
+  if (!["repository", "workspace"].includes(args.sessionKind)) {
+    throw new Error("--session-kind must be repository or workspace");
   }
   return args;
 }

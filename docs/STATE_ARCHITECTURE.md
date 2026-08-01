@@ -73,9 +73,10 @@ projection.
   AgentCoord claims own cross-host writer hints. Losing these manifests loses
   local collision/reconciliation context but no work noun, source, commit, or
   supervised execution truth. Version 2 records form a repository or workspace
-  union. Workspace records are read-only operator observations keyed by exact
-  resolved path and carry no Git facts. Version 1 repository records remain
-  readable. Only `agent-workspace` writes this directory.
+  union. Workspace records require explicit operator admission. They are
+  read-only observations keyed by exact resolved path and carry no Git facts.
+  Version 1 repository records remain readable. Only `agent-workspace` writes
+  this directory.
 
 - **csub delegation logs and receipts (added 2026-07-28):**
   `~/.local/state/csub/` (override: `CSUB_LOG_DIR`) is owned by the `csub`

@@ -24,7 +24,7 @@ const DEFAULT_WORKBENCH_URL = process.env.AGENT_WORKBENCH_URL || "http://beelink
 const REQUIRED_TOOLS = ["agent-start", "agent-focus", "workspace-preflight", "agent-workspace", "agentcoord", "machine-compliance", "committer", "docs-list", "bus-discover", "wwi", "claude", "codex", "agent-check"];
 
 function usage() {
-  console.log(`Usage: agent-start [--root DIR] [--mode read|write] [--goal GOAL_ID]
+  console.log(`Usage: agent-start [--root DIR] [--mode read|write] [--session-kind repository|workspace] [--goal GOAL_ID]
                    [--focus-file PATH] [--json] [--notice] [--card PATH]
                    [--skip-bus|--no-bus] [--timeout MS]
                    [--workbench-summary PATH] [--workbench-url URL]
@@ -48,7 +48,8 @@ function parseArgs(argv) {
     workbenchSummary: DEFAULT_WORKBENCH_SUMMARY,
     explicitWorkbenchSummary: Boolean(process.env.AGENT_WORKBENCH_SUMMARY),
     workbenchUrl: DEFAULT_WORKBENCH_URL,
-    mode: "write",
+    mode: "",
+    sessionKind: "repository",
     goalId: process.env.AGENT_FOCUS_GOAL_ID || "",
     focusFile: DEFAULT_FOCUS_FILE,
     agentcoordRoot: PREFLIGHT_AGENTCOORD_ROOT,
@@ -63,6 +64,7 @@ function parseArgs(argv) {
     else if (arg === "--skip-bus" || arg === "--no-bus") args.skipBus = true;
     else if (arg === "--root") args.root = argv[++i];
     else if (arg === "--mode") args.mode = argv[++i];
+    else if (arg === "--session-kind") args.sessionKind = argv[++i];
     else if (arg === "--goal") args.goalId = argv[++i];
     else if (arg === "--focus-file") args.focusFile = argv[++i];
     else if (arg === "--card") args.cardPath = argv[++i];
@@ -75,7 +77,10 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0) throw new Error("--timeout must be positive milliseconds");
+  if (!["repository", "workspace"].includes(args.sessionKind)) throw new Error("--session-kind must be repository or workspace");
+  if (!args.mode) args.mode = args.sessionKind === "workspace" ? "read" : "write";
   if (!["read", "write"].includes(args.mode)) throw new Error("--mode must be read or write");
+  if (args.sessionKind === "workspace" && args.mode !== "read") throw new Error("workspace sessions require --mode read");
   args.root = path.resolve(args.root);
   return args;
 }
@@ -253,13 +258,14 @@ function collectSafety(args, root) {
     agentcoordRoot: args.agentcoordRoot,
     quarantineRoot: args.quarantineRoot,
     stateRoot: args.stateRoot,
+    sessionKind: args.sessionKind,
   }));
   const runStates = relevantRunStates(root, { stateRoot: args.stateRoot });
   return { weeklyFocus, workspacePreflight, runStates };
 }
 
 function collect(args) {
-  const root = gitRoot(args.root);
+  const root = args.sessionKind === "workspace" ? path.resolve(args.root) : gitRoot(args.root);
   const agentcoordPath = path.join(os.homedir(), "Projects/shared/agent-scripts/bin/agentcoord");
   const coordCmd = commandExists("agentcoord") || (fs.existsSync(agentcoordPath) ? agentcoordPath : "agentcoord");
   const packet = {
@@ -390,7 +396,7 @@ try {
     process.exit(0);
   }
   if (args.notice) {
-    const root = gitRoot(args.root);
+    const root = args.sessionKind === "workspace" ? path.resolve(args.root) : gitRoot(args.root);
     const safety = collectSafety(args, root);
     process.stdout.write(renderNotice(
       readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),

@@ -19,6 +19,7 @@ agent-start --notice
 agent-start --root ~/Projects/shared/agent-scripts
 agent-start --root . --goal W31-EXAMPLE
 agent-start --root . --mode read
+agent-start --root ~/Projects --session-kind workspace
 ```
 
 The packet includes:
@@ -82,8 +83,10 @@ safe to call before handing control to `codex` or `claude`. It defaults to
 `--mode write`; use `--mode read` for a deliberately read-only launch. Read
 mode permits write hazards but still surfaces them.
 
-For an existing non-Git directory, the safety section labels the session as a
-read-only operator workspace with no code-write authority. A path inside a Git
+The default session kind is `repository`. It refuses an existing non-Git
+directory. Use `--session-kind workspace` to ask for an operator session at an
+exact non-Git path. This explicit path selects read mode and has no code-write
+authority. Passing `--mode write` with it is refused. A path inside a Git
 repository keeps repository launch checks. Missing paths and non-directories
 are refused.
 

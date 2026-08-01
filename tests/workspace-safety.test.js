@@ -137,15 +137,43 @@ function makeWorkspaceFixture(t, name) {
   return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot };
 }
 
-test("existing non-Git Projects and nested ucla-tdg directories permit workspace operator sessions", (t) => {
+test("non-Git write preflight refuses with ok=false and a non-zero CLI exit", (t) => {
   const fixture = makeWorkspaceFixture(t, "shapes");
   for (const root of [fixture.root, path.join(fixture.root, "ucla-tdg")]) {
     const preflight = preflightWorkspace(root, "write", fixture);
-    assert.equal(preflight.ok, true);
-    assert.equal(preflight.session_kind, "workspace");
+    assert.equal(preflight.ok, false);
+    assert.equal(preflight.session_kind, "repository");
     assert.equal(preflight.workspace_root, fs.realpathSync(root));
-    assert.match(preflight.issues.map((item) => item.code).join("\n"), /workspace_operator_session/);
+    assert.match(preflight.issues.map((item) => item.code).join("\n"), /git_repository_required/);
   }
+  const cli = spawnSync("node", [path.join(repoRoot, "bin/workspace-preflight"),
+    "--root", fixture.root,
+    "--mode", "write",
+    "--json",
+  ], { encoding: "utf8" });
+  if (cli.error?.code === "EPERM") {
+    t.skip("sandbox blocks nested process execution");
+    return;
+  }
+  assert.equal(cli.status, 1, cli.stderr);
+  assert.equal(JSON.parse(cli.stdout).ok, false);
+});
+
+test("explicit workspace read preflight permits a non-Git operator session", (t) => {
+  const fixture = makeWorkspaceFixture(t, "explicit-read");
+  const preflight = preflightWorkspace(fixture.root, "read", {
+    ...fixture,
+    sessionKind: "workspace",
+  });
+  assert.equal(preflight.ok, true);
+  assert.equal(preflight.session_kind, "workspace");
+  assert.match(preflight.issues.map((item) => item.code).join("\n"), /workspace_operator_session/);
+  const writeAttempt = preflightWorkspace(fixture.root, "write", {
+    ...fixture,
+    sessionKind: "workspace",
+  });
+  assert.equal(writeAttempt.ok, false);
+  assert.match(writeAttempt.issues.map((item) => item.code).join("\n"), /workspace_write_forbidden/);
 });
 
 test("missing paths and non-directories refuse without creating a repository", (t) => {
@@ -168,6 +196,7 @@ test("workspace manifest v2 is explicit, read-only, and omits Git-only fields", 
     tool: "codex",
     pid: process.pid,
     runId: "workspace-manifest",
+    sessionKind: "workspace",
   });
   assert.equal(begun.manifest.schema, "agent-workspace-run.v2");
   assert.equal(begun.manifest.session_kind, "workspace");
@@ -183,6 +212,17 @@ test("workspace manifest v2 is explicit, read-only, and omits Git-only fields", 
   assert.equal(sealed.manifest.state, "sealed");
   assert.equal(sealed.manifest.exit_code, 7);
   assert.equal(Object.hasOwn(sealed.manifest, "ending_head"), false);
+});
+
+test("implicit non-Git begin refuses repository admission", (t) => {
+  const fixture = makeWorkspaceFixture(t, "implicit-begin");
+  assert.throws(() => beginRun({
+    ...fixture,
+    goalId: "W31-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "implicit-workspace",
+  }), /workspace preflight refused begin/);
 });
 
 test("old v1 repository manifests remain readable", () => {
@@ -204,7 +244,7 @@ test("workspace and child repository entrances do not collide in either order", 
     const repo = makeRepository(t, `child-${order}`);
     const child = path.join(fixture.root, "child");
     fs.renameSync(repo, child);
-    const workspaceOptions = { ...fixture, goalId: "W31-CORE", tool: "codex", pid: process.pid, runId: `${order}-workspace` };
+    const workspaceOptions = { ...fixture, sessionKind: "workspace", goalId: "W31-CORE", tool: "codex", pid: process.pid, runId: `${order}-workspace` };
     const repositoryOptions = { ...fixture, root: child, goalId: "W31-CORE", tool: "codex", pid: process.pid, runId: `${order}-repository` };
     const starts = order === "workspace-first"
       ? [() => beginRun(workspaceOptions), () => beginRun(repositoryOptions)]
@@ -252,6 +292,37 @@ function makeAgentStartSupport(fixture) {
     },
   };
 }
+
+test("agent-start requires explicit workspace admission and then uses read safety", (t) => {
+  const fixture = makeWorkspaceFixture(t, "agent-start-workspace");
+  const support = makeAgentStartSupport(fixture);
+  const baseArgs = [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--goal", "W31-CORE",
+    "--focus-file", fixture.focusFile,
+    "--workbench-summary", support.workbench,
+    "--no-bus",
+    "--json",
+  ];
+  const implicit = spawnSync("node", baseArgs, { encoding: "utf8", env: support.env });
+  if (implicit.error?.code === "EPERM") {
+    t.skip("sandbox blocks nested process execution");
+    return;
+  }
+  assert.equal(implicit.status, 0, implicit.stderr);
+  assert.equal(JSON.parse(implicit.stdout).workspacePreflight.ok, false);
+
+  const explicit = spawnSync("node", [...baseArgs, "--session-kind", "workspace"], {
+    encoding: "utf8",
+    env: support.env,
+  });
+  assert.equal(explicit.status, 0, explicit.stderr);
+  const packet = JSON.parse(explicit.stdout);
+  assert.equal(packet.workspacePreflight.ok, true);
+  assert.equal(packet.workspacePreflight.mode, "read");
+  assert.equal(packet.workspacePreflight.session_kind, "workspace");
+});
 
 test("valid weekly focus supports no execution_refs", () => {
   const focus = parseValidFocus(focusYaml());
