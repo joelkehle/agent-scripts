@@ -4,6 +4,7 @@ read_when:
   - Creating, choosing, or extending any state store (DB, JSON files, wiki pages, caches).
   - Deciding where a fact belongs: noun DB, project-manager, wiki, source system, or repo-local data/.
   - Designing intake, sync, or any pipeline that copies data between stores.
+  - Changing GitHub contribution state, owner attention, supervised coding state, or reviewer calibration.
   - Reviewing a change that adds tables, schemas, or persistent files.
 ---
 

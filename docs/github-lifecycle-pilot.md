@@ -1,6 +1,7 @@
 ---
 summary: "GHL-010 pilot: the scenario ledger that runs checked-in acceptance evidence, the offline live-mode refusal preflight, and the ordered live-canary runbook with its rollback and abort points."
 read_when:
+  - Checking which parts of the weekly-goal-to-GitHub lifecycle are built, partial, or still unproven.
   - Running or changing `ghl-pilot` or the GHL-E2E scenario map.
   - Deciding whether the GitHub-native lifecycle pilot may run against live GitHub.
   - Preparing, executing, or aborting the supervised live canary.
@@ -57,7 +58,8 @@ seal identically.
 
 ### Current coverage
 
-Seven of the twelve scenarios are `partial`. The gaps are recorded in the map
+`ghl-pilot plan` currently reports five `executable` scenarios and seven
+`partial` scenarios. The gaps are recorded in the map
 itself and printed by `ghl-pilot plan`; the largest are the packet's spec
 revision and requirement citations (`GHL-E2E-04`), a simulated GitHub-post and
 packet-post failure that preserves earlier stages (`GHL-E2E-07`), a shared-scope
@@ -71,6 +73,28 @@ the mission `budget_exhausted` instead of `ready_for_joel`. The map selects the
 Manager tests that genuinely pass at the pinned HEAD and records the blocked
 clauses as gaps rather than running the whole package. That failure is not
 root-caused; treat any claim resting on those tests as unproven until it is.
+
+### What exists and what is still missing
+
+The pieces are farther along than the live canary.
+
+| Part | State | What that means |
+|---|---|---|
+| Manifest schema, coverage check, stable renderer | Implemented and locally tested | A design can become a checked issue proposal. |
+| Exact batch approval | Designed target only | Version 2 still needs one matching Joel comment per issue. |
+| GitHub issue create, claim, lease, and recovery adapters | Implemented with focused tests | The adapters exist; the full live chain is not yet proven. |
+| Manager mission, initiative, and campaign conductors | Implemented | They own coding proof, not GitHub state. |
+| Weekly goal to issue link | Not implemented | Current manifest schemas do not carry a weekly-goal field. |
+| Issue-to-Manager provenance | Partial | Claim data exists, but Manager does not yet carry every issue, spec revision, and requirement field. |
+| Legacy lifecycle tool wording | Partial | The canonical docs use `request_agent_mission`; the ratified v1 issue text still names the operator tool and needs a new approved revision. |
+| Guarded branch and PR publication | Implemented with focused tests | Only a successful exact mission packet may publish. |
+| Independent review, exact-head packet, new-head invalidation | Implemented with focused tests | A changed head must be reviewed again. |
+| Owner-attention and Joel decision record | Partial | Core paths exist; shared-scope and full replay still have stated gaps. |
+| One real start-to-finish canary | Not run | The whole system is not yet proven live. |
+| Plain terminal launch with automatic issue binding | Not proven | A normal session can still begin without a GitHub work link. |
+
+Do not add another workflow engine before this chain passes once. Fix the
+missing links in the existing owners first.
 
 ## Live-mode refusal preflight
 
@@ -91,7 +115,8 @@ ghl-pilot preflight observed.json --receipt  # sealed evaluation receipt
 
 `observed.json` is `github-lifecycle-build-identity.v1`: what the health
 endpoints actually report, one `{service, commit, dirty, activated_at}` entry
-per service, plus the recorded `ACT-REV-01` and `ACT-REV-02` receipts.
+per service, plus the receipts named by the current activation spec. Version
+1.1.0 requires `ACT-REV-03` for Manager and `ACT-REV-04` for the coordinator.
 
 Live mode is refused unless every checkpoint matches exactly. A service that is
 absent, reported twice, reporting no commit, reporting a commit that is not the
@@ -103,9 +128,14 @@ one; only a health endpoint reporting that commit satisfies a checkpoint.
 required builds are running. It does not say the canary may proceed; that is
 Joel's separate decision.
 
-Today it refuses. The deployed coordinator is the `GHL-002`-only build and
-Manager predates `GHL-005`, so both checkpoints fail on `commit_mismatch` and
-neither historical receipt is recorded.
+The last recorded live check was 2026-07-30. It passed after Joel ratified
+`ACT-REV-05` and `ACT-REV-06`, and the two health endpoints reported the exact
+required builds. That pass proved build identity only. It did not authorize or
+run the canary.
+
+This is a dated fact. Before a canary, rebuild `observed.json` from the real
+health endpoints and run `ghl-pilot preflight` again. Do not reuse the old pass
+as current proof.
 
 ## Live canary runbook
 
@@ -172,3 +202,28 @@ Record what the canary proved, and which `GHL-E2E` clauses it moved from
 `partial` to `executable`. A live canary is evidence about the deployed system;
 it does not close the map's gaps, which are about the checked-in suites. Update
 the map only when a test asserts the clause.
+
+## Recommended completion order
+
+Use this order so each step removes a real block:
+
+1. Re-ratify the old issue text so it names `request_agent_mission` for the
+   external lifecycle path.
+2. Add a versioned weekly-goal link to the manifest, renderer, and issue.
+3. Add the missing issue, spec revision, requirement, weekly-goal, and claim
+   links to Manager request and packet proof.
+4. Add one exact batch-ratification receipt. Keep the current per-issue gate
+   until the new receipt has code and tests.
+5. Make plain `codex` and `claude` sessions bind claimed issue work before they
+   may write.
+6. Close the seven stated scenario gaps, starting with full provenance and
+   partial-write recovery.
+7. Refresh the live build preflight.
+8. Ask Joel for one canary approval.
+9. Run the one bounded canary and stop at Joel's decision gate.
+10. Record what failed, fix the owning rule or test, and repeat only with a new
+   approval if the first canary did not finish.
+
+The first canary should use one small documentation or validator issue in one
+repo. It should not also test a new campaign policy. Cross-repo campaign proof
+comes after the one-repo path works from issue to decision.

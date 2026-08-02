@@ -1,8 +1,10 @@
 ---
 summary: "Versioned specification-to-issue manifest schema, coverage validator, stable issue renderer, and attributable validation receipt for JK-SPEC-GHLIFE-001."
 read_when:
-  - Adding, editing, or validating a github-lifecycle-manifest.v1 manifest.
+  - Adding, editing, or validating a github-lifecycle-manifest.v1 or v2 manifest.
   - Proposing a GitHub issue batch from a ratified specification.
+  - Deciding how Joel approves an exact issue batch.
+  - Checking whether the current per-issue version 2 ratification gate is still required.
   - Implementing GHL-004's issue adapter or any consumer of rendered issue payloads.
 ---
 
@@ -17,11 +19,56 @@ the GitHub issue batch that implements it. Validation and rendering are
 read/propose work. Creating or updating issues is a separately authorized
 external write and lives outside this repository.
 
+## The handoff from design to work
+
+The source specification owns the design. The manifest does not replace it.
+The manifest gives machines a small, strict set of fields that they can check
+and render without guessing.
+
+```text
+weekly goal
+  -> Joel and AI agree on the design
+  -> AI proposes a manifest
+  -> deterministic validator checks coverage and links
+  -> renderer produces the exact issue batch
+  -> Joel approves that exact batch
+  -> authorized adapter creates or updates GitHub issues
+```
+
+The AI handles meaning. It finds likely work slices, requirement links,
+dependencies, proof, and non-goals. The validator handles shape and math. It
+checks that required facts exist, all normative requirements are covered, and
+the dependency graph is usable. It does not decide whether the design is good.
+
+Each rendered issue is a faithful work packet. It keeps the source spec and
+revision, requirement IDs, acceptance criteria, dependencies, check commands,
+non-goals, write class, and definition of done. A downstream adapter must not
+quietly shorten that packet.
+
+## Ratification: current rule and target rule
+
+There are two different states. Keep them separate.
+
+**Implemented current rule:** each version 2 issue needs a Joel-authored GitHub
+comment with the matching `ratified-definition-of-done.v1` marker. The
+coordinator recomputes the marker from the live issue title and body before a
+claim. This is strict, but it makes Joel repeat approval for each issue.
+
+**Approved target rule:** Joel may approve one exact rendered batch. The future
+receipt must bind all issue IDs, titles, body hashes, manifest hash, source spec
+revision, approving actor, and approval time. The issue adapter may then post
+only those exact bodies. Any changed hash or extra issue needs new approval.
+
+The target saves clicks. It does not weaken review. It is not implemented by
+this documentation change. Until code, tests, and a live proof exist, the
+current per-issue comments remain the gate.
+
 ## Artifacts
 
 | Artifact | Path |
 |---|---|
-| Ratified `GHL-001`..`GHL-010` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v1.json` |
+| Ratified v1 `GHL-001`..`GHL-010` plus `GHL-013` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v1.json` |
+| Ratified structured v2 `GHL-013` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v2.json` |
 | Generated JSON Schema | `docs/schemas/github-lifecycle-manifest.v1.schema.json` |
 | Structured DoD JSON Schema | `docs/schemas/github-lifecycle-manifest.v2.schema.json` |
 | Library | `lib/github-lifecycle/` |
@@ -31,7 +78,7 @@ external write and lives outside this repository.
 ## Commands
 
 ```bash
-ghl-manifest validate                    # defaults to the ratified manifest
+ghl-manifest validate                    # defaults to the ratified v1 manifest
 ghl-manifest validate path/to/manifest.json --format json
 ghl-manifest render --issue GHL-003
 ghl-manifest receipt --actor codex-contributor --at 2026-07-27T00:00:00.000Z
@@ -202,3 +249,8 @@ always hash the same regardless of formatting or key order.
 - No issue assignment, claim event, or mission launch; those belong to
   `GHL-004` through `GHL-006` in the coordinator repository.
 - Not a project-management database. GitHub stays canonical for issue state.
+- No weekly-goal or supervised-execution state. A future schema may carry
+  stable IDs that link to those owners, but current v1 and v2 schemas have no
+  weekly-goal field. The manifest must never copy their status.
+- No proof that the design is correct. Validation proves structure, coverage,
+  and stable output only. Joel still approves meaning.

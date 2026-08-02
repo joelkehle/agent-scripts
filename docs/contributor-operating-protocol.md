@@ -1,6 +1,7 @@
 ---
 summary: "How work moves in Joel's repos: issues in, PRs out, how work is claimed, assigned and reviewed, the commit-anchored ready-for-Joel packet, and how silence is handled. For human interns and coding agents alike."
 read_when:
+  - Starting coding work from a weekly goal or deciding what Joel should see in a normal terminal session.
   - Coordinating contributors, parsing a spec into issues, or assigning work.
   - Preparing, reviewing, or adjudicating a PR in any Joel or UCLA TDG repo.
   - A contributor (human or agent) has gone silent, or you are drafting a nudge.
@@ -9,7 +10,7 @@ read_when:
 
 # Contributor Operating Protocol
 
-Version: 0.7 (2026-07-26). Amendments become effective when Joel merges them
+Version: 0.8 (2026-08-01). Amendments become effective when Joel merges them
 into `main`.
 
 This document does not replace the canonical agent startup. Run the normal
@@ -22,6 +23,51 @@ authority, and ownership rules.
 `contribution-review-architecture.md` is the canonical implementation
 architecture for the roles, identity boundaries, lifecycle, retry behavior,
 and state ownership described here.
+
+## What Joel should see
+
+Joel should not have to remember the system map. A normal coding session should
+do this:
+
+1. Show the current weekly goals.
+2. Ask which goal this work serves.
+3. Show matching open GitHub issues, or help turn the approved design into a
+   checked issue batch.
+4. Explain the proposed batch in plain words.
+5. Ask once for approval of the exact batch after the batch-receipt gate is
+   built. Today, version 2 issues still need their matching Joel comments.
+6. Claim the chosen issue and choose the smallest fitting work layer.
+7. Work until Joel must make a real choice.
+8. Return one ready packet tied to the exact pull-request head.
+
+The session must say when a step is not built or not live. It must not show a
+mission as if it were an issue, or a green check as if it were Joel's merge
+decision.
+
+## From a weekly goal to GitHub issues
+
+A weekly goal says which result matters now. It does not contain all coding
+steps. An architecture or specification explains the result, its rules, and
+how it will be proved. A machine-readable manifest then turns that approved
+design into proposed issues.
+
+An AI may write the first draft. A deterministic validator checks:
+
+- every required field is present;
+- every requirement is covered;
+- every dependency points to a real issue;
+- the dependency graph has no cycle;
+- proof, budget, and non-goal fields are complete; and
+- the same input renders the same issue text.
+
+The validator cannot prove that the design is wise or that the issue text means
+what Joel wants. Joel approves the exact rendered batch. A batch approval must
+name or hash that exact version. Later changes need a new approval.
+
+Current code still requires one matching Joel-authored ratification comment on
+each version 2 issue before it may be claimed. The one-click batch receipt is a
+target state, not a live claim. Until it is built, the per-issue comments stay.
+Version 1 issues do not carry this structured definition-of-done gate.
 
 ## The maintainer, in five lines
 
@@ -64,10 +110,21 @@ learning needs differ, and mentoring applies to humans.
   `shared-agent-coordination.md`).
 - **One existing lifecycle conductor owns an automated claim.** The
   `ucla.contribution-coordinator` deployable moves the bounded issue from
-  confirmed claim through idempotent `start_agent_mission`, polling, successful
+  confirmed claim through idempotent `request_agent_mission`, polling, successful
   exact-revision packet, and guarded contributor-fork publication.
-  `start_agent_mission` owns local coding mission state, holds no GitHub
+  `request_agent_mission` is the external lifecycle entry tool.
+  `start_agent_mission` is the separate operator entry tool. Manager's
+  deterministic coding conductor owns local mission state, holds no GitHub
   credential, and is not the lifecycle database.
+- **The issue and execution stay linked.** A supervised request carries the
+  weekly goal, issue URL, specification revision, requirement IDs, claim
+  generation, and work-layer choice. The pull request links back to the issue
+  and the successful execution packet. If a required link is missing, the
+  automated path stops.
+- **Use the smallest work layer that fits.** One bounded repo change is a
+  mission. Several ordered changes in one repo form an initiative. One outcome
+  across repos is a campaign. An issue may need more than one mission, and a
+  campaign may close more than one issue. The links make that clear.
 - **PRs are the only unit of delivered repository code or documentation.**
   Deployments, incidents, and operational actions are delivered through
   receipts and runbooks per their owning repo, not necessarily PRs.
@@ -93,8 +150,13 @@ Two different questions, two different rules (Charter R3, R4):
   attributed findings are posted on the PR. A peer review — human or agent —
   that satisfies the first-pass contract for the exact head completes the
   required review; the coordinator records it rather than dispatching a
-  duplicate. Findings block mechanically only for reviewer identities with
-  earned calibration (Architecture: Reviewer equivalence and calibration).
+  duplicate. Model findings are advisory today. Earned blocking weight is a
+  future rule that needs an approved state owner, code, and proof first.
+
+The contract is model-neutral. A reviewer must have a different identity from
+the contributor. Cross-model review is a high-risk target, but it is not a
+proven gate until the packet records model family and policy checks it. No one
+model vendor is required for the pipe to work.
 
 ## The ready-for-Joel queue
 
@@ -127,8 +189,8 @@ The packet contains, in order:
 7. Optional `decision-analysis.v1` block (Architecture: Decision analysis):
    recommendation with a probability, top falsifiers, reversibility class,
    kill criteria, and decide-by — hard-budgeted to eight rendered lines,
-   short form for low-stakes reversible changes. Stated confidence feeds the
-   reviewer's calibration record and is never a substitute for evidence.
+   short form for low-stakes reversible changes. Stated confidence may feed a
+   future approved calibration system and is never a substitute for evidence.
 
 **Commit anchoring.** Every packet records the exact reviewed `head_sha`,
 validation evidence produced against that SHA, generation time,
@@ -143,6 +205,11 @@ outlive the commit it reviewed. The `ready-for-joel` label is a
 rebuildable projection, never readiness truth: every consumer must compare
 the packet's `head_sha` with the live PR head and fail closed on mismatch,
 even when stale-label removal failed.
+
+This is the GitHub HTML marker. Manager uses the same legacy text as the JSON
+schema for its separate execution packet. Consumers must choose the owning
+store and typed contract first. They must not treat the bare string as one
+cross-store packet type.
 
 Joel adjudicates asynchronously and in batches. **The recommended
 disposition is an input to Joel's decision, never a default.** For
@@ -224,6 +291,10 @@ describes how the system works; only live sources describe how it is.
 
 ## Changelog
 
+- 0.8 (2026-08-01): add the plain terminal flow; connect weekly goals,
+  approved designs, checked issue batches, GitHub claims, supervised work
+  layers, pull requests, and final packets; separate current per-issue
+  ratification from the approved batch-receipt target.
 - 0.7 (2026-07-26): define the GitHub claim event primitive, reuse the
   contribution-coordinator as lifecycle conductor, and route personal/shared
   repo-bound attention to GitHub while retaining UCLA attention in Project

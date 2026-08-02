@@ -1,6 +1,8 @@
 ---
 summary: "Canonical architecture contract for contribution intake, independent PR review, GitHub posting, ready-for-Joel packets, and owner-attention routing across Joel's repos."
 read_when:
+  - Connecting weekly goals, approved architecture, GitHub issues, supervised coding, pull requests, and Joel decisions.
+  - Reviewing the contribution-review Elephant Check or a drift between GitHub and Manager contracts.
   - Designing or changing contribution routing, automated PR review, GitHub machine identities, or the ready-for-Joel queue.
   - Changing the contribution coordinator, policy evaluator, first-pass reviewer, GitHub review poster, or Project Manager integration.
   - Implementing or reviewing github-pr-review, contribution-coordinator, review-agent, or project-manager behavior.
@@ -9,18 +11,40 @@ read_when:
 
 # Contribution Review Architecture Contract
 
-Version: 0.2 (2026-07-26). This contract becomes effective when Joel merges it
+Version: 0.5 (2026-08-01). This contract becomes effective when Joel merges it
 into `main`.
 
 ## Outcome
 
-One contribution pipe serves human interns, coding agents, and Joel:
+One contribution pipe serves human contributors, coding agents, and Joel:
+
+```text
+weekly goal
+  -> ratified architecture or specification
+  -> checked issue manifest
+  -> Joel approves the exact issue batch (target batch receipt)
+  -> faithful GitHub issues
+  -> conflict-safe claim
+  -> supervised mission, initiative, or campaign
+  -> exact Git commit and contribution PR
+  -> local checks and independent review
+  -> ready-for-Joel packet for the current PR head
+  -> Joel decision
+  -> recorded outcome and reusable lesson
+```
+
+For small work, the first three steps may be one short issue written by Joel
+and an AI partner. Large work needs the full specification and manifest path.
+The safety rule is the same: the issue must keep the approved goal, scope,
+proof, limits, and dependencies.
+
+The repository delivery part of the pipe is:
 
 ```text
 captured work
   -> faithful GitHub issue
   -> conflict-safe claim
-  -> supervised coding mission
+  -> supervised coding execution
   -> contribution PR
   -> independent first-pass review
   -> attributed GitHub evidence
@@ -38,6 +62,107 @@ transparent expedited-completion mode when time matters.
 This is the canonical cross-repo architecture for that outcome. Repo-local
 specs implement it; they do not redefine its roles, identity boundaries, or
 state ownership.
+
+## Git and GitHub do different jobs
+
+Git and GitHub are both required. They do not own the same facts.
+
+- **Git** owns files, commits, branches, and commit history. It answers, "What
+  exact code or document changed?"
+- **GitHub** owns issues, claims, pull requests, posted reviews, and Joel's
+  final repository decision. It answers, "Why was this work done, who owns it,
+  and may it be merged?"
+- **Manager** owns supervised execution proof. It answers, "Did the work pass
+  the required checks and an independent review at this exact commit?"
+
+A commit is not an issue. A mission is not a pull request. A ready packet is
+not a merge decision. Each record links to the others by stable IDs and exact
+commit hashes instead of copying their facts.
+
+## One system, two conductors
+
+The word `conductor` names two bounded state machines. Their full names must be
+used when both appear in the same discussion.
+
+| Name | Owns | Does not own |
+|---|---|---|
+| **coding conductor** | Manager mission, initiative, or campaign steps; checks; review; evidence; terminal outcome | GitHub issue state, branch publication, PR state, or Joel's decision |
+| **lifecycle conductor** | One claimed GitHub issue through mission request, result polling, branch publication, and PR creation | Code proof, mission truth, review judgment, or Joel's decision |
+
+The lifecycle conductor is part of the contribution coordinator today. It
+asks Manager to run work. It does not replace Manager. Manager returns proof.
+It does not publish a pull request.
+
+## From architecture to claimed work
+
+An AI may draft the issue manifest. A deterministic validator then checks the
+parts a machine can prove: required fields, requirement coverage, dependency
+links, cycles, proof fields, and stable rendering. The validator does not decide
+what Joel meant. Joel approves the exact rendered batch before any issue write.
+
+In the target design, the approved batch becomes GitHub issues. Each issue
+keeps:
+
+- its source specification and revision;
+- the weekly goal it supports;
+- requirement IDs and acceptance criteria;
+- dependencies and non-goals;
+- local check commands;
+- its write class and proof budget.
+
+The current manifest schemas do not yet have a weekly-goal field. That link is
+part of the missing provenance work. Until a versioned field, renderer, and
+tests exist, the system must not claim that the issue proves its weekly goal.
+
+One approval may cover an exact, hashed batch. It must not become open-ended
+approval for later edits. Until that batch receipt exists in code, the current
+per-issue GitHub ratification comments remain required for version 2 issues.
+Version 1 has no structured definition-of-done ratification gate and must not be
+treated as if it carries the version 2 proof contract.
+
+Humans and agents claim the same issues. They use different identities and may
+have different coaching needs, but neither gets a private work queue that can
+override GitHub.
+
+## Issue and execution mapping
+
+Use the smallest supervised layer that proves the outcome:
+
+| Work shape | Manager layer | GitHub shape |
+|---|---|---|
+| One bounded change in one repo | **mission** | Usually one issue and one PR |
+| Several ordered changes in one repo | **initiative** | One or more linked issues; one final outcome packet |
+| One outcome across several repos | **campaign** | Linked issues and PRs in each repo; one cross-repo assurance packet |
+
+This mapping is not forced to be one issue per mission. One issue may need an
+initiative. One campaign may close several issues. Every execution record must
+still cite its weekly goal, source issue or issues, specification revision,
+requirement IDs, and claim generation. Every PR must cite the issue and exact
+successful execution packet.
+
+When no released layer can cover the work, the operator must say so. It must
+not hide a cross-repo outcome inside unrelated missions. The choices are to
+use a smaller approved work slice, get approval for a fitting policy, or use an
+explicit direct-session contract and record the harness gap.
+
+## Normal operator experience
+
+The normal terminal path should be short:
+
+1. Show Joel's current weekly goals.
+2. Let Joel choose one goal or state a new approved goal.
+3. Show the matching open GitHub work, or help turn the approved design into a
+   checked issue batch.
+4. Claim the chosen issue.
+5. Pick mission, initiative, or campaign from the work shape.
+6. Start the execution with non-null goal and GitHub links.
+7. Return only when Joel must decide, grant a new write, or resolve a real
+   blocker.
+
+Starting from a folder that is not a Git repo must still support this flow.
+The launcher should treat that folder as a cross-repo workspace, not fail on a
+Git command. A read-only workspace session may inspect and plan, but it may not
+claim that supervised write work has begun.
 
 ## Authority and scope
 
@@ -91,6 +216,13 @@ Normative words `MUST`, `MUST NOT`, `SHOULD`, and `MAY` express requirements.
    shared access. Transport namespace does not decide business ownership.
 10. **No hidden delegation.** This contract creates no merge authority and no
     autonomous GitHub `APPROVE` authority.
+11. **Models are replaceable.** Policy names roles and proof, not one model
+    vendor. Contributor and reviewer identities must differ. Cross-model review
+    is a target for high-risk work, but it is not a proven gate until a packet
+    records model family and policy checks it. The contract does not depend on
+    one vendor.
+12. **One owner per fact.** New graphs, dashboards, and logs are projections
+    unless this contract and the State Architecture clearly move ownership.
 
 ## Canonical vocabulary
 
@@ -131,7 +263,7 @@ The lifecycle conductor owns this bounded outer sequence:
 
 ```text
 confirmed GitHub issue claim
-  -> idempotent start_agent_mission request
+  -> idempotent request_agent_mission request
   -> mission polling and lease recovery
   -> successful exact-revision ready packet
   -> guarded contributor-fork publication
@@ -144,10 +276,19 @@ lease, and records attributable receipts for every requested side effect.
 GitHub remains canonical for issue and claim state. Manager remains canonical
 for mission state.
 
-`start_agent_mission` is the inner local coding conductor. It holds no GitHub
-credential, is not the contribution lifecycle database, and never publishes a
-branch or PR. The lifecycle conductor holds no authority to approve, merge, or
-perform Joel's final request-changes adjudication.
+`request_agent_mission` is the external lifecycle entry tool. It sends the
+claim lineage into Manager. `start_agent_mission` is the separate operator
+entry tool. The **coding conductor** is Manager's deterministic Go state
+machine, not either tool. Manager holds no GitHub credential, is not the
+contribution lifecycle database, and never publishes a branch or PR. The
+lifecycle conductor holds no authority to approve, merge, or perform Joel's
+final request-changes adjudication.
+
+The ratified version 1 issue manifest and its source specification still carry
+older text that calls `start_agent_mission` from the lifecycle path. That text
+is historical and must not guide new work. Correcting a ratified issue body
+needs a new spec or manifest revision and Joel's approval; this documentation
+change does not silently rewrite it.
 
 ### Contribution coordinator
 
@@ -308,7 +449,8 @@ The unit of review is `(repository, pull_request, head_sha)`. The lifecycle:
 2. **Claim.** A contributor obtains the issue through the conflict-safe,
    versioned GitHub claim event stream and a bounded lease.
 3. **Conduct.** The lifecycle conductor starts and polls one idempotent
-   `start_agent_mission` request under the owning Manager policy.
+   `request_agent_mission` request under the owning Manager policy. Direct
+   operator work uses `start_agent_mission` and is not the GitHub claim path.
 4. **Publish.** Only a successful exact-revision mission packet may reach the
    guarded contributor adapter, which publishes from the contributor fork as
    `kehle-contributor-agent`.
@@ -354,12 +496,12 @@ Three properties stay distinct; none of them is human-versus-agent:
 - **Contract-satisfying versus advisory.** A review that misses any contract
   property is advisory: visible, answered, and never a substitute for the
   required review.
-- **Blocking weight earned per identity.** Findings gate a merge mechanically
-  only for reviewer identities whose recorded calibration — findings compared
-  against adjudicated outcomes — has earned blocking authority. An
-  uncalibrated identity's findings are recorded and answered but do not by
-  themselves block. Calibration records are coordination outcomes owned by
-  the contribution coordinator.
+- **Blocking weight earned per identity is a target, not a live rule.** A later
+  policy may compare findings with Joel's decisions and earn bounded blocking
+  weight. No durable calibration store or owner is approved today. Until the
+  State Architecture names one and code proves the gate, model findings remain
+  advisory. Only an authorized deterministic guardrail may block under the
+  Maintainer Charter.
 
 Learning invitations survive deduplication. The coordinator may invite a peer
 review — especially from a human contributor — when the requirement is
@@ -403,9 +545,10 @@ Recommended idempotency basis:
 repository + pull_request + head_sha + stage + payload_hash
 ```
 
-## Ready-for-Joel packet contract
+## GitHub ready-for-Joel packet contract
 
-The canonical marker is `ready-for-joel.v1`. The PR-posted packet MUST contain:
+The PR-posted review packet currently uses the HTML marker
+`ready-for-joel.v1`. It MUST contain:
 
 1. repository, PR number, and exact `head_sha`;
 2. generation time;
@@ -425,6 +568,14 @@ The canonical marker is `ready-for-joel.v1`. The PR-posted packet MUST contain:
 The packet MUST NOT create a GitHub `APPROVE` event. A `ready-for-joel` label is
 a rebuildable user-interface projection. Consumers compare the packet head to
 the live PR head and fail closed on mismatch.
+
+Manager also uses `ready-for-joel.v1`, but there it is a JSON **schema** for an
+execution packet. The GitHub review packet and Manager execution packet are
+different typed records with different owners. This reused token is legacy
+naming debt. A consumer MUST choose the owning store and typed contract before
+reading it. Searching both stores for the bare string is invalid. A future
+version should rename the GitHub marker, with code and migration tests; this
+documentation change does not rename a live marker.
 
 ### Decision analysis (`decision-analysis.v1`)
 
@@ -446,20 +597,20 @@ recommendation and confidence only. The full block is reserved for one-way
 doors, scope or security changes, and activation-adjacent work. Exceeding
 the budget is a rendering defect, not diligence.
 
-Calibration: stated confidence feeds the reviewer identity's calibration
-record (Reviewer equivalence and calibration) as a forecast scored against
-the adjudicated outcome. Decision quality and outcome quality are scored
-separately: the adjudication observation preserves the context known at
-decision time, so a well-made call with a bad outcome is not recorded as a
-bad call. Confidence never substitutes for the packet's concrete evidence
-and creates no adjudication authority.
+Future calibration may score stated confidence against the adjudicated
+outcome. Decision quality and outcome quality must be scored separately: the
+adjudication observation preserves the context known at decision time, so a
+well-made call with a bad outcome is not recorded as a bad call. No durable
+calibration record may be written until the State Architecture names its
+owner. Confidence never substitutes for evidence and creates no authority.
 
 ## State ownership
 
 | Fact or artifact | Canonical owner | Notes |
 |---|---|---|
-| PR, commit, head SHA, review, comment, adjudication record | GitHub | Review is incomplete until evidence is here. |
-| Repo requirements and validation contract | Owning repo | Packet cites them; it does not replace them. |
+| Weekly goals, definitions of done, milestones, fallbacks, and non-goals | AgentCoord weekly-focus registry | Priority only. It may link to execution but owns no execution state. |
+| Architecture, specification, requirements, repo check contract, files, and commits | Owning Git repo | Git owns the exact approved revision. GitHub may show a rendered copy and commit reference. |
+| Issue, claim, PR, PR head reference, review, comment, and adjudication record | GitHub | Review is incomplete until evidence is here. |
 | UCLA owner-attention status, age, escalation, disposition | UCLA Project Manager | One work item per required action and current head. |
 | Personal/shared repo-bound owner-attention status and disposition | GitHub PR `owner-attention.v1` events | Server-ordered event reduction for the exact head. |
 | Issue claim, lease, release, and recovery | GitHub issue `issue-claim.v1` events | Assignment is a projection; the event reducer is canonical. |
@@ -467,8 +618,12 @@ and creates no adjudication authority.
 | Sweep and retry cursor | Coordinator repo-local working state | Disposable and rebuildable. |
 | Agent role, trust, safety class, reporting line | Manager agent-org | Runtime passports and docs are projections. |
 | Runtime registration and HMAC transport identity | Pinakes | Transport only; no durable workflow facts. |
+| Cross-host edit claim | AgentCoord claim record | Collision hint only. It cannot overrule GitHub or Git. |
+| Current coding loop and handoff breadcrumb | WWI and loop receipts | Helpful continuity evidence. They do not own issue, commit, or execution truth. |
+| System-contract drift check | Elephant Check in the owning repo | Proof that contracts were checked. It is not workflow state. |
 | GitHub authenticated actor | GitHub account/install identity | Runtime config maps actor to allowed role. |
 | Ready label and dashboards | Projection | Safe to delete and rebuild. |
+| Optional reactive graph or ActiveGraph view | Projection only unless a later state ruling says otherwise | It may support replay, fork, diff, and learning. It must not replace Manager enforcement or canonical stores. |
 
 The packet is canonical review evidence; the scope-owned owner-attention
 record is canonical work state. Neither duplicates the other:
@@ -483,6 +638,53 @@ canonical home is the GitHub PR event stream. UCLA attention MUST remain in
 UCLA Project Manager. Non-repository personal attention is outside this
 contract. Every write carries business scope and fails closed when no approved
 owner exists.
+
+The event flow may be copied into a reactive graph for replay, comparison, and
+learning. That can make hidden links easier to see. It does not move the gate.
+Process entry, file authority, GitHub writes, and terminal execution decisions
+still fail closed at their owning boundaries.
+
+## Learning loop
+
+After Joel decides, the adjudication observer can link the outcome to the exact
+packet and reviewer identity. The approved owners may then support four kinds
+of learning:
+
+- Was the review finding correct?
+- Did the stated confidence match the result?
+- Was the issue clear enough to finish without extra talks?
+- Did the chosen mission, initiative, or campaign fit the real work?
+
+Repeated misses change a rule, template, test, or routing policy in its owning
+repo. They do not become secret prompt memory. Durable lessons are linked from
+the PR and moved into the correct contract or runbook. No new calibration
+state is created by this contract.
+
+## Implementation truth and target state
+
+These words must stay separate:
+
+| Word | Meaning |
+|---|---|
+| **documented** | The contract is written and approved. |
+| **implemented** | Code and local tests exist. |
+| **activated** | The reviewed build is installed and running. |
+| **proven live** | A real bounded flow produced the required evidence. |
+
+As of 2026-08-01, the main pieces exist, but the full flow is not proven live.
+The checked manifest, GitHub claim events, Manager conductors, guarded
+publication, review packet contracts, and pilot preflight exist. Several proof
+gaps remain before a canary: full issue and spec lineage into Manager, exact
+batch ratification, plain-session issue binding, partial-write recovery, and
+the seven partial pilot scenarios. The Manager conductors exist, but the pilot
+also records host-specific tests whose results remain unproven. After those
+gaps close, one separately authorized end-to-end canary is the final live proof.
+Campaign policies are allowlisted; a campaign that does not cover the needed
+repos and paths must refuse rather than widen itself.
+
+Live facts can change. Refresh them with the commands in
+`github-lifecycle-pilot.md`, Manager's supervised-coding runbook, GitHub, and
+the live Pinakes registry before making a present-tense claim.
 
 ## Human learning and expedited completion
 
@@ -621,6 +823,12 @@ Before claiming the architecture implemented:
 10. Prove health, metrics, authenticated GitHub actors, GitHub artifacts, and
     scope-correct GitHub or UCLA Project Manager attention state in the live
     environment.
+11. Bind weekly goal, specification revision, issue, requirements, claim
+    generation, execution, commit, PR, review, and adjudication without copying
+    ownership.
+12. Make the plain terminal entry path work from both a repo and a cross-repo
+    folder. It must fail closed when required goal or execution links are
+    missing.
 
 Documented, implemented, deployed, and proven live remain separate claims.
 
@@ -630,7 +838,8 @@ Changes to roles, identity invariants, state ownership, adjudication authority,
 or the lifecycle require:
 
 - an update to this contract;
-- an Elephant Check when the change is system-level;
+- an update to `docs/elephant-checks/contribution-review-architecture.md` when
+  the change is system-level;
 - reconciliation with the Maintainer Charter, Contributor Operating Protocol,
   and State Architecture;
 - Joel's adjudication through a PR.
@@ -650,15 +859,24 @@ Until Joel decides them, implementations fail closed rather than infer policy.
 
 ## Changelog
 
+- 0.5 (2026-08-01): join weekly goals, approved designs, checked issue
+  manifests, GitHub claims and PRs, Manager execution layers, and learning into
+  one end-to-end system; define Git versus GitHub, the two conductors, layer
+  mapping, simple terminal flow, fact owners, model-neutral review, and the
+  current implementation gap; correct the external lifecycle entry tool;
+  separate the two typed ready packets; mark calibration and cross-model
+  review as unimplemented targets with no hidden state owner.
 - 0.4 (2026-07-27): decision analysis — optional budgeted
   `decision-analysis.v1` packet block (probability, falsifiers,
   reversibility, kill criteria, decide-by) with proportional rendering;
-  confidence feeds per-identity reviewer calibration; decision quality and
-  outcome quality scored separately.
+  proposed per-identity reviewer calibration; decision quality and outcome
+  quality scored separately. Version 0.5 marks that calibration as unbuilt and
+  without an approved state owner.
 - 0.3 (2026-07-27): reviewer equivalence — the required first-pass review is
-  completed by any identity satisfying the contract; blocking weight is
-  calibrated per reviewer identity; the coordinator's dispatched reviewer
-  remains the latency floor; learning invitations survive deduplication.
+  completed by any identity satisfying the contract; per-reviewer blocking
+  weight was proposed; the coordinator's dispatched reviewer remains the
+  latency floor; learning invitations survive deduplication. Version 0.5 marks
+  the blocking-weight proposal as unbuilt and without an approved state owner.
 - 0.2 (2026-07-26): add the lifecycle conductor using the existing
   contribution-coordinator; define GitHub claim events; assign personal/shared
   repo-bound owner attention to GitHub PR events while retaining UCLA attention
