@@ -458,10 +458,11 @@ clock time expired.
 
 #### `GHL-REQ-03` — Mission provenance
 
-One confirmed claim generation launches at most one active
-`start_agent_mission` generation. The lifecycle conductor supplies a stable
-`mission_request_id` derived from repository, issue, and claim generation.
-Manager MUST return the original mission for a replay of that request ID and
+One confirmed claim generation launches at most one active Manager mission.
+The lifecycle conductor uses `request_agent_mission` as the external lifecycle
+entry request and supplies a stable `mission_request_id` derived from
+repository, issue, and claim generation. Manager remains the durable mission
+owner. It MUST return the original mission for a replay of that request ID and
 reject a payload mismatch.
 
 Manager policy, not caller input, owns:
@@ -486,7 +487,7 @@ lifecycle-conductor role:
 
 ```text
 confirmed claim
-  -> idempotent start_agent_mission
+  -> idempotent request_agent_mission
   -> check_agent_mission polling and lease renewal
   -> terminal-state classification
   -> successful packet and exact-SHA verification
@@ -848,7 +849,7 @@ Manager unavailability or ambiguity produces no takeover.
 
 ### `GHL-E2E-04` — Lifecycle conductor and mission provenance
 
-The confirmed claim starts one idempotent `start_agent_mission` request. The
+The confirmed claim starts one idempotent `request_agent_mission` request. The
 existing contribution-coordinator deployable polls `check_agent_mission` and
 renews the claim. The final packet cites issue, claim generation, spec
 revision, requirements, base SHA, exact candidate SHA, targeted/full local
@@ -1214,7 +1215,7 @@ scripts/agent-check.sh
   `ucla.contribution-coordinator` deployable; create no new service.
 - Begin only from a reducer-confirmed claim whose assignment projection
   matches.
-- Call `start_agent_mission` with the stable mission request ID, persist the
+- Call `request_agent_mission` with the stable mission request ID, persist the
   returned binding as a claim event, and poll only through
   `check_agent_mission`.
 - Renew the claim lease while the mission is active.
