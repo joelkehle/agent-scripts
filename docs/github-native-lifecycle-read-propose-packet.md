@@ -459,8 +459,8 @@ clock time expired.
 #### `GHL-REQ-03` — Mission provenance
 
 One confirmed claim generation launches at most one active Manager mission.
-The lifecycle conductor uses `request_agent_mission` as the external lifecycle
-entry request and supplies a stable `mission_request_id` derived from
+The lifecycle conductor calls `request_agent_mission` as the external lifecycle
+entry request. It supplies a stable `mission_request_id` derived from
 repository, issue, and claim generation. Manager remains the durable mission
 owner. It MUST return the original mission for a replay of that request ID and
 reject a payload mismatch.
