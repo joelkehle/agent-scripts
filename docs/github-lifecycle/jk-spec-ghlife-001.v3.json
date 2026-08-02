@@ -1,0 +1,150 @@
+{
+  "schema": "github-lifecycle-manifest.v3",
+  "manifest_version": "3.0.0",
+  "weekly_goal": {
+    "schema": "agentcoord-weekly-goal-link.v1",
+    "goal_id": "W31-HARNESS",
+    "week_ending": "2026-08-02"
+  },
+  "specification": {
+    "spec_id": "JK-SPEC-GHLIFE-001",
+    "title": "GitHub-native lifecycle specification and evidence packet",
+    "source_document": "docs/github-native-lifecycle-read-propose-packet.md",
+    "source_revision": "86be382791d13cb10268ca3a5395d4abb1ab3dca",
+    "ratified_on": "2026-07-26",
+    "status": "Approved by Joel for Phase 0 preservation; effective after merge to main."
+  },
+  "notes": [
+    "Rendering this manifest proposes one issue payload only. Creating the issue is an external write and is separately authorized.",
+    "This manifest carries GHL-013 alone. The v1 manifest remains the record for GHL-001 through GHL-010; those issues are already rendered, and retrofitting definition_of_done blocks onto merged work would invent contracts nobody agreed to.",
+    "Rendering is proposal-only and does not ratify. The coordinator refuses to claim a v2 issue until Joel posts a ratified-definition-of-done.v1 comment binding the rendered payload_sha256."
+  ],
+  "requirements": [
+    {
+      "id": "GHL-REQ-07",
+      "title": "Decision-ready packet and owner attention"
+    }
+  ],
+  "issues": [
+    {
+      "issue_id": "GHL-013",
+      "title": "Adopt the budgeted plain-terms lead block in packets and contributor doctrine",
+      "summary": "Every PR body, ready-for-joel packet, and report to Joel leads with a budgeted plain-English block so adjudication happens at the altitude where the owner's judgment is strongest. Doctrine amendment only; mandated by Joel 2026-07-27 (agent-scripts issue #18).",
+      "owner_repository": "joelkehle/agent-scripts",
+      "write_class": "propose",
+      "requirements": [
+        "GHL-REQ-07"
+      ],
+      "depends_on": [],
+      "external_dependencies": [],
+      "acceptance_criteria": [
+        "Amend the contributor operating protocol so the packet contract requires an \"In plain terms\" lead block: three to five jargon-free sentences covering what changes in the world, what could go wrong, how undoable the change is, and the one thing to read if only one.",
+        "Amend the contribution review architecture with the plain-terms layer, its rationale, and its named failure modes: the plain layer must never replace the technical record, must inform rather than persuade, and must never omit what could go wrong.",
+        "State the proportionality rule: one-way-door decisions get the full decision-analysis.v1 treatment; small two-way doors get the minimum budget.",
+        "Record changelog entries in each amended document.",
+        "Keep the amendment documentation-only; no schema, validator, or renderer changes."
+      ],
+      "validation_commands": [
+        "node --test tests/github-lifecycle/spec-issue-manifest.test.js",
+        "npm run agent:check"
+      ],
+      "non_goals": [
+        "No schema or validator enforcement of the block (a later issue graduates it into the packet schema and policy evaluator).",
+        "No GitHub writes by this issue's tooling.",
+        "No rewriting of already-merged PR bodies."
+      ],
+      "definition_of_done": {
+        "class": "lightweight",
+        "proof_requirements": [
+          {
+            "id": "GHL013-PROTOCOL-PACKET",
+            "requirement": "docs/contributor-operating-protocol.md requires an \"In plain terms\" lead block on every packet, specified as three to five jargon-free sentences covering what changes in the world, what could go wrong, how undoable the change is, and the one thing to read if only one.",
+            "evidence": "The amended packet-contract section of docs/contributor-operating-protocol.md, quoted in the ready packet with the sentence-count and the four required subjects visible."
+          },
+          {
+            "id": "GHL013-ARCH-LAYER",
+            "requirement": "docs/contribution-review-architecture.md documents the plain-terms layer with its rationale and its three named failure modes: it must never replace the technical record, must inform rather than persuade, and must never omit what could go wrong.",
+            "evidence": "The amended layer section of docs/contribution-review-architecture.md, quoted in the ready packet with all three failure modes named."
+          },
+          {
+            "id": "GHL013-PROPORTIONALITY",
+            "requirement": "Both amended documents state the proportionality rule: a one-way-door decision gets the full decision-analysis.v1 treatment, and a small two-way door gets the minimum budget.",
+            "evidence": "The proportionality sentence quoted from each of the two documents, showing both the one-way-door and two-way-door halves."
+          },
+          {
+            "id": "GHL013-CHANGELOG",
+            "requirement": "Each amended document records a changelog entry for this amendment.",
+            "evidence": "The changelog entry from each of the two documents, each naming GHL-013."
+          },
+          {
+            "id": "GHL013-DOCS-ONLY",
+            "requirement": "The change edits documentation only and touches no schema, validator, or renderer file.",
+            "evidence": "git diff --name-only against the base commit listing only paths under docs/, together with a passing npm run agent:check."
+          }
+        ],
+        "pass_criteria": [
+          {
+            "proof_id": "GHL013-PROTOCOL-PACKET",
+            "criterion": "The packet contract names the lead block, bounds it at three to five sentences, and enumerates the four required subjects.",
+            "expected_result": "All four subjects appear in the contract text and the sentence bound is stated numerically; a contract missing any subject or the bound fails."
+          },
+          {
+            "proof_id": "GHL013-ARCH-LAYER",
+            "criterion": "The architecture document names the plain-terms layer and all three failure modes.",
+            "expected_result": "Three failure modes appear as explicit prohibitions; fewer than three fails."
+          },
+          {
+            "proof_id": "GHL013-PROPORTIONALITY",
+            "criterion": "The proportionality rule appears in both documents and distinguishes one-way from two-way doors.",
+            "expected_result": "Both documents state the rule with both halves; the rule appearing in only one document fails."
+          },
+          {
+            "proof_id": "GHL013-CHANGELOG",
+            "criterion": "Both amended documents carry a changelog entry referencing GHL-013.",
+            "expected_result": "Two changelog entries exist, each naming GHL-013; one entry or an unreferenced entry fails."
+          },
+          {
+            "proof_id": "GHL013-DOCS-ONLY",
+            "criterion": "The diff touches only documentation paths and the repository gate passes.",
+            "expected_result": "git diff --name-only lists only docs/ paths and npm run agent:check exits 0; any non-docs path fails."
+          }
+        ],
+        "non_goals": [
+          "No schema or validator enforcement of the block (a later issue graduates it into the packet schema and policy evaluator).",
+          "No GitHub writes by this issue's tooling.",
+          "No rewriting of already-merged PR bodies."
+        ],
+        "budget": {
+          "max_review_rounds": 2,
+          "max_continuation_attempts": 1
+        },
+        "kill_criteria": [
+          {
+            "trigger": "A second review round still reports a contract gap in the packet contract.",
+            "action": "Stop and escalate to Joel with the specific gap named; do not open a third round.",
+            "decide_by": "Before a third review round is dispatched."
+          },
+          {
+            "trigger": "The amendment cannot be made coherent without editing a schema, validator, or renderer file.",
+            "action": "Stop; the work has outgrown a documentation-only issue and needs a new issue with a wider write class.",
+            "decide_by": "Within the same mission, before any non-documentation file is edited."
+          }
+        ],
+        "defer_policy": {
+          "destination": "A new GHL issue proposed through this manifest, carrying the deferred finding verbatim.",
+          "promotion_rule": "A deferred finding is promoted into scope only when Joel names it in a GitHub comment on this issue or its pull request; a reviewer cannot promote its own finding."
+        },
+        "ratification": {
+          "actor": "joelkehle",
+          "evidence": "github_comment"
+        },
+        "finding_policy": {
+          "within_dod": "fix",
+          "beyond_dod": "defer",
+          "contract_gap": "escalate",
+          "at_budget": "accept_or_defer"
+        }
+      }
+    }
+  ]
+}

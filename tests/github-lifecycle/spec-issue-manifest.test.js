@@ -22,7 +22,11 @@ const REPO_ROOT = path.join(__dirname, "..", "..");
 const MANIFEST_PATH = path.join(REPO_ROOT, "docs", "github-lifecycle", "jk-spec-ghlife-001.v1.json");
 const SCHEMA_PATH = path.join(REPO_ROOT, "docs", "schemas", "github-lifecycle-manifest.v1.schema.json");
 const SCHEMA_V2_PATH = path.join(REPO_ROOT, "docs", "schemas", "github-lifecycle-manifest.v2.schema.json");
+const SCHEMA_V3_PATH = path.join(REPO_ROOT, "docs", "schemas", "github-lifecycle-manifest.v3.schema.json");
+const MANIFEST_V2_PATH = path.join(REPO_ROOT, "docs", "github-lifecycle", "jk-spec-ghlife-001.v2.json");
+const MANIFEST_V3_PATH = path.join(REPO_ROOT, "docs", "github-lifecycle", "jk-spec-ghlife-001.v3.json");
 const GOLDEN_PATH = path.join(__dirname, "fixtures", "ghl-003.expected.md");
+const GOLDEN_V3_PATH = path.join(__dirname, "fixtures", "ghl-013.v3.expected.md");
 const CLI = path.join(REPO_ROOT, "bin", "ghl-manifest");
 const FIXED_TIMESTAMP = "2026-07-27T00:00:00.000Z";
 
@@ -122,6 +126,18 @@ function structuredManifest() {
       },
     };
   }
+  return manifest;
+}
+
+function linkedManifest() {
+  const manifest = structuredManifest();
+  manifest.schema = "github-lifecycle-manifest.v3";
+  manifest.manifest_version = "3.0.0";
+  manifest.weekly_goal = {
+    schema: "agentcoord-weekly-goal-link.v1",
+    goal_id: "W31-HARNESS",
+    week_ending: "2026-08-02",
+  };
   return manifest;
 }
 
@@ -376,7 +392,7 @@ describe("defect detection", () => {
 
   it("rejects a manifest written against another schema version", () => {
     const manifest = minimalManifest();
-    manifest.schema = "github-lifecycle-manifest.v3";
+    manifest.schema = "github-lifecycle-manifest.v4";
 
     assert.ok(defectCodes(manifest).includes(DEFECT_CODES.SCHEMA_MISMATCH));
   });
@@ -544,6 +560,86 @@ describe("structured definition of done v2", () => {
 
     assert.match(marker, new RegExp(`payload_sha256=${expected}`));
     assert.equal(rendered.payload_sha256, expected);
+  });
+});
+
+describe("weekly goal link v3", () => {
+  it("keeps v1 and v2 valid with their current projections", () => {
+    const v1 = batch();
+    const v2 = loadManifest(MANIFEST_V2_PATH);
+
+    assert.equal(validateManifest(v1).ok, true);
+    assert.equal(validateManifest(v2).ok, true);
+    assert.equal(renderManifest(v1).issues[0].definition_of_done, undefined);
+    assert.deepEqual(renderManifest(v2).issues[0].definition_of_done, v2.issues[0].definition_of_done);
+    assert.equal(renderManifest(v1).issues[0].weekly_goal, undefined);
+    assert.equal(renderManifest(v2).issues[0].weekly_goal, undefined);
+  });
+
+  it("requires the weekly goal link and its exact schema", () => {
+    const missing = linkedManifest();
+    delete missing.weekly_goal;
+    assert.ok(validateManifest(missing).errors.some(
+      (error) => error.code === DEFECT_CODES.MISSING_FIELD && error.path === "weekly_goal",
+    ));
+
+    const wrong = linkedManifest();
+    wrong.weekly_goal.schema = "agentcoord-weekly-goal-link.v2";
+    assert.ok(validateManifest(wrong).errors.some(
+      (error) => error.code === DEFECT_CODES.INVALID_FIELD && error.path === "weekly_goal.schema",
+    ));
+  });
+
+  it("rejects unknown weekly goal fields", () => {
+    const manifest = linkedManifest();
+    manifest.weekly_goal.status = "active";
+    assert.ok(validateManifest(manifest).errors.some(
+      (error) => error.code === DEFECT_CODES.UNKNOWN_FIELD && error.path === "weekly_goal.status",
+    ));
+  });
+
+  it("projects the unchanged link into renders and receipts", () => {
+    const manifest = linkedManifest();
+    const rendered = renderManifest(manifest);
+    const receipt = buildValidationReceipt({
+      manifest,
+      validation: validateManifest(manifest),
+      actor: "codex-contributor",
+      timestamp: FIXED_TIMESTAMP,
+    });
+
+    for (const issue of rendered.issues) {
+      assert.deepEqual(issue.weekly_goal, manifest.weekly_goal);
+      assert.match(issue.body, /`W31-HARNESS`/);
+      assert.match(issue.body, /`2026-08-02`/);
+      assert.match(issue.body, /`agentcoord-weekly-goal-link\.v1`/);
+      assert.match(issue.body, /ratified-definition-of-done\.v1/);
+    }
+    assert.deepEqual(receipt.subject.weekly_goal, manifest.weekly_goal);
+    assert.deepEqual(receipt.subject.definition_of_done[0].contract, manifest.issues[0].definition_of_done);
+  });
+
+  it("uses title and body fingerprints with per-issue isolation", () => {
+    const manifest = linkedManifest();
+    const before = renderManifest(manifest).issues;
+    manifest.issues[0].acceptance_criteria.push("A changed first issue criterion.");
+    const after = renderManifest(manifest).issues;
+
+    assert.deepEqual(
+      before.filter((issue, index) => issue.payload_sha256 !== after[index].payload_sha256).map((issue) => issue.issue_id),
+      ["TEST-001"],
+    );
+    for (const rendered of after) {
+      const [, ...bodyParts] = rendered.body.split("\n\n");
+      const expected = crypto.createHash("sha256").update(`${rendered.title}\n${bodyParts.join("\n\n")}`).digest("hex");
+      assert.equal(rendered.payload_sha256, expected);
+    }
+  });
+
+  it("matches the checked-in GHL-013 v3 golden file byte for byte", () => {
+    const manifest = loadManifest(MANIFEST_V3_PATH);
+    const rendered = renderIssue(manifest, "GHL-013");
+    assert.equal(`${rendered.title}\n\n${rendered.body}`, fs.readFileSync(GOLDEN_V3_PATH, "utf8"));
   });
 });
 
@@ -735,6 +831,13 @@ describe("published schema", () => {
       buildJsonSchema("github-lifecycle-manifest.v2"),
     );
   });
+
+  it("matches the generated v3 schema", () => {
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(SCHEMA_V3_PATH, "utf8")),
+      buildJsonSchema("github-lifecycle-manifest.v3"),
+    );
+  });
 });
 
 describe("ghl-manifest CLI", () => {
@@ -790,5 +893,12 @@ describe("ghl-manifest CLI", () => {
 
     assert.equal(result.status, 0);
     assert.equal(JSON.parse(result.stdout).properties.schema.const, "github-lifecycle-manifest.v2");
+  });
+
+  it("prints the versioned v3 schema", () => {
+    const result = runCli(["schema", "--schema-version", "v3"]);
+
+    assert.equal(result.status, 0);
+    assert.equal(JSON.parse(result.stdout).properties.schema.const, "github-lifecycle-manifest.v3");
   });
 });

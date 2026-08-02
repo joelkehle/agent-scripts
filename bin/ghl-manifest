@@ -33,7 +33,7 @@ Options:
   --issue ID           Render one issue instead of the whole batch
   --actor NAME         Receipt validator identity (default: $USER)
   --at TIMESTAMP       Receipt timestamp (default: current time)
-  --schema-version v1|v2  Schema contract to print (default: v1)
+  --schema-version v1|v2|v3  Schema contract to print (default: v1)
 
 Exit codes: 0 ok, 1 validation defects, 2 usage or input error.
 Default manifest: ${path.relative(process.cwd(), DEFAULT_MANIFEST)}`);

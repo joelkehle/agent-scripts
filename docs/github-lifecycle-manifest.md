@@ -1,7 +1,7 @@
 ---
 summary: "Versioned specification-to-issue manifest schema, coverage validator, stable issue renderer, and attributable validation receipt for JK-SPEC-GHLIFE-001."
 read_when:
-  - Adding, editing, or validating a github-lifecycle-manifest.v1 or v2 manifest.
+  - Adding, editing, or validating a github-lifecycle-manifest.v1, v2, or v3 manifest.
   - Proposing a GitHub issue batch from a ratified specification.
   - Deciding how Joel approves an exact issue batch.
   - Checking whether the current per-issue version 2 ratification gate is still required.
@@ -69,8 +69,10 @@ current per-issue comments remain the gate.
 |---|---|
 | Ratified v1 `GHL-001`..`GHL-010` plus `GHL-013` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v1.json` |
 | Ratified structured v2 `GHL-013` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v2.json` |
+| Weekly-goal-linked v3 `GHL-013` manifest | `docs/github-lifecycle/jk-spec-ghlife-001.v3.json` |
 | Generated JSON Schema | `docs/schemas/github-lifecycle-manifest.v1.schema.json` |
 | Structured DoD JSON Schema | `docs/schemas/github-lifecycle-manifest.v2.schema.json` |
+| Weekly goal link JSON Schema | `docs/schemas/github-lifecycle-manifest.v3.schema.json` |
 | Library | `lib/github-lifecycle/` |
 | CLI | `bin/ghl-manifest` |
 | Tests | `tests/github-lifecycle/spec-issue-manifest.test.js` |
@@ -78,12 +80,12 @@ current per-issue comments remain the gate.
 ## Commands
 
 ```bash
-ghl-manifest validate                    # defaults to the ratified v1 manifest
-ghl-manifest validate path/to/manifest.json --format json
-ghl-manifest render --issue GHL-003
-ghl-manifest receipt --actor codex-contributor --at 2026-07-27T00:00:00.000Z
-ghl-manifest schema
-ghl-manifest schema --schema-version v2
+./bin/ghl-manifest validate                    # defaults to the ratified v1 manifest
+./bin/ghl-manifest validate docs/github-lifecycle/jk-spec-ghlife-001.v2.json
+./bin/ghl-manifest validate docs/github-lifecycle/jk-spec-ghlife-001.v3.json
+./bin/ghl-manifest render docs/github-lifecycle/jk-spec-ghlife-001.v3.json --issue GHL-013
+./bin/ghl-manifest receipt --actor codex-contributor --at 2026-07-27T00:00:00.000Z
+./bin/ghl-manifest schema --schema-version v3
 ```
 
 Exit codes are `0` for a clean run, `1` for validation defects, and `2` for a
@@ -166,6 +168,26 @@ separate authorization.
 `external_dependencies` holds prose gates that are not issues, such as
 `Verified \`ACT-REV-02\`` or the merged Phase 0 revision.
 
+## Schema `github-lifecycle-manifest.v3`
+
+Version 3 keeps every version 2 issue and definition-of-done rule. It adds one
+required top-level `weekly_goal` link. That object has exactly three fields:
+`schema`, `goal_id`, and `week_ending`. The schema value is
+`agentcoord-weekly-goal-link.v1`. The goal ID uses the existing stable ID
+format. The week uses `YYYY-MM-DD`. Unknown fields fail validation.
+
+The checked-in version 3 manifest links `W31-HARNESS` to the week ending
+`2026-08-02`. Each rendered body names the same goal ID, week, and link schema.
+The machine render and validation receipt also copy the unchanged link object.
+
+Version 3 proves which goal ID and week the issue named. It does not preserve
+the old goal text or prove the goal later status. Historical goal storage is
+outside this mission. Version 3 does not copy milestones, execution state, or
+any other weekly goal data.
+
+The version 2 ratification rule still applies. A claim needs a `joelkehle`
+GitHub comment with the matching `ratified-definition-of-done.v1` marker.
+
 ## Validator
 
 `validateManifest(manifest)` returns `{ok, errors, requirement_coverage,
@@ -208,9 +230,9 @@ that lets a downstream adapter find and upsert its issue without duplicating it:
 <!-- github-lifecycle-manifest.v1 spec=JK-SPEC-GHLIFE-001 revision=<rev> issue=GHL-003 payload_sha256=<hex> -->
 ```
 
-`payload_sha256` covers the canonical issue entry only, so editing one issue
-does not churn the other bodies. An omitted optional list and an empty one hash
-alike.
+For v1, `payload_sha256` covers the canonical issue entry. For v2 and v3, it
+hashes the exact rendered title and body content. Editing one issue does not
+change another issue's fingerprint.
 
 For v2, the rendered issue body includes every DoD field and the render payload
 also exposes the unchanged `definition_of_done` object. Validation receipts
@@ -222,14 +244,14 @@ produce byte drift.
 anchor. An intended manifest edit that changes `GHL-003` regenerates it with:
 
 ```bash
-ghl-manifest render --issue GHL-003 --format json |
+./bin/ghl-manifest render --issue GHL-003 --format json |
   node -e 'const d=JSON.parse(require("node:fs").readFileSync(0,"utf8")).issues[0];
 process.stdout.write(`${d.title}\n\n${d.body}`)' \
   > tests/github-lifecycle/fixtures/ghl-003.expected.md
 ```
 
-Regenerate the JSON Schema the same way with `ghl-manifest schema >
-docs/schemas/github-lifecycle-manifest.v1.schema.json`.
+Generate the version 3 JSON Schema with `./bin/ghl-manifest schema
+--schema-version v3 > docs/schemas/github-lifecycle-manifest.v3.schema.json`.
 
 ## Validation receipt
 
@@ -249,8 +271,8 @@ always hash the same regardless of formatting or key order.
 - No issue assignment, claim event, or mission launch; those belong to
   `GHL-004` through `GHL-006` in the coordinator repository.
 - Not a project-management database. GitHub stays canonical for issue state.
-- No weekly-goal or supervised-execution state. A future schema may carry
-  stable IDs that link to those owners, but current v1 and v2 schemas have no
-  weekly-goal field. The manifest must never copy their status.
+- Version 3 stores only a weekly goal ID and week. It stores no goal text,
+  milestone, status, or execution state. Version 1 and version 2 have no
+  weekly-goal field.
 - No proof that the design is correct. Validation proves structure, coverage,
   and stable output only. Joel still approves meaning.
