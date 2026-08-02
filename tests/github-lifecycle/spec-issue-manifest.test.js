@@ -608,6 +608,7 @@ describe("weekly goal link v3", () => {
       timestamp: FIXED_TIMESTAMP,
     });
 
+    assert.deepEqual(rendered.weekly_goal, manifest.weekly_goal);
     for (const issue of rendered.issues) {
       assert.deepEqual(issue.weekly_goal, manifest.weekly_goal);
       assert.match(issue.body, /`W31-HARNESS`/);

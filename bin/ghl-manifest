@@ -18,8 +18,9 @@ const DEFAULT_MANIFEST = path.join(__dirname, "..", "docs", "github-lifecycle", 
 function usage() {
   console.log(`Usage: ${TOOL} <command> [manifest.json] [options]
 
-Validates and renders a github-lifecycle-manifest.v1 specification-to-issue
-manifest. Rendering is proposal-only; this tool never writes to GitHub.
+Validates and renders github-lifecycle-manifest.v1, v2, and v3
+specification-to-issue manifests. Rendering is proposal-only; this tool never
+writes to GitHub.
 
 Commands:
   validate    Report unknown requirements, missing coverage, cycles, duplicates,

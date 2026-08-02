@@ -17,7 +17,7 @@
   "notes": [
     "Rendering this manifest proposes one issue payload only. Creating the issue is an external write and is separately authorized.",
     "This manifest carries GHL-013 alone. The v1 manifest remains the record for GHL-001 through GHL-010; those issues are already rendered, and retrofitting definition_of_done blocks onto merged work would invent contracts nobody agreed to.",
-    "Rendering is proposal-only and does not ratify. The coordinator refuses to claim a v2 issue until Joel posts a ratified-definition-of-done.v1 comment binding the rendered payload_sha256."
+    "Rendering is proposal-only and does not ratify. The coordinator refuses to claim a version 3 issue until Joel posts a ratified-definition-of-done.v1 comment binding the rendered payload_sha256."
   ],
   "requirements": [
     {
