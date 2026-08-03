@@ -9,6 +9,8 @@ codex_manifest="$plugin_root/.codex-plugin/plugin.json"
 claude_manifest="$plugin_root/.claude-plugin/plugin.json"
 codex_marketplace="$repo_root/workspace-roots/projects/.agents/plugins/marketplace.json"
 claude_marketplace="$repo_root/.claude-plugin/marketplace.json"
+mcp_config="$plugin_root/.mcp.json"
+mcp_bridge="$plugin_root/mcp/manager-mission-bridge.mjs"
 
 fail() {
   printf 'plugin-marketplace: %s\n' "$*" >&2
@@ -17,15 +19,46 @@ fail() {
 
 bash -n "$repo_root/scripts/sync-plugin-skills"
 
-for file in "$codex_manifest" "$claude_manifest" "$codex_marketplace" "$claude_marketplace"; do
+for file in "$codex_manifest" "$claude_manifest" "$codex_marketplace" "$claude_marketplace" "$mcp_config"; do
   jq -e . "$file" >/dev/null || fail "invalid JSON: ${file#$repo_root/}"
 done
 
 jq -e '
+  def valid_codex_version:
+    type == "string" and
+    test("^0[.]1[.]0[+]codex[.][a-z0-9](?:[a-z0-9-]*[a-z0-9])?$");
   .id == "joel-agent-ops" and
   .skills == "./skills/" and
-  .version == "0.1.0"
+  .mcpServers == "./.mcp.json" and
+  (.version | valid_codex_version)
 ' "$codex_manifest" >/dev/null || fail "Codex manifest contract mismatch"
+
+jq -n -e '
+  def valid_codex_version:
+    type == "string" and
+    test("^0[.]1[.]0[+]codex[.][a-z0-9](?:[a-z0-9-]*[a-z0-9])?$");
+  ([
+    "0.1.0",
+    "0.1.0+codex.one+codex.two",
+    "0.1.0+codex.one.codex.two"
+  ] | all(valid_codex_version | not))
+' >/dev/null || fail "Codex cachebuster version guard mismatch"
+
+jq -e '
+  .mcpServers["manager-mission-operator"] as $server |
+  $server.command == "node" and
+  $server.args == ["./mcp/manager-mission-bridge.mjs"] and
+  $server.cwd == "." and
+  $server.enabled_tools == [
+    "preflight_agent_mission",
+    "start_agent_mission",
+    "check_agent_mission"
+  ] and
+  $server.default_tools_approval_mode == "writes"
+' "$mcp_config" >/dev/null || fail "Codex mission MCP contract mismatch"
+
+node --check "$mcp_bridge"
+node --test "$repo_root/tests/plugin-manager-mission-mcp.test.js"
 
 jq -e '
   .name == "joel-agent-ops" and
@@ -78,5 +111,5 @@ done
 skill_count="$(find "$plugin_root/skills" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
 [ "$skill_count" -eq "${#skills[@]}" ] || fail "unexpected packaged skill count: $skill_count"
 
-printf 'plugin-marketplace: ok skills=%s tracked_files=%s runtimes=codex,claude\n' \
+printf 'plugin-marketplace: ok skills=%s tracked_files=%s runtimes=codex,claude mission_tools=3\n' \
   "$skill_count" "$tracked_file_count"

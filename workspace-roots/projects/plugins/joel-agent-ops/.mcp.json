@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "manager-mission-operator": {
+      "command": "node",
+      "args": [
+        "./mcp/manager-mission-bridge.mjs"
+      ],
+      "cwd": ".",
+      "enabled_tools": [
+        "preflight_agent_mission",
+        "start_agent_mission",
+        "check_agent_mission"
+      ],
+      "default_tools_approval_mode": "writes"
+    }
+  }
+}
