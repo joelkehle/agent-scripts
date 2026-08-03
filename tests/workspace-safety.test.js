@@ -530,6 +530,21 @@ test("weekly focus version 2 rejects invalid, missing, unknown, and duplicate re
   }
 });
 
+test("weekly focus version 2 rejects every C1 control character in execution IDs", () => {
+  for (let codePoint = 0x80; codePoint <= 0x9f; codePoint += 1) {
+    const escapedControl = `\\u${codePoint.toString(16).padStart(4, "0")}`;
+    const parsed = parseFocusYaml(focusYamlV2(`    active_execution_refs:
+      - kind: mission
+        id: "${escapedControl}opaque"
+`));
+    assert.match(
+      validateFocus(parsed.focus, parsed.errors).errors.join("\n"),
+      /id must be a non-empty opaque execution ID/,
+      `U+${codePoint.toString(16).toUpperCase().padStart(4, "0")} must be refused`,
+    );
+  }
+});
+
 test("agent-focus keeps version 2 active and proof references separate in text and JSON", (t) => {
   const support = fs.mkdtempSync(path.join(os.tmpdir(), "weekly-focus-v2-cli-"));
   t.after(() => fs.rmSync(support, { recursive: true, force: true }));
