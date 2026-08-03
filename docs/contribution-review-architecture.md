@@ -11,7 +11,7 @@ read_when:
 
 # Contribution Review Architecture Contract
 
-Version: 0.5 (2026-08-01). This contract becomes effective when Joel merges it
+Version: 0.6 (2026-08-03). This contract becomes effective when Joel merges it
 into `main`.
 
 ## Outcome
@@ -548,7 +548,24 @@ repository + pull_request + head_sha + stage + payload_hash
 ## GitHub ready-for-Joel packet contract
 
 The PR-posted review packet currently uses the HTML marker
-`ready-for-joel.v1`. It MUST contain:
+`ready-for-joel.v1`.
+
+The **In plain terms** layer helps Joel find the decision and its main risk
+quickly. It informs rather than persuades. It never replaces the technical
+record, and it never hides what could go wrong. It adds no new authority or
+canonical facts.
+
+Every packet MUST begin with a lead block titled **In plain terms**. The block
+MUST have three to five clear sentences. It says what changes, what could go
+wrong, how easy the change is to undo, and the one file, finding, or choice
+Joel should read first. The technical record follows it unchanged.
+
+Match the size to the choice. One-way-door choices get the full
+`decision-analysis.v1` analysis. Small two-way-door choices get the minimum
+useful **In plain terms** block and no decision-analysis block unless another
+rule requires it.
+
+The technical record MUST contain:
 
 1. repository, PR number, and exact `head_sha`;
 2. generation time;
@@ -579,9 +596,9 @@ documentation change does not rename a live marker.
 
 ### Decision analysis (`decision-analysis.v1`)
 
-An optional versioned block that sharpens items 10 and 11 into a scoreable
-bet. When present it contains exactly five fields and renders in at most
-eight lines:
+A versioned block that sharpens items 10 and 11 into a scoreable bet. The full
+block is required for a one-way-door choice. It contains exactly five fields
+and renders in at most eight lines:
 
 1. `recommendation` with `confidence` — a probability, not an adjective;
 2. `falsifiers` — the one or two concrete observations that would make the
@@ -592,10 +609,11 @@ eight lines:
    triggers revert or quit;
 5. `decide_by` — the real cost of waiting, or `none`.
 
-Proportionality: low-stakes reversible changes render the short form —
-recommendation and confidence only. The full block is reserved for one-way
-doors, scope or security changes, and activation-adjacent work. Exceeding
-the budget is a rendering defect, not diligence.
+Proportionality: one-way doors get the full decision analysis. Scope or
+security changes and activation-adjacent work also get it when another rule
+requires it. Small two-way-door choices get the minimum useful **In plain
+terms** block instead. Exceeding the budget is a rendering defect, not
+diligence.
 
 Future calibration may score stated confidence against the adjudicated
 outcome. Decision quality and outcome quality must be scored separately: the
@@ -859,6 +877,8 @@ Until Joel decides them, implementations fail closed rather than infer policy.
 
 ## Changelog
 
+- 0.6 (2026-08-03): GHL-013 adds the **In plain terms** reader layer and
+  sizes decision analysis by reversibility without replacing technical proof.
 - 0.5 (2026-08-01): join weekly goals, approved designs, checked issue
   manifests, GitHub claims and PRs, Manager execution layers, and learning into
   one end-to-end system; define Git versus GitHub, the two conductors, layer

@@ -10,7 +10,7 @@ read_when:
 
 # Contributor Operating Protocol
 
-Version: 0.8 (2026-08-01). Amendments become effective when Joel merges them
+Version: 0.9 (2026-08-03). Amendments become effective when Joel merges them
 into `main`.
 
 This document does not replace the canonical agent startup. Run the normal
@@ -171,6 +171,16 @@ not a substitute. No session or agent posts through Joel's GitHub identity.
 The authorized poster may manage the `ready-for-joel` label only when repo
 policy and the current task authorize that write action.
 
+Every packet begins with an **In plain terms** lead block of three to five
+clear sentences. It says what changes, what could go wrong, how easy the
+change is to undo, and the one file, finding, or choice Joel should read
+first. The block helps Joel enter the evidence; the technical record below it
+stays complete.
+
+Match the size to the choice. One-way-door choices get the full
+`decision-analysis.v1` analysis. Small two-way-door choices get the minimum
+useful **In plain terms** block; do not pad them with a full decision analysis.
+
 Owner attention is scope-specific. For personal/shared repo-bound engineering,
 the canonical attention record is the append-only `owner-attention.v1` event
 stream on the PR; its label is only a projection. For UCLA work, the canonical
@@ -186,11 +196,13 @@ The packet contains, in order:
 5. Recommended disposition (merge / request changes / discuss) —
    propose-only; it never creates a GitHub APPROVE event.
 6. Risk, reversibility, and deployment status.
-7. Optional `decision-analysis.v1` block (Architecture: Decision analysis):
-   recommendation with a probability, top falsifiers, reversibility class,
-   kill criteria, and decide-by — hard-budgeted to eight rendered lines,
-   short form for low-stakes reversible changes. Stated confidence may feed a
-   future approved calibration system and is never a substitute for evidence.
+7. Conditional `decision-analysis.v1` block (Architecture: Decision analysis):
+   required in full for one-way-door choices, with a recommendation and
+   probability, top falsifiers, reversibility class, kill criteria, and
+   decide-by — hard-budgeted to eight rendered lines. Small two-way-door
+   choices use only the minimum useful **In plain terms** block unless another
+   rule requires more analysis. Stated confidence may feed a future approved
+   calibration system and is never a substitute for evidence.
 
 **Commit anchoring.** Every packet records the exact reviewed `head_sha`,
 validation evidence produced against that SHA, generation time,
@@ -291,6 +303,8 @@ describes how the system works; only live sources describe how it is.
 
 ## Changelog
 
+- 0.9 (2026-08-03): GHL-013 adds the required **In plain terms** lead block
+  and sizes decision analysis by reversibility.
 - 0.8 (2026-08-01): add the plain terminal flow; connect weekly goals,
   approved designs, checked issue batches, GitHub claims, supervised work
   layers, pull requests, and final packets; separate current per-issue
