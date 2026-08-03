@@ -9,7 +9,7 @@ read_when:
 
 # Launch Safety And Weekly Focus
 
-Version 1 provides three local CLI surfaces:
+The launch-safety tools provide three local CLI surfaces:
 
 - `agent-focus`: validate, list, and resolve weekly priority metadata.
 - `workspace-preflight`: read-only Git, worktree, origin-authority, AgentCoord,
@@ -32,24 +32,45 @@ The default file is:
 Required shape:
 
 ```yaml
+schema: weekly-focus.v2
 week_ending: 2026-08-02
 goals:
   - id: W31-EXAMPLE
     done: The gradeable weekly outcome.
     required_milestone: The minimum enabling milestone.
     fallback: The bounded fallback when the milestone is unavailable.
-    execution_refs:
+    active_execution_refs:
       - kind: mission
-        id: opaque-existing-id
+        id: opaque-active-id
+    proof_execution_refs:
+      - kind: mission
+        id: opaque-proof-id
 not_this_week:
   - Explicit non-goal
 ```
 
-`execution_refs` is optional. It may be empty or contain several opaque
-references with `kind: mission|initiative|campaign`. The Manager supervised
-coding control plane remains authoritative for existence, repository
-compatibility, status, descendants, budgets, and evidence. Weekly focus carries
-priority metadata above that hierarchy; it does not add an execution layer.
+Version 2 keeps two optional reference lists:
+
+- `active_execution_refs` names supervised work that is active for the goal.
+- `proof_execution_refs` names supervised work used as proof for the goal.
+
+Each list may be absent, empty, or hold several references. A reference has a
+`kind` of `mission`, `initiative`, or `campaign`, plus an opaque `id`. The tools
+check only that the ID is a nonempty string of at most 256 characters with no
+space or control character. They do not split it, read a prefix, or infer its
+kind from its text.
+
+Files without `schema` use the old version 1 shape. Its optional
+`execution_refs` list remains readable. A file must use one format only. The
+validator refuses a version 2 field without `schema: weekly-focus.v2`, a legacy
+`execution_refs` field under version 2, an unknown schema, duplicate references,
+unknown fields or kinds, malformed lists, and missing or invalid IDs.
+
+The Manager supervised coding control plane remains authoritative for existence,
+repository compatibility, status, descendants, budgets, and evidence. Weekly
+focus carries priority metadata above that hierarchy. It does not add an
+execution layer. A proof reference is not an active work binding and grants no
+launch or write authority.
 
 `week_ending` remains current through that complete calendar date in
 `America/Los_Angeles`. On the next Los Angeles calendar date, validation and
@@ -76,9 +97,9 @@ Allowed exception categories:
 - `data_loss_risk`
 - `immovable_external_deadline`
 
-An exception requires a human-readable reason. An unknown goal, malformed
-file, unsupported execution kind, or missing execution ID is refused. The
-command never creates or repairs the weekly file.
+An exception requires a human-readable reason. An unknown goal, malformed file,
+unsupported execution kind, missing execution ID, or mixed version is refused.
+The command never creates or repairs the weekly file.
 
 ## Workspace Preflight
 
@@ -272,8 +293,9 @@ agent-start --root . --mode read
 ```
 
 The full packet shows weekly goal definitions of done, required milestones,
-declared execution bindings, actual origin, preflight result, and active or
-quarantined run state. `--notice` stays silent when clean and surfaces focus,
+active execution bindings, proof execution references, actual origin, preflight
+result, and active or quarantined run state. It labels active and proof
+references separately. `--notice` stays silent when clean and surfaces focus,
 origin, uncommitted-work, collision, or quarantine failures for launch wrappers.
 
 Manager may later validate that an opaque execution ID exists and belongs to

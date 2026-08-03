@@ -51,6 +51,20 @@ not_this_week:
 `;
 }
 
+function focusYamlV2(references = "", weekEnding = "2099-08-02") {
+  return `schema: weekly-focus.v2
+week_ending: ${weekEnding}
+goals:
+  - id: W31-CORE
+    done: Core is validated.
+    required_milestone: Targeted tests pass.
+    fallback: Preserve the safe read path.
+${references}
+not_this_week:
+  - New orchestrator
+`;
+}
+
 function parseValidFocus(text) {
   const parsed = parseFocusYaml(text);
   const result = validateFocus(parsed.focus, parsed.errors);
@@ -357,6 +371,198 @@ test("valid weekly focus supports several mixed execution_refs", () => {
 test("valid weekly focus accepts an explicitly empty execution_refs list", () => {
   const focus = parseValidFocus(focusYaml("    execution_refs: []\n"));
   assert.deepEqual(focus.goals[0].execution_refs, []);
+});
+
+test("weekly focus version 2 keeps active and proof execution references separate", () => {
+  const focus = parseValidFocus(focusYamlV2(`    active_execution_refs:
+      - kind: mission
+        id: opaque:active/01?slot=A
+      - kind: initiative
+        id: 01JOPAQUEACTIVE
+    proof_execution_refs:
+      - kind: campaign
+        id: opaque:proof/01?slot=P
+`));
+  assert.equal(focus.schema, "weekly-focus.v2");
+  assert.deepEqual(focus.goals[0].active_execution_refs, [
+    { kind: "mission", id: "opaque:active/01?slot=A" },
+    { kind: "initiative", id: "01JOPAQUEACTIVE" },
+  ]);
+  assert.deepEqual(focus.goals[0].proof_execution_refs, [
+    { kind: "campaign", id: "opaque:proof/01?slot=P" },
+  ]);
+  assert.equal(Object.hasOwn(focus.goals[0], "execution_refs"), false);
+
+  const boundary = parseValidFocus(focusYamlV2(`    active_execution_refs:
+      - kind: mission
+        id: ${"x".repeat(256)}
+`));
+  assert.equal(boundary.goals[0].active_execution_refs[0].id.length, 256);
+});
+
+test("weekly focus version 2 permits omitted or explicitly empty reference lists", () => {
+  const omitted = parseValidFocus(focusYamlV2());
+  assert.equal(omitted.goals[0].active_execution_refs, undefined);
+  assert.equal(omitted.goals[0].proof_execution_refs, undefined);
+
+  const empty = parseValidFocus(focusYamlV2(`    active_execution_refs: []
+    proof_execution_refs: []
+`));
+  assert.deepEqual(empty.goals[0].active_execution_refs, []);
+  assert.deepEqual(empty.goals[0].proof_execution_refs, []);
+});
+
+test("weekly focus strictly refuses mixed version 1 and version 2 reference fields", () => {
+  const v2WithLegacy = parseFocusYaml(focusYamlV2(`    execution_refs:
+      - kind: mission
+        id: legacy-ref
+`));
+  assert.match(
+    validateFocus(v2WithLegacy.focus, v2WithLegacy.errors).errors.join("\n"),
+    /mixes weekly-focus\.v2 with legacy execution_refs/,
+  );
+
+  const v1WithV2 = parseFocusYaml(focusYaml(`    active_execution_refs:
+      - kind: mission
+        id: active-ref
+`));
+  assert.match(
+    validateFocus(v1WithV2.focus, v1WithV2.errors).errors.join("\n"),
+    /uses version 2 reference fields without schema weekly-focus\.v2/,
+  );
+
+  const allFields = parseFocusYaml(focusYaml(`    execution_refs: []
+    proof_execution_refs: []
+`));
+  assert.match(
+    validateFocus(allFields.focus, allFields.errors).errors.join("\n"),
+    /must not mix execution_refs with version 2 reference fields/,
+  );
+});
+
+test("weekly focus version 2 rejects unknown schemas and malformed reference lists", () => {
+  const unknownSchema = parseFocusYaml(focusYamlV2().replace("weekly-focus.v2", "weekly-focus.v3"));
+  assert.match(
+    validateFocus(unknownSchema.focus, unknownSchema.errors).errors.join("\n"),
+    /schema must be weekly-focus\.v2/,
+  );
+
+  for (const field of ["active_execution_refs", "proof_execution_refs"]) {
+    const malformed = parseFocusYaml(focusYamlV2(`    ${field}: mission-ref
+`));
+    const errors = validateFocus(malformed.focus, malformed.errors).errors.join("\n");
+    assert.match(errors, new RegExp(`${field} must be a block list or \\[\\]`));
+  }
+});
+
+test("weekly focus version 2 rejects invalid, missing, unknown, and duplicate references", () => {
+  const cases = [
+    {
+      yaml: `    active_execution_refs:
+      - kind: program
+        id: opaque-1
+`,
+      error: /kind must be mission/,
+    },
+    {
+      yaml: `    active_execution_refs:
+      - kind: mission
+`,
+      error: /id must be a non-empty opaque execution ID/,
+    },
+    {
+      yaml: `    active_execution_refs:
+      - kind: mission
+        id: ""
+`,
+      error: /id must be a non-empty opaque execution ID/,
+    },
+    {
+      yaml: `    active_execution_refs:
+      - kind: mission
+        id: 12345
+`,
+      error: /id must be a non-empty opaque execution ID/,
+    },
+    {
+      yaml: `    active_execution_refs:
+      - kind: mission
+        id: ${"x".repeat(257)}
+`,
+      error: /id must be a non-empty opaque execution ID/,
+    },
+    {
+      yaml: `    active_execution_refs:
+      - kind: mission
+        id: "\\u0000opaque"
+`,
+      error: /id must be a non-empty opaque execution ID/,
+    },
+    {
+      yaml: `    proof_execution_refs:
+      - kind: mission
+        id: " has-space "
+`,
+      error: /id must be a non-empty opaque execution ID/,
+    },
+    {
+      yaml: `    proof_execution_refs:
+      - kind: mission
+        id: opaque-1
+        status: active
+`,
+      error: /unknown field status/,
+    },
+    {
+      yaml: `    active_execution_refs:
+      - kind: mission
+        id: same-opaque-id
+    proof_execution_refs:
+      - kind: mission
+        id: same-opaque-id
+`,
+      error: /duplicates goals\[0\]\.active_execution_refs\[0\]/,
+    },
+  ];
+  for (const item of cases) {
+    const parsed = parseFocusYaml(focusYamlV2(item.yaml));
+    assert.match(validateFocus(parsed.focus, parsed.errors).errors.join("\n"), item.error);
+  }
+});
+
+test("agent-focus keeps version 2 active and proof references separate in text and JSON", (t) => {
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), "weekly-focus-v2-cli-"));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const file = path.join(support, "weekly-focus.yaml");
+  fs.writeFileSync(file, focusYamlV2(`    active_execution_refs:
+      - kind: mission
+        id: opaque-active
+    proof_execution_refs:
+      - kind: mission
+        id: opaque-proof
+`));
+
+  const listed = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"), "list", "--file", file,
+  ], { encoding: "utf8" });
+  if (listed.error?.code === "EPERM") {
+    t.skip("sandbox blocks nested process execution");
+    return;
+  }
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /active execution: mission:opaque-active/);
+  assert.match(listed.stdout, /proof execution: mission:opaque-proof/);
+  assert.doesNotMatch(listed.stdout, /\n  execution:/);
+
+  const resolved = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"), "resolve", "W31-CORE", "--file", file, "--json",
+  ], { encoding: "utf8" });
+  assert.equal(resolved.status, 0, resolved.stderr);
+  const value = JSON.parse(resolved.stdout);
+  assert.equal(value.schema, "weekly-focus.v2");
+  assert.deepEqual(value.active_execution_refs, [{ kind: "mission", id: "opaque-active" }]);
+  assert.deepEqual(value.proof_execution_refs, [{ kind: "mission", id: "opaque-proof" }]);
+  assert.equal(Object.hasOwn(value, "execution_refs"), false);
 });
 
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
@@ -1227,9 +1433,12 @@ test("dead-run reconciliation quarantines uncommitted changes", (t) => {
 
 test("agent-start displays weekly focus, execution binding, and clean workspace summary", (t) => {
   const fixture = makeRunFixture(t, "agent-start");
-  fs.writeFileSync(fixture.focusFile, focusYaml(`    execution_refs:
+  fs.writeFileSync(fixture.focusFile, focusYamlV2(`    active_execution_refs:
       - kind: mission
-        id: mission-start-1
+        id: opaque-active-start
+    proof_execution_refs:
+      - kind: mission
+        id: opaque-proof-start
 `));
   const support = makeAgentStartSupport(fixture);
   const result = spawnSync("node", [
@@ -1245,9 +1454,11 @@ test("agent-start displays weekly focus, execution binding, and clean workspace 
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /goal: W31-CORE \[selected\]/);
+  assert.match(result.stdout, /schema: weekly-focus\.v2/);
   assert.match(result.stdout, /definition of done: Core is validated/);
   assert.match(result.stdout, /required milestone: Targeted tests pass/);
-  assert.match(result.stdout, /execution binding: mission:mission-start-1/);
+  assert.match(result.stdout, /active execution binding: mission:opaque-active-start/);
+  assert.match(result.stdout, /proof execution reference: mission:opaque-proof-start/);
   assert.match(result.stdout, /preflight: PASS mode=write/);
   assert.match(result.stdout, /origin fetch: https:\/\/github\.com\/kehle-tdg-dev\/agent-start\.git/);
   assert.match(result.stdout, /origin push: https:\/\/github\.com\/kehle-tdg-dev\/agent-start\.git/);
