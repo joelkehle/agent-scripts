@@ -5,22 +5,57 @@ description: Use when Joel asks Codex or Claude to preflight, start, check, or t
 
 # Manager Mission Operator
 
-Use Manager's native mission tools. Codex may defer these tools until they are
-searched for by name.
+Use the local `manager-mission` command. It is the primary path for every
+mission operation. Do not require or search for native MCP tools.
 
-Before saying the tool surface is missing, search for all three exact tools:
+Before any operation, check that the command is installed:
 
-- `preflight_agent_mission`
-- `start_agent_mission`
-- `check_agent_mission`
+```bash
+command -v manager-mission
+```
 
-Call the matching native tool after it is found. Do not run
-`manager-mission-bridge.mjs` from a shell. Do not send raw MCP JSON through a
-shell or standard input. Those paths skip the native tool controls and proof.
+If it is absent, report `manager-mission not installed; cannot operate Manager
+missions.` Then stop. Fail closed. Do not run the old
+`manager-mission-bridge.mjs` or send raw MCP JSON as a fallback.
 
-Report `tool_surface_missing` only when an exact tool search finds no native
-match. Include the missing tool names in that report.
+## Commands
 
-Starting a mission is a write action. Require Joel's approved mission contract
-before calling `start_agent_mission`. Preflight and status checks are read-only.
-Do not widen the approved mission or its authority.
+Use these four commands:
+
+- `manager-mission preflight` checks an exact mission contract.
+- `manager-mission start` submits that same exact contract.
+- `manager-mission check` reads the state of one mission ID.
+- `manager-mission watch` follows one mission ID to a terminal result or the
+  CLI timeout.
+
+Pass each command the needed contract or mission ID in the form shown by the
+local command help. Do not change the contract while moving from preflight to
+start.
+
+## Safe Start
+
+Starting a mission is a write action. Require Joel's approved exact mission
+contract before `manager-mission start`. Preflight, check, and watch are
+read-only. Do not widen the contract or its authority.
+
+Run preflight first. Start only after it passes. Run start at most once unless
+Manager clearly refuses the request. If Manager clearly refuses it, correct the
+stated problem and submit again only when the corrected contract still has
+Joel's approval.
+
+Do not run a second start after Manager accepted the request. Do not run a second
+start when the reply is unclear. A transport error without a clear
+Manager refusal also stops the workflow for recovery. Treat those cases as
+possibly accepted. Report what is known and recover the existing request or
+mission instead of creating another one.
+
+## Watch The Accepted Mission
+
+After a successful start, read `data.mission_id` from the reply. Immediately
+run `manager-mission watch` for that exact ID. Keep it running until the mission
+has a terminal result or the CLI timeout is reached.
+
+The watch command polls every 10 seconds. It follows Manager's mission deadline
+plus two minutes. It prints a heartbeat every minute. It returns success only
+when the terminal result is `ready_for_joel`. Every other terminal result and a
+CLI timeout are failures.

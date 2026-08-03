@@ -308,3 +308,24 @@ the selected repository. Its future launcher wrapper must remain alive as the
 controller across `begin`, child-agent execution, and `seal`; it must not invoke
 begin and seal from unrelated short-lived processes. That integration is
 outside this version.
+
+## Manager Mission Operator
+
+The `manager-mission-operator` skill uses the local `manager-mission` command
+as its primary path. It does not need native MCP tool discovery. The four
+operator commands are `preflight`, `start`, `check`, and `watch`. If
+`manager-mission` is not installed, the skill reports that fact and stops. It
+does not use the old plugin bridge or raw MCP JSON as a fallback.
+
+Start is a write action. The skill requires Joel's approved exact mission
+contract before start. It runs preflight first and sends the same contract to
+start. It never sends a second start after Manager accepted the request, after
+an unclear reply, or after a transport error without a clear refusal. A clear
+Manager refusal may be corrected and submitted again when the corrected
+contract still has Joel's approval.
+
+After start succeeds, the skill reads `data.mission_id` and immediately runs
+watch for that exact ID. Watch polls every 10 seconds, follows the Manager
+deadline plus two minutes, and prints a heartbeat every minute. It succeeds
+only when the terminal result is `ready_for_joel`. It stops at any other
+terminal result or at the CLI timeout.

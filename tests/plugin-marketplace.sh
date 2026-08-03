@@ -111,35 +111,66 @@ done
 
 mission_skill="$canonical_skills/manager-mission-operator/SKILL.md"
 mission_skill_agent="$canonical_skills/manager-mission-operator/agents/openai.yaml"
+packaged_mission_skill="$plugin_root/skills/manager-mission-operator/SKILL.md"
+packaged_mission_skill_agent="$plugin_root/skills/manager-mission-operator/agents/openai.yaml"
+
+cmp -s "$mission_skill" "$packaged_mission_skill" ||
+  fail "packaged Manager mission skill differs from canonical source"
+cmp -s "$mission_skill_agent" "$packaged_mission_skill_agent" ||
+  fail "packaged Manager mission metadata differs from canonical source"
+
 for required_text in \
-  preflight_agent_mission \
-  start_agent_mission \
-  check_agent_mission \
-  tool_surface_missing \
+  "command -v manager-mission" \
+  "manager-mission not installed" \
+  "Fail closed" \
+  "manager-mission preflight" \
+  "manager-mission start" \
+  "manager-mission check" \
+  "manager-mission watch" \
+  "approved exact mission" \
+  "write action" \
+  "Do not run a second start after Manager accepted" \
+  "start when the reply is unclear" \
+  "transport error without a clear" \
+  "Manager clearly refuses" \
+  "data.mission_id" \
+  "Immediately" \
+  "that exact ID" \
+  "every 10 seconds" \
+  "plus two minutes" \
+  "heartbeat every minute" \
+  "returns success only" \
+  "CLI timeout" \
+  ready_for_joel \
   manager-mission-bridge.mjs \
   "raw MCP JSON"; do
   grep -Fq "$required_text" "$mission_skill" ||
     fail "Manager mission skill lacks required rule: $required_text"
 done
-grep -Fq "Do not run" "$mission_skill" ||
-  fail "Manager mission skill does not forbid shell bridge use"
-grep -Fq "exact tool search" "$mission_skill" ||
-  fail "Manager mission skill does not require native tool discovery"
+grep -Fq "Do not require or search for native MCP tools" "$mission_skill" ||
+  fail "Manager mission skill does not reject native MCP tool discovery"
+for forbidden_text in \
+  preflight_agent_mission \
+  start_agent_mission \
+  check_agent_mission \
+  tool_surface_missing; do
+  if grep -Fq "$forbidden_text" "$mission_skill"; then
+    fail "Manager mission skill still requires native tool discovery: $forbidden_text"
+  fi
+done
 
 for required_text in \
   'display_name: "Manager Mission Operator"' \
-  'short_description: "Start and check supervised Manager missions"' \
-  'type: "mcp"' \
-  'value: "manager-mission-operator"' \
-  'description: "Native tools for supervised Manager missions"' \
-  'transport: "stdio"' \
-  'command: "node"'; do
+  'short_description: "Run and watch supervised Manager missions"'; do
   grep -Fq "$required_text" "$mission_skill_agent" ||
-    fail "Manager mission skill lacks native tool dependency: $required_text"
+    fail "Manager mission skill lacks OpenAI metadata: $required_text"
 done
+if grep -Eq '^(dependencies:|[[:space:]]+type: "mcp"|[[:space:]]+transport: "stdio")' "$mission_skill_agent"; then
+  fail "Manager mission skill metadata still declares an MCP dependency"
+fi
 
 skill_count="$(find "$plugin_root/skills" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
 [ "$skill_count" -eq "${#skills[@]}" ] || fail "unexpected packaged skill count: $skill_count"
 
-printf 'plugin-marketplace: ok skills=%s tracked_files=%s runtimes=codex,claude mission_tools=3\n' \
+printf 'plugin-marketplace: ok skills=%s tracked_files=%s runtimes=codex,claude mission_cli=4\n' \
   "$skill_count" "$tracked_file_count"
