@@ -12,6 +12,11 @@ The start tool is a write action. Codex asks before it runs. The other two
 tools are read-only. The bridge uses the local Manager at
 `http://127.0.0.1:8228/mcp`. It does not store a token or start a service.
 
+Codex may defer these tools until it searches for them by exact name. The
+packaged `manager-mission-operator` skill tells Codex to search first and then
+use the native tool call. It also forbids running the bridge from a shell or
+sending raw MCP JSON through standard input.
+
 The Codex chat stays read-only. Manager starts a separate child to change code.
 This first version does not add the new mission to weekly focus.
 

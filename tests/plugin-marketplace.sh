@@ -82,6 +82,7 @@ skills=(
   feature-elicitation
   hygiene-loop
   learn-loop
+  manager-mission-operator
   oracle
   repair-loop
   review-loop
@@ -107,6 +108,22 @@ for skill in "${skills[@]}"; do
   [ "$packaged_file_count" -eq "$skill_file_count" ] ||
     fail "unexpected packaged file count for $skill: $packaged_file_count"
 done
+
+mission_skill="$canonical_skills/manager-mission-operator/SKILL.md"
+for required_text in \
+  preflight_agent_mission \
+  start_agent_mission \
+  check_agent_mission \
+  tool_surface_missing \
+  manager-mission-bridge.mjs \
+  "raw MCP JSON"; do
+  grep -Fq "$required_text" "$mission_skill" ||
+    fail "Manager mission skill lacks required rule: $required_text"
+done
+grep -Fq "Do not run" "$mission_skill" ||
+  fail "Manager mission skill does not forbid shell bridge use"
+grep -Fq "exact tool search" "$mission_skill" ||
+  fail "Manager mission skill does not require native tool discovery"
 
 skill_count="$(find "$plugin_root/skills" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
 [ "$skill_count" -eq "${#skills[@]}" ] || fail "unexpected packaged skill count: $skill_count"

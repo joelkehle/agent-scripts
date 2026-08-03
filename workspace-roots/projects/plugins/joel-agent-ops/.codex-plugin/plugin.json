@@ -1,7 +1,7 @@
 {
   "id": "joel-agent-ops",
   "name": "joel-agent-ops",
-  "version": "0.1.0+codex.20260803095044",
+  "version": "0.1.0+codex.20260803152000",
   "description": "Shared coding-agent skills and a narrow Manager mission operator for Joel's workspace.",
   "author": {
     "name": "Joel Kehle",
