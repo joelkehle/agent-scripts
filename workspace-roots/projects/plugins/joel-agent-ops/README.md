@@ -15,7 +15,9 @@ tools are read-only. The bridge uses the local Manager at
 Codex may defer these tools until it searches for them by exact name. The
 packaged `manager-mission-operator` skill tells Codex to search first and then
 use the native tool call. It also forbids running the bridge from a shell or
-sending raw MCP JSON through standard input.
+sending raw MCP JSON through standard input. The skill declares the Manager
+MCP server as a tool dependency, so Codex loads that native tool surface when
+the skill is used.
 
 The Codex chat stays read-only. Manager starts a separate child to change code.
 This first version does not add the new mission to weekly focus.

@@ -110,6 +110,7 @@ for skill in "${skills[@]}"; do
 done
 
 mission_skill="$canonical_skills/manager-mission-operator/SKILL.md"
+mission_skill_agent="$canonical_skills/manager-mission-operator/agents/openai.yaml"
 for required_text in \
   preflight_agent_mission \
   start_agent_mission \
@@ -124,6 +125,18 @@ grep -Fq "Do not run" "$mission_skill" ||
   fail "Manager mission skill does not forbid shell bridge use"
 grep -Fq "exact tool search" "$mission_skill" ||
   fail "Manager mission skill does not require native tool discovery"
+
+for required_text in \
+  'display_name: "Manager Mission Operator"' \
+  'short_description: "Start and check supervised Manager missions"' \
+  'type: "mcp"' \
+  'value: "manager-mission-operator"' \
+  'description: "Native tools for supervised Manager missions"' \
+  'transport: "stdio"' \
+  'command: "node"'; do
+  grep -Fq "$required_text" "$mission_skill_agent" ||
+    fail "Manager mission skill lacks native tool dependency: $required_text"
+done
 
 skill_count="$(find "$plugin_root/skills" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')"
 [ "$skill_count" -eq "${#skills[@]}" ] || fail "unexpected packaged skill count: $skill_count"

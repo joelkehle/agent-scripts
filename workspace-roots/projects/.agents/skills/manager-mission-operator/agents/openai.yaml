@@ -1,0 +1,11 @@
+interface:
+  display_name: "Manager Mission Operator"
+  short_description: "Start and check supervised Manager missions"
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "manager-mission-operator"
+      description: "Native tools for supervised Manager missions"
+      transport: "stdio"
+      command: "node"
