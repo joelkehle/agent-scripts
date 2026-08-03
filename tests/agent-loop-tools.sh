@@ -356,8 +356,9 @@ git -C "$notice_repo" remote add origin https://github.com/kehle-tdg-dev/notice-
 notice_head="$(git -C "$notice_repo" rev-parse HEAD)"
 git -C "$notice_repo" update-ref refs/remotes/origin/main "$notice_head"
 git -C "$notice_repo" branch --set-upstream-to=origin/main main >/dev/null
-cat > "$notice_focus" <<'YAML'
-week_ending: 2026-08-02
+notice_week_ending="$(TZ=America/Los_Angeles date +%F)"
+cat > "$notice_focus" <<YAML
+week_ending: $notice_week_ending
 goals:
   - id: NOTICE
     done: Notice remains quiet.

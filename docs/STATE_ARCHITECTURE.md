@@ -10,7 +10,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.26 (2026-08-01)
+Version: 1.27 (2026-08-03)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -62,7 +62,12 @@ projection.
   `/mnt/synology-share1/AgentCoord/registry/weekly-focus.yaml` owns current
   weekly priority/attention metadata: week ending, declared goals, definitions
   of done, required milestones, fallbacks, non-goals, and optional opaque
-  mission/initiative/campaign references. It is above the supervised execution
+  mission/initiative/campaign references. Version 2 keeps one active execution
+  reference apart from a list of proof references. It also records whether a
+  goal requires supervised execution for write-capable repository work. Proof
+  references grant no write authority. Old files with `execution_refs` remain
+  readable for display and migration, but one file cannot mix the formats. It is
+  above the supervised execution
   hierarchy and owns no execution status, descendants, budgets, evidence,
   dispatch, planning, or scheduling. Manager's supervised coding control plane
   remains authoritative for mission, initiative, and campaign truth.
@@ -370,6 +375,9 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.27 (2026-08-03): define weekly-focus version 2. One active execution,
+  finished proof, and the supervision requirement use separate fields. Old
+  files stay readable, and mixed files fail closed.
 - 1.26 (2026-08-01): extend disposable local workspace-run records with a
   versioned repository/workspace union. Workspace sessions use exact-path
   identity, declare read-only operator authority, and omit Git-only facts.

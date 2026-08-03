@@ -223,6 +223,7 @@ function collectWeeklyFocus(args) {
     return {
       ok: !focus.expired,
       file: focus.file,
+      schema: focus.schema || null,
       week_ending: focus.week_ending,
       status: focus.status,
       expired: focus.expired,
@@ -239,6 +240,7 @@ function collectWeeklyFocus(args) {
     return {
       ok: false,
       file: args.focusFile,
+      schema: null,
       week_ending: null,
       status: "invalid",
       expired: false,
@@ -330,6 +332,7 @@ function renderText(packet) {
   if (!packet.weeklyFocus.ok) {
     out.push(`INVALID ${packet.weeklyFocus.error}`);
   } else {
+    out.push(`schema: ${packet.weeklyFocus.schema || "legacy"}`);
     out.push(`week ending: ${packet.weeklyFocus.week_ending}`);
     for (const goal of packet.weeklyFocus.goals) {
       const selected = packet.weeklyFocus.selected?.goal_id === goal.id ? " [selected]" : "";
@@ -337,7 +340,16 @@ function renderText(packet) {
       out.push(`  definition of done: ${goal.done}`);
       out.push(`  required milestone: ${goal.required_milestone}`);
       for (const ref of goal.execution_refs || []) {
-        out.push(`  execution binding: ${ref.kind}:${ref.id}`);
+        out.push(`  legacy execution reference: ${ref.kind}:${ref.id}`);
+      }
+      if (goal.active_execution_ref) {
+        out.push(`  active execution binding: ${goal.active_execution_ref.kind}:${goal.active_execution_ref.id}`);
+      }
+      for (const ref of goal.proof_execution_refs || []) {
+        out.push(`  proof execution reference: ${ref.kind}:${ref.id}`);
+      }
+      if (goal.supervised_execution) {
+        out.push(`  supervision required: ${goal.supervised_execution.required}`);
       }
     }
   }

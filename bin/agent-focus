@@ -48,9 +48,24 @@ function parseArgs(argv) {
   return args;
 }
 
+function printExecutionRefs(value, indent = "") {
+  for (const ref of value.execution_refs || []) {
+    console.log(`${indent}legacy execution: ${ref.kind}:${ref.id}`);
+  }
+  if (value.active_execution_ref) {
+    console.log(`${indent}active execution: ${value.active_execution_ref.kind}:${value.active_execution_ref.id}`);
+  }
+  for (const ref of value.proof_execution_refs || []) {
+    console.log(`${indent}proof execution: ${ref.kind}:${ref.id}`);
+  }
+  if (value.supervised_execution) {
+    console.log(`${indent}supervision required: ${value.supervised_execution.required}`);
+  }
+}
+
 function printText(command, value) {
   if (command === "validate") {
-    console.log(`agent-focus: ${value.expired ? "EXPIRED" : "valid"} week_ending=${value.week_ending} current_date=${value.current_date} time_zone=${value.time_zone} goals=${value.goals.length} file=${value.file}`);
+    console.log(`agent-focus: ${value.expired ? "EXPIRED" : "valid"} schema=${value.schema || "legacy"} week_ending=${value.week_ending} current_date=${value.current_date} time_zone=${value.time_zone} goals=${value.goals.length} file=${value.file}`);
     return;
   }
   if (command === "list") {
@@ -62,9 +77,7 @@ function printText(command, value) {
       console.log(`  done: ${goal.done}`);
       console.log(`  required milestone: ${goal.required_milestone}`);
       console.log(`  fallback: ${goal.fallback}`);
-      for (const ref of goal.execution_refs || []) {
-        console.log(`  execution: ${ref.kind}:${ref.id}`);
-      }
+      printExecutionRefs(goal, "  ");
     }
     if (value.not_this_week.length) {
       console.log("Not this week:");
@@ -77,7 +90,7 @@ function printText(command, value) {
     console.log(`done: ${value.done}`);
     console.log(`required milestone: ${value.required_milestone}`);
     console.log(`fallback: ${value.fallback}`);
-    for (const ref of value.execution_refs || []) console.log(`execution: ${ref.kind}:${ref.id}`);
+    printExecutionRefs(value);
   } else {
     console.log(`agent-focus: resolved exception ${value.exception.category} through ${value.week_ending}`);
     console.log(`reason: ${value.exception.reason}`);

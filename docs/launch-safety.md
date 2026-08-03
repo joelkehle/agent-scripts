@@ -9,7 +9,7 @@ read_when:
 
 # Launch Safety And Weekly Focus
 
-Version 1 provides three local CLI surfaces:
+The launch-safety tools provide three local CLI surfaces:
 
 - `agent-focus`: validate, list, and resolve weekly priority metadata.
 - `workspace-preflight`: read-only Git, worktree, origin-authority, AgentCoord,
@@ -32,24 +32,49 @@ The default file is:
 Required shape:
 
 ```yaml
-week_ending: 2026-08-02
+schema: agentcoord-weekly-focus.v2
+week_ending: 2026-08-09
 goals:
-  - id: W31-EXAMPLE
+  - id: W32-EXAMPLE
     done: The gradeable weekly outcome.
     required_milestone: The minimum enabling milestone.
     fallback: The bounded fallback when the milestone is unavailable.
-    execution_refs:
+    supervised_execution:
+      required: true
+    active_execution_ref:
+      kind: mission
+      id: opaque-active-id
+    proof_execution_refs:
       - kind: mission
-        id: opaque-existing-id
+        id: opaque-proof-id
 not_this_week:
   - Explicit non-goal
 ```
 
-`execution_refs` is optional. It may be empty or contain several opaque
-references with `kind: mission|initiative|campaign`. The Manager supervised
-coding control plane remains authoritative for existence, repository
-compatibility, status, descendants, budgets, and evidence. Weekly focus carries
-priority metadata above that hierarchy; it does not add an execution layer.
+Version 2 has three goal fields for supervised work:
+
+- `supervised_execution.required` is a Boolean. It says whether write-capable
+  repository work needs an open active execution. When the object is absent,
+  the value defaults to `false`.
+- `active_execution_ref` is optional and singular. It names the one open
+  execution allowed to support current work.
+- `proof_execution_refs` is an optional list. It names finished work used as
+  evidence. Proof does not grant write authority.
+
+Each reference has a `kind` of `mission`, `initiative`, or `campaign`, plus an
+opaque `id`. The tools check only its shape. They do not infer status from the
+ID or contact Manager.
+
+Files without `schema` use the old format. Its optional `execution_refs` list
+remains readable for display and migration. One file cannot mix old and new
+fields. The validator also refuses unknown or duplicate fields, duplicate proof
+references, the same reference in active and proof roles, malformed lists, and
+missing or invalid IDs.
+
+The Manager supervised coding control plane remains authoritative for
+existence, repository compatibility, status, descendants, budgets, and
+evidence. Weekly focus carries priority metadata above that hierarchy. It does
+not add an execution layer.
 
 `week_ending` remains current through that complete calendar date in
 `America/Los_Angeles`. On the next Los Angeles calendar date, validation and
@@ -63,7 +88,7 @@ Commands:
 ```bash
 agent-focus validate
 agent-focus list
-agent-focus resolve W31-EXAMPLE
+agent-focus resolve W32-EXAMPLE
 agent-focus exception \
   --category production_incident \
   --reason "Production is unavailable."
@@ -77,8 +102,8 @@ Allowed exception categories:
 - `immovable_external_deadline`
 
 An exception requires a human-readable reason. An unknown goal, malformed
-file, unsupported execution kind, or missing execution ID is refused. The
-command never creates or repairs the weekly file.
+file, unsupported execution kind, missing execution ID, or mixed format is
+refused. The command never creates or repairs the weekly file.
 
 ## Workspace Preflight
 
@@ -149,7 +174,7 @@ Begin requires either a declared weekly goal or a valid exception:
 ```bash
 agent-workspace begin \
   --root /path/to/repo \
-  --goal W31-EXAMPLE \
+  --goal W32-EXAMPLE \
   --tool codex \
   --pid "$$"
 ```
@@ -160,7 +185,7 @@ An operator session for an existing non-Git directory must be requested:
 agent-workspace begin \
   --session-kind workspace \
   --root /path/to/workspace \
-  --goal W31-EXAMPLE \
+  --goal W32-EXAMPLE \
   --tool codex \
   --pid "$$"
 ```
@@ -175,7 +200,7 @@ looked up or mutated:
 ```bash
 agent-workspace begin \
   --root /path/to/repo \
-  --goal W31-EXAMPLE \
+  --goal W32-EXAMPLE \
   --execution-kind mission \
   --execution-id opaque-existing-id \
   --tool codex \
@@ -267,14 +292,16 @@ truth.
 `agent-start` defaults to write-mode visibility:
 
 ```bash
-agent-start --root . --goal W31-EXAMPLE
+agent-start --root . --goal W32-EXAMPLE
 agent-start --root . --mode read
 ```
 
 The full packet shows weekly goal definitions of done, required milestones,
-declared execution bindings, actual origin, preflight result, and active or
-quarantined run state. `--notice` stays silent when clean and surfaces focus,
-origin, uncommitted-work, collision, or quarantine failures for launch wrappers.
+supervision requirements, active bindings, proof references, actual origin,
+preflight result, and active or quarantined run state. It labels old references,
+active work, and proof separately. `--notice` stays silent when clean and
+surfaces focus, origin, uncommitted-work, collision, or quarantine failures for
+launch wrappers.
 
 Manager may later validate that an opaque execution ID exists and belongs to
 the selected repository. Its future launcher wrapper must remain alive as the
