@@ -22,9 +22,13 @@ This is the center of gravity for subagent guidance under `~/Projects`.
 
 ## Default
 
-Use Codex native subagents when available for non-trivial work that benefits from parallel read, disjoint write, or independent verification.
+Single-agent work is the default. Delegate only when parallel read, disjoint
+writes, or independent verification materially reduces risk or time.
 
-Stay single-agent only for small, obvious, single-threaded work. When a task is broad, context-heavy, risky to verify in one thread, or likely to generate noisy logs/search output, split early so the lead thread stays focused on requirements, decisions, integration, and user comms.
+Broad or context-heavy work may allow useful parallel read or disjoint writes.
+Noisy log or search work may make parallel read faster. Risky changes may
+benefit from independent verification. Use a subagent only when one of those
+benefits is material for the task at hand.
 
 The lead keeps moving and does not delegate the immediate blocker. Follow the active runtime's delegation rules. If a runtime requires explicit user permission before spawning subagents and the current task does not already authorize delegation, get it first.
 
@@ -178,12 +182,14 @@ User-level `~/.claude/agents/` provides `grunt` and `mech` everywhere (tracked h
 
 ## Tool-Specific Notes
 
-Codex native subagents are preferred for current coding delegation when available.
+When delegation meets the `Default` test above and Codex native subagents are
+available, use them for current coding delegation.
 
 In Codex, explicit user requests such as "use subagents", "delegate this",
 "parallel agents", "split this up", "use one agent per area", or "keep the main
-context clean" should trigger native subagent use when the task is non-trivial.
-Use `/agent` in the CLI to inspect or steer active subagent threads.
+context clean" authorize native subagent use. Delegate only when the task also
+meets the `Default` test above. Use `/agent` in the CLI to inspect or steer
+active subagent threads.
 
 Claude Code custom agents resolve user-level (`~/.claude/agents/` — `grunt` and `mech` live there) and repo-local. Treat references to repo-local agents as stale unless the repo actually contains those maintained files.
 
