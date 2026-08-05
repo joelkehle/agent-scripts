@@ -612,32 +612,30 @@ Not this week:
 });
 
 test("compact goal listing preserves a long valid goal ID", () => {
-  const longId = `GOAL-${"x".repeat(90)}`;
   const longDone = `Scan ${"details ".repeat(20)}without hiding the goal ID.`;
-  const longIdFocus = parseValidFocus(focusYaml().replace(
-    "id: W31-CORE",
-    `id: ${longId}`,
-  ).replace(
-    "done: Core is validated.",
-    `done: ${JSON.stringify(longDone)}`,
-  ));
-  const longIdLine = formatFocusList({
-    ...longIdFocus,
-    expired: false,
-    time_zone: "America/Los_Angeles",
-  }).split("\n")[1];
-  assert.ok(longIdLine.startsWith(`${longId}: `));
-  assert.equal(Array.from(longIdLine).length, 100);
-  assert.equal(longIdLine.slice(`${longId}: `.length), "...");
+  const compactLineFor = (id) => {
+    const focus = parseValidFocus(focusYaml().replace(
+      "id: W31-CORE",
+      `id: ${id}`,
+    ).replace(
+      "done: Core is validated.",
+      `done: ${JSON.stringify(longDone)}`,
+    ));
+    return formatFocusList({
+      ...focus,
+      expired: false,
+      time_zone: "America/Los_Angeles",
+    }).split("\n")[1];
+  };
 
-  const overlong = parseFocusYaml(focusYaml().replace(
-    "id: W31-CORE",
-    `id: ${longId}x`,
-  ));
-  assert.match(
-    validateFocus(overlong.focus, overlong.errors).errors.join("\n"),
-    /id must be at most 95 characters/,
-  );
+  const almostFullId = `GOAL-${"x".repeat(90)}`;
+  const almostFullLine = compactLineFor(almostFullId);
+  assert.equal(Array.from(almostFullLine).length, 100);
+  assert.equal(almostFullLine, `${almostFullId}: ...`);
+
+  const noRoomId = `GOAL-${"x".repeat(93)}`;
+  const noRoomLine = compactLineFor(noRoomId);
+  assert.equal(noRoomLine, `${noRoomId}: ...`);
 });
 
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
