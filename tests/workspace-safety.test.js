@@ -636,6 +636,10 @@ test("compact goal listing preserves a long valid goal ID", () => {
   const noRoomId = `GOAL-${"x".repeat(93)}`;
   const noRoomLine = compactLineFor(noRoomId);
   assert.equal(noRoomLine, `${noRoomId}: ...`);
+
+  const negativeRoomId = `GOAL-${"x".repeat(94)}`;
+  const negativeRoomLine = compactLineFor(negativeRoomId);
+  assert.equal(negativeRoomLine, `${negativeRoomId}: ...`);
 });
 
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
