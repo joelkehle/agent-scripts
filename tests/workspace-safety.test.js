@@ -562,7 +562,7 @@ not_this_week:
   const compactLinesDirect = compactText.split("\n");
   assert.equal(compactLinesDirect[0], "Weekly focus through 2099-08-02 in America/Los_Angeles");
   assert.match(compactLinesDirect[1], /^W31-LONG: Scan details/);
-  assert.equal(Array.from(compactLinesDirect[1]).length, 100);
+  assert.equal(Array.from(compactLinesDirect[1].slice("W31-LONG: ".length)).length, 100);
   assert.match(compactLinesDirect[1], /\.\.\.$/);
   assert.equal(compactLinesDirect[2], "W31-SHORT: Small goal is done.");
   assert.equal(compactLinesDirect[3], "Not this week: 2 items (use --full to expand)");
@@ -609,6 +609,27 @@ Not this week:
   assert.equal(fullJson.status, 0, fullJson.stderr);
   assert.equal(fullJson.stdout, json.stdout);
   assert.equal(JSON.parse(json.stdout).goals[0].done, multilineDone);
+});
+
+test("compact goal listing preserves a long valid goal ID", () => {
+  const longId = `GOAL-${"x".repeat(95)}`;
+  const longDone = `Scan ${"details ".repeat(20)}without hiding the goal ID.`;
+  const longIdFocus = parseValidFocus(focusYaml().replace(
+    "id: W31-CORE",
+    `id: ${longId}`,
+  ).replace(
+    "done: Core is validated.",
+    `done: ${JSON.stringify(longDone)}`,
+  ));
+  const longIdLine = formatFocusList({
+    ...longIdFocus,
+    expired: false,
+    time_zone: "America/Los_Angeles",
+  }).split("\n")[1];
+  assert.ok(longIdLine.startsWith(`${longId}: `));
+  const longIdDone = longIdLine.slice(`${longId}: `.length);
+  assert.equal(Array.from(longIdDone).length, 100);
+  assert.match(longIdDone, /\.\.\.$/);
 });
 
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
