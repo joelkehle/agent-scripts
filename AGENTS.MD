@@ -30,6 +30,19 @@ does not change code, config, log lines, or machine-read output.
 Technical accuracy still wins. Simplify the words, never the facts. Do not drop
 a caveat, a risk, or a number to make a sentence shorter.
 
+## Documentation Portal
+
+- The agent harness docs live at http://beelink:8300 (tailnet-only). If the
+  short name fails, use http://beelink.tail9063c0.ts.net:8300.
+- Machine index for agents: http://beelink:8300/llms.txt.
+- The editorial guidelines page (http://beelink:8300/editorial-guidelines/) is
+  the full rulebook behind the Plain Language rule above. Read it before you
+  write or edit any doc.
+- The glossary (http://beelink:8300/glossary/) lists the governed nouns of the
+  harness (mission, contract, conductor, contributor, reviewer, receipt,
+  packet). Use these exact words. Never invent a synonym.
+- Point Joel to a portal page instead of re-explaining what it already says.
+
 ## Hard Boundaries
 
 - `~/MedProjects/` is off-limits. Never read, write, `cd`, grep, glob, open a
