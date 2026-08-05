@@ -1,0 +1,68 @@
+# Human-in-the-loop audit — August 2026 (WO-7)
+
+This page lists every place in the docs where work stops or slows until Joel (or another human) acts. It covers `shared/agent-scripts/docs/` and `shared/manager/docs/` on beelink, read 2026-08-04. For each gate it says what is gated, whether the gated act is irreversible, what form the gate takes today, and a proposed class. It ends with a one-page end-state Joel can ratify with a single yes. This is WO-7 of the remediation plan: paper only, no behavior changes. Source of truth: `~/Projects/tmp/hitl-audit-2026-08.md` (laptop; moves to `agent-scripts/docs/decisions/hitl-audit-2026-08.md` on a branch after sign-off).
+
+**Summary.** The 2026-08-03 assessment estimated ~25 human-in-the-loop points. This audit found **24 distinct gates** (several stated in more than one doc; duplicates are merged and all sources listed). The ruling principle, from Joel's approved plan: **gate on irreversibility, not on activity.** Applying it: **7 gates stay blocking** (they guard merge, deploy, money, publication under Joel's name, credentials/authority, product judgment, and the one grant-level yes), **11 become advisory** (Joel is told, work continues or waits with a bounded clock), and **6 are deleted** (they gate nothing irreversible and mostly belong to the unwired launch-safety layer or superseded per-item approval rules).
+
+Classes used below:
+
+- **KEEP** — stays blocking. Work stops until Joel acts.
+- **ADVISORY** — becomes a notification with evidence. Work continues, or waits on a bounded clock with a visible signal (per the standing rule: no state may wait indefinitely without a human-visible signal).
+- **DELETE** — the gate is removed, with its text.
+
+---
+
+## The gate table
+
+| # | Gate | Written in | What it gates | Irreversible? | Form today | Proposed |
+|---|---|---|---|---|---|---|
+| 1 | Merge to main / final adjudication | agent-scripts `docs/maintainer-charter.md` R1 ("Joel alone makes the final merge or request-changes adjudication"); `docs/github-native-lifecycle-read-propose-packet.md` GHL-REQ-08; manager `docs/runbooks/contribution-review.md`; `docs/how-a-mission-works.md` step 9 | Any merge, GitHub APPROVE, or final REQUEST_CHANGES | **YES — merge to main** | Blocking | **KEEP** |
+| 2 | Packet adjudication | charter R5 (packets "adjudicated asynchronously in batches"; recommendation "never a default"); GHL-REQ-07 ("decision-ready... not merge-ready"); manager `docs/supervised-coding-design.md` (adjudicator role) | Accepting or declining a `ready-for-joel.v1` packet | YES (it is the doorway to gate 1) | Blocking | **KEEP** (same act as gate 1; adjudicate in batches, never per-interrupt) |
+| 3 | Doctrine amendments | charter + `docs/contributor-operating-protocol.md` + `docs/contribution-review-architecture.md`: "Amendments become effective when Joel merges them" | Changing maintainer doctrine | YES (a merge) | Blocking | **KEEP** (enforced by gate 1; no separate ceremony) |
+| 4 | Deploy / install / restart / migrate | manager `docs/services/claude-projects-mcp.md` ("it never posts, approves, merges, pushes, deploys, restarts, migrates"); operational rules of 2026-08-04 (deploy = build + restart + canary spawn) | Changing what runs in production | **YES — deploy** | Procedural (Joel by hand) | **KEEP** |
+| 5 | Money / new spend | charter (scope of Joel-only judgment); assessment §closing allocation ("money"); grant budgets in issue #25 | Any spend beyond a pre-priced ceiling | **YES — money** | Blocking | **KEEP** |
+| 6 | External publication under Joel's name | GHL-REQ-08 (decision "MUST cite Joel as actor"); `docs/joel-email-voice.md` (his voice); manager service docs ("never... impersonates him") | Email, DNS, posts, GitHub acts recorded as Joel | **YES — publication** | Blocking | **KEEP** |
+| 7 | Credentials and authority levels | agent-scripts `docs/infisical-agent-auth.md` ("Joel-only step in web UI"; "Privileged Host Checklist (Joel sudo)"); charter R7 ("Agent authority levels are set only by explicit Joel rulings"); protocol ("Return only when Joel must decide, grant a new write"); manager phase-0 target list (Joel ruling 2026-07-27, `docs/runbooks/supervised-coding-missions.md`) | Minting credentials, new write authority, enrolling repos, raising delegation levels | **YES — authority/credential change** | Blocking / procedural | **KEEP** |
+| 8 | Product judgment escalations | manager `docs/work-orders/supervised-coding-missions.md` escalation table: `contract_gap` → "Escalate for owner attention; no repair"; `beyond_dod` critical/high → "Escalate with fix/remove/narrow/stop owner choices" | What the product should be when the contract was wrong | YES in effect (product direction) | Blocking | **KEEP** |
+| 9 | Mission contract ratification | manager `docs/glossary.md` ("Nothing runs until Joel says yes to a contract"); `docs/how-a-mission-works.md` step 1; agent-scripts `docs/measurable-done.md` item 7 ("Ratification evidence: Joel's explicit approval") | Starting any mission | No (branch work is reversible) | Blocking, per contract | **ADVISORY inside a grant** — one grant-level yes stays blocking (issue #25); per-contract approval inside the box becomes a `delegated-ratification.v1` receipt |
+| 10 | DoD ratification | manager `docs/work-orders/supervised-coding-missions.md` + `docs/runbooks/supervised-coding-missions.md`: "Joel is the sole external DoD ratifier" | Ratifying a definition of done | No | Blocking | **ADVISORY inside a grant** (same mechanism as gate 9) |
+| 11 | Contract revisions between attempts | `docs/measurable-done.md` ("proposes work beyond the ratified scope" → re-ratify); lived on WO-3, which took three attempts over scope syntax | Re-approving a byte-changed contract | No | Blocking | **ADVISORY inside a grant** — independent re-review required, Joel not (issue #25's own design) |
+| 12 | Push branch / publish contributor fork | GHL-REQ-05 + roadmap step 4 ("Separately authorize contributor-fork push/PR"); `docs/supervised-coding-design.md` (adjudicator "authorizes pushes") | Pushing a branch, opening a PR | No — closing a PR is free; a branch deletes cleanly | Blocking | **ADVISORY** — grantable verbs (`push_branch`, `open_pr`); requires #4's no-push isolation first, then the WO-2 publisher does it under grant |
+| 13 | Issue-batch approval | `docs/contribution-review-architecture.md` ("Joel approves the exact issue batch... before any issue write"); `docs/github-lifecycle-manifest.md` ("Joel approves that exact batch") | Creating GitHub issues from a spec | No (issues close for free) | Blocking, batch | **ADVISORY** for issues posted under an agent identity inside a grant; keep one batch-level yes when a new spec first activates |
+| 14 | Per-issue ratification comment (v2 rule) | `docs/github-lifecycle-manifest.md`: "each version 2 issue needs a Joel-authored GitHub comment... makes Joel repeat approval for each issue"; the doc itself already names the batch rule as the "Approved target rule" | Claiming each individual issue | No | Blocking, per item | **DELETE** — superseded by the batch rule the doc already approves |
+| 15 | Budget-exhausted missions | WO `supervised-coding-missions.md` ("either ratified budget reached → No automatic repair; ... owner attention"); the assessment's "budget-exhausted missions silently waiting" seam | Continuing after review/repair budget runs out | No | Blocking — and historically **silent** | **ADVISORY** — immediate notify-joel with P1 owner choices; non-P1 defaults to defer-with-record after a bounded wait |
+| 16 | Escalated / terminal attention | `docs/supervised-coding-operator.md` ("Escalate to Joel when: a packet reaches ready_for_joel..."); manager `docs/runbooks/ops-alerts.md` (`needs_joel` grouped events) | Joel noticing terminal states and incidents | No (noticing, not acting) | Advisory since WO-1 (notification live 2026-08-04) | **ADVISORY** — keep; this is the model gate 15 should copy |
+| 17 | Review findings: medium/low severity | WO-4 (merged 2026-08-04): medium no longer mechanically blocks; `advisory_findings` now in the packet, tamper-checked | Whether a medium/low finding blocks readiness | No | Was blocking; now advisory | **ADVISORY** — already done; recorded here so the table is complete |
+| 18 | Reviewer blocking findings (critical/high, within DoD) | WO `supervised-coding-missions.md` ("A blocking finding on the last permitted pass cannot authorize a repair"); `docs/contribution-review-architecture.md` step 10 | Sealing a packet over a critical/high finding | No (the block is machine-side; Joel sees it in the packet) | Blocking (machine gate, not a Joel interrupt) | **KEEP as machine gate** — not a human-in-the-loop point; listed because the assessment counted it |
+| 19 | Weekly goals | `docs/contributor-operating-protocol.md` ("Show the current weekly goals"; work must cite its goal); charter (specs are a Joel standing output) | What work exists at all | Product direction | Blocking (nothing to do without goals) | **KEEP** — product choice, part of gate 8's family |
+| 20 | Launch preflight: weekly goal or exception | agent-scripts `docs/launch-safety.md` ("Begin requires either a declared weekly goal or a valid exception"); the whole layer is built but unwired (assessment: `agent-start --notice` always exits 0) | Starting a plain terminal session | No | Procedural, unwired, advisory in practice | **DELETE** — per WO-6's standing recommendation: archive-tag and delete the launch-safety layer |
+| 21 | Quarantine resolution | `docs/launch-safety.md` ("Resolve a quarantined observation only after the controller has exited") | Clearing a quarantined workspace run | No | Procedural, unwired | **DELETE** with gate 20 (the conductor's project reservation does this job now) |
+| 22 | Launch-safety start skill approval | `docs/launch-safety.md` ("Start is a write action. The skill requires Joel's approved exact mission contract") | Duplicate of gate 9, in the unwired layer | No | Procedural, unwired | **DELETE** with gate 20 — gate 9 (grant path) is the one implementation |
+| 23 | Subagent restraint rules | agent-scripts `docs/subagent.md` vs AGENTS.MD contradiction (default-on vs exception-only, per assessment) | When a session may delegate to subagents | No | Procedural, self-applied | **DELETE** as a human gate — resolve the contradiction in WO-6; it is a style rule, not an approval |
+| 24 | Fleet release approval | manager `docs/decisions/fleet-version-governance.md`: "There is no per-release human approval... Joel is involved only when he deliberately" changes policy | Releasing fleet tool versions | No (rollback is a pointer move) | Already advisory by design | **ADVISORY** — keep as is; the counter-example that proves the end-state works |
+
+Dedup notes: gates 1–3 are one authority (the merge) written in four documents; gates 9, 10, 11, and 22 are one authority (the ratified contract) written in five; gate 13 and 14 are the batch and per-item versions of one authority. Counting authorities instead of documents: roughly 15 real decision points, of which 6 families are irreversible — matching the assessment's "maybe six are genuinely irreversible."
+
+---
+
+## One-page end-state for ratification
+
+**What Joel keeps, forever (the blocking six, plus one yes):**
+
+1. **Merge to main** — his hands, batched, never per-interrupt (gates 1–3).
+2. **Deploy, install, restart, migrate** anything live (gate 4).
+3. **Money** — any spend beyond a ceiling he priced in advance (gate 5).
+4. **Publication under his name** — email, DNS, posts, GitHub acts recorded as Joel (gate 6).
+5. **Credentials and authority** — new tokens, new write grants, repo enrollment, delegation-level changes (gate 7).
+6. **Product judgment** — weekly goals, contract gaps, beyond-DoD critical findings (gates 8, 19).
+7. Plus **one grant-level yes** per box of work (issue #25), which replaces the per-contract, per-DoD, per-revision, per-push, per-issue approvals below.
+
+**What becomes advisory (Joel is told; nothing waits silently):** contract ratification, DoD ratification, and contract revisions inside an active grant (gates 9–11); branch pushes and PR openings under grant verbs, once issue #4's no-push isolation lands (gate 12); issue posting under agent identity (gate 13); budget exhaustion, with immediate notification and bounded defaults (gate 15); terminal-state attention, already live via notify-joel (gates 16, 17, 24).
+
+**What is deleted:** the per-issue ratification comment rule (gate 14); the unwired launch-safety layer and its three gates (20–22), archive-tagged per WO-6; the subagent-approval contradiction, resolved as style not authority (gate 23).
+
+**Expected effect, measured against 2026-08-04:** that day Joel was interrupted for seven merges, several contract revisions, one deploy incident, and assorted carries. Under this end-state the same day is one grant yes in the morning, templated ✅ texts during the day, and one batch merge-and-deploy sitting in the evening. Every removed gate is replaced by a notification or a receipt — none by silence.
+
+**Guardrails on the change itself:** every reclassification is docs-plus-code follow-on work orders (none included here); each advisory gate must satisfy the standing rule — bounded wait, then a human-visible signal; and the delegation ladder in charter R7 still applies — an advisory class activates only when its structural enforcement (identity, scope, audit, revocation) is live, which is exactly what issues #4 and #25 build.
+
+**Ratification asked:** one yes to this table and end-state. Implementation returns as separate work orders, each with its own contract.
