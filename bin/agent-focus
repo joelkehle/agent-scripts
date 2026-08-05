@@ -4,6 +4,7 @@
 const {
   DEFAULT_FOCUS_FILE,
   FocusValidationError,
+  formatFocusList,
   loadFocus,
   resolveException,
   resolveGoal,
@@ -12,7 +13,7 @@ const {
 function usage() {
   console.log(`Usage:
   agent-focus validate [--file PATH] [--json]
-  agent-focus list [--file PATH] [--json]
+  agent-focus list [--file PATH] [--full] [--json]
   agent-focus resolve GOAL_ID [--file PATH] [--json]
   agent-focus exception --category CATEGORY --reason TEXT [--file PATH] [--json]
 
@@ -31,6 +32,7 @@ function parseArgs(argv) {
     category: "",
     reason: "",
     json: false,
+    full: false,
     help: false,
   };
   if (args.command === "show") args.command = "list";
@@ -39,6 +41,7 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") args.help = true;
     else if (arg === "--json") args.json = true;
+    else if (arg === "--full") args.full = true;
     else if (arg === "--file") args.file = argv[++index];
     else if (arg === "--goal") args.goalId = argv[++index];
     else if (arg === "--category") args.category = argv[++index];
@@ -63,26 +66,13 @@ function printExecutionRefs(value, indent = "") {
   }
 }
 
-function printText(command, value) {
+function printText(command, value, options = {}) {
   if (command === "validate") {
     console.log(`agent-focus: ${value.expired ? "EXPIRED" : "valid"} schema=${value.schema || "legacy"} week_ending=${value.week_ending} current_date=${value.current_date} time_zone=${value.time_zone} goals=${value.goals.length} file=${value.file}`);
     return;
   }
   if (command === "list") {
-    console.log(value.expired
-      ? `Weekly focus EXPIRED after ${value.week_ending} in ${value.time_zone}; current date ${value.current_date}`
-      : `Weekly focus through ${value.week_ending} in ${value.time_zone}`);
-    for (const goal of value.goals) {
-      console.log(`${goal.id}`);
-      console.log(`  done: ${goal.done}`);
-      console.log(`  required milestone: ${goal.required_milestone}`);
-      console.log(`  fallback: ${goal.fallback}`);
-      printExecutionRefs(goal, "  ");
-    }
-    if (value.not_this_week.length) {
-      console.log("Not this week:");
-      for (const item of value.not_this_week) console.log(`- ${item}`);
-    }
+    console.log(formatFocusList(value, options));
     return;
   }
   if (value.kind === "goal") {
@@ -112,7 +102,7 @@ try {
   if (args.command === "resolve") value = resolveGoal(focus, args.goalId);
   if (args.command === "exception") value = resolveException(focus, args.category, args.reason);
   if (args.json) console.log(JSON.stringify(value, null, 2));
-  else printText(args.command, value);
+  else printText(args.command, value, { full: args.full });
   if (focus.expired && ["validate", "list"].includes(args.command)) process.exitCode = 1;
 } catch (error) {
   if (error instanceof FocusValidationError) {

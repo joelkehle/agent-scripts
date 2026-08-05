@@ -12,6 +12,7 @@ const {
   calendarDate,
   FocusValidationError,
   focusStatus,
+  formatFocusList,
   loadFocus,
   parseFocusYaml,
   resolveException,
@@ -506,8 +507,14 @@ test("agent-focus labels legacy, active, proof, and supervision in text and JSON
       - kind: mission
         id: proof-cli
 `));
+  const focus = loadFocus(file);
+  const fullText = formatFocusList(focus, { full: true });
+  assert.match(fullText, /active execution: mission:active-cli/);
+  assert.match(fullText, /proof execution: mission:proof-cli/);
+  assert.match(fullText, /supervision required: true/);
+  assert.doesNotMatch(formatFocusList(focus), /active execution|proof execution|supervision required/);
   const listed = spawnSync("node", [
-    path.join(repoRoot, "bin/agent-focus"), "list", "--file", file,
+    path.join(repoRoot, "bin/agent-focus"), "list", "--full", "--file", file,
   ], { encoding: "utf8" });
   if (listed.error?.code === "EPERM") {
     t.skip("sandbox blocks nested process execution");
@@ -529,9 +536,87 @@ test("agent-focus labels legacy, active, proof, and supervision in text and JSON
   assert.deepEqual(value.supervised_execution, { required: true });
 });
 
+test("agent-focus list uses a compact default and preserves full and JSON views", (t) => {
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), "weekly-focus-compact-cli-"));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const file = path.join(support, "weekly-focus.yaml");
+  const longDone = `Scan ${"details ".repeat(20)}without showing the full record.`;
+  const multilineDone = `${longDone}\nSecond line.`;
+  fs.writeFileSync(file, `week_ending: 2099-08-02
+goals:
+  - id: W31-LONG
+    done: ${JSON.stringify(multilineDone)}
+    required_milestone: Targeted tests pass.
+    fallback: Preserve the safe read path.
+  - id: W31-SHORT
+    done: Small goal is done.
+    required_milestone: Short test passes.
+    fallback: Keep the old path.
+not_this_week:
+  - New orchestrator
+  - Production writes
+`);
+
+  const focus = loadFocus(file);
+  const compactText = formatFocusList(focus);
+  const compactLinesDirect = compactText.split("\n");
+  assert.equal(compactLinesDirect[0], "Weekly focus through 2099-08-02 in America/Los_Angeles");
+  assert.match(compactLinesDirect[1], /^W31-LONG: Scan details/);
+  assert.equal(Array.from(compactLinesDirect[1]).length, 100);
+  assert.match(compactLinesDirect[1], /\.\.\.$/);
+  assert.equal(compactLinesDirect[2], "W31-SHORT: Small goal is done.");
+  assert.equal(compactLinesDirect[3], "Not this week: 2 items (use --full to expand)");
+  assert.equal(compactLinesDirect.length, 4);
+  assert.doesNotMatch(compactText, /required milestone|fallback|execution:/);
+
+  const fullText = `Weekly focus through 2099-08-02 in America/Los_Angeles
+W31-LONG
+  done: ${multilineDone}
+  required milestone: Targeted tests pass.
+  fallback: Preserve the safe read path.
+W31-SHORT
+  done: Small goal is done.
+  required milestone: Short test passes.
+  fallback: Keep the old path.
+Not this week:
+- New orchestrator
+- Production writes`;
+  assert.equal(formatFocusList(focus, { full: true }), fullText);
+
+  const compact = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"), "list", "--file", file,
+  ], { encoding: "utf8" });
+  if (compact.error?.code === "EPERM") {
+    t.diagnostic("sandbox blocks the CLI check; formatter checks passed");
+    return;
+  }
+  assert.equal(compact.status, 0, compact.stderr);
+  assert.equal(compact.stdout, `${compactText}\n`);
+
+  const full = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"), "list", "--full", "--file", file,
+  ], { encoding: "utf8" });
+  assert.equal(full.status, 0, full.stderr);
+  assert.equal(full.stdout, `${fullText}\n`);
+
+  const json = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"), "list", "--json", "--file", file,
+  ], { encoding: "utf8" });
+  const fullJson = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-focus"), "list", "--full", "--json", "--file", file,
+  ], { encoding: "utf8" });
+  assert.equal(json.status, 0, json.stderr);
+  assert.equal(fullJson.status, 0, fullJson.stderr);
+  assert.equal(fullJson.stdout, json.stdout);
+  assert.equal(JSON.parse(json.stdout).goals[0].done, multilineDone);
+});
+
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
   const missing = parseFocusYaml("week_ending: 2026-08-02\ngoals: []\n");
   assert.equal(validateFocus(missing.focus, missing.errors).ok, false);
+
+  const zeroGoals = parseFocusYaml("week_ending: 2026-08-02\ngoals: []\nnot_this_week: []\n");
+  assert.match(validateFocus(zeroGoals.focus, zeroGoals.errors).errors.join("\n"), /goals must be a non-empty list/);
 
   const invalidKind = parseFocusYaml(focusYaml(`    execution_refs:
       - kind: program
@@ -596,12 +681,23 @@ test("agent-focus validate and list report expired focus while exception remains
   t.after(() => fs.rmSync(support, { recursive: true, force: true }));
   const file = path.join(support, "weekly-focus.yaml");
   fs.writeFileSync(file, focusYaml("", "2000-01-01"));
+  const expiredFocus = loadFocus(file, { allowExpired: true });
+  const compactText = formatFocusList(expiredFocus);
+  assert.match(compactText, /^Weekly focus EXPIRED after 2000-01-01 in America\/Los_Angeles/);
+  assert.match(compactText, /W31-CORE: Core is validated\./);
+  assert.match(compactText, /Not this week: 1 item \(use --full to expand\)/);
+  assert.doesNotMatch(compactText, /required milestone|fallback/);
+  assert.match(formatFocusList(expiredFocus, { full: true }), /required milestone: Targeted tests pass/);
   for (const command of ["validate", "list"]) {
     const result = spawnSync("node", [
       path.join(repoRoot, "bin/agent-focus"),
       command,
       "--file", file,
     ], { encoding: "utf8" });
+    if (result.error?.code === "EPERM") {
+      t.diagnostic("sandbox blocks the expired CLI check; formatter checks passed");
+      return;
+    }
     assert.equal(result.status, 1);
     assert.match(result.stdout, /EXPIRED/);
     assert.match(result.stdout, /America\/Los_Angeles/);
