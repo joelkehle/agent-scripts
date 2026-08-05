@@ -659,11 +659,16 @@ test("weekly focus rejects invalid files, execution kinds, and missing execution
   assert.match(validateFocus(missingId.focus, missingId.errors).errors.join("\n"), /id must be/);
 });
 
-test("weekly focus rejects goal IDs with surrounding whitespace", () => {
+test("weekly focus rejects goal IDs with surrounding whitespace or line breaks", () => {
   const parsed = parseFocusYaml(focusYaml().replace("id: W31-CORE", 'id: " W31-CORE "'));
   const result = validateFocus(parsed.focus, parsed.errors);
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /id must not contain leading or trailing whitespace/);
+
+  const multiline = parseFocusYaml(focusYaml().replace("id: W31-CORE", 'id: "GOAL\\nWRAPPED"'));
+  const multilineResult = validateFocus(multiline.focus, multiline.errors);
+  assert.equal(multilineResult.ok, false);
+  assert.match(multilineResult.errors.join("\n"), /id must not contain line breaks/);
 });
 
 test("goal and exception resolution validate declared IDs and reasons", () => {
