@@ -612,7 +612,7 @@ Not this week:
 });
 
 test("compact goal listing preserves a long valid goal ID", () => {
-  const longId = `GOAL-${"x".repeat(89)}`;
+  const longId = `GOAL-${"x".repeat(90)}`;
   const longDone = `Scan ${"details ".repeat(20)}without hiding the goal ID.`;
   const longIdFocus = parseValidFocus(focusYaml().replace(
     "id: W31-CORE",
@@ -628,7 +628,16 @@ test("compact goal listing preserves a long valid goal ID", () => {
   }).split("\n")[1];
   assert.ok(longIdLine.startsWith(`${longId}: `));
   assert.equal(Array.from(longIdLine).length, 100);
-  assert.equal(longIdLine.slice(`${longId}: `.length), "S...");
+  assert.equal(longIdLine.slice(`${longId}: `.length), "...");
+
+  const overlong = parseFocusYaml(focusYaml().replace(
+    "id: W31-CORE",
+    `id: ${longId}x`,
+  ));
+  assert.match(
+    validateFocus(overlong.focus, overlong.errors).errors.join("\n"),
+    /id must be at most 95 characters/,
+  );
 });
 
 test("weekly focus rejects invalid files, execution kinds, and missing execution IDs", () => {
