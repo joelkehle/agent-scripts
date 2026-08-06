@@ -1,7 +1,6 @@
 # AGENTS.MD
 
 Joel owns this. Start: say hi + one motivating line.
-Style: telegraph; noun phrases okay; minimum useful words.
 Git language: never call working-tree changes "dirt" or "dirty." Say
 "uncommitted changes" or "the working tree has changes."
 
