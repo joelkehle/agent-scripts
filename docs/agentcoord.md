@@ -1,22 +1,27 @@
 ---
-summary: AgentCoord CLI for validated claims, stale-claim sweeps, and handoffs on the shared NAS coordination layer.
+summary: AgentCoord CLI commands, flags, examples, stale-claim sweeps, and handoffs.
 read_when:
   - Creating, renewing, releasing, validating, or sweeping AgentCoord claims.
   - Writing a cross-host or cross-agent handoff.
-  - Hardening shared coding-agent coordination conventions.
 ---
 
 # AgentCoord CLI
 
-`agentcoord` is the command-line interface for `/mnt/synology-share1/AgentCoord`.
+`agentcoord` manages claims and handoffs from the command line.
+
+For the coordination model, shared rules, and directory layout, see
+[Shared Agent Coordination](shared-agent-coordination.md).
 
 Common commands:
 
 ```bash
 agentcoord validate
+agentcoord check
+agentcoord list --all
 agentcoord list --active
 agentcoord list --stale
-agentcoord claim --repo shared/agent-scripts --slug launch-ritual --scope bin/agent-start --ttl-hours 2
+agentcoord claim --repo shared/agent-scripts --slug launch-ritual \
+  --safety write --scope bin/agent-start --ttl-hours 2
 agentcoord renew --repo shared/agent-scripts --slug launch-ritual --ttl-hours 4
 agentcoord release --repo shared/agent-scripts --slug launch-ritual
 agentcoord sweep
@@ -50,5 +55,3 @@ added:
   "stale_since": "2026-06-18T08:00:00Z"
 }
 ```
-
-Claims are coordination hints, not permanent locks. Expired claims should send agents to the linked handoffs/logs before proceeding, but stale claims should not block safe work forever.

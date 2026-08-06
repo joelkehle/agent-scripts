@@ -4,6 +4,7 @@ read_when:
   - Coordinating Codex or Claude Code sessions across beelink and macmini.
   - Starting overlapping work where multiple coding agents may edit the same project.
   - Handing off work, proof packs, or patches through the Synology shared storage layer.
+  - Hardening shared coding-agent coordination rules.
 ---
 
 # Shared Agent Coordination
@@ -112,14 +113,9 @@ proof-packs/<repo>/<slug>-<YYYYMMDDThhmmssZ>/
 logs/<repo>/<slug>-<YYYYMMDDThhmmssZ>.log
 ```
 
-Use `agentcoord` for claim lifecycle work instead of hand-writing JSON when
-possible:
+Use `agentcoord` for claim work instead of hand-writing JSON when possible.
 
-```bash
-agentcoord claim --repo shared/agent-scripts --slug launch-ritual --safety write --scope bin/agent-start
-agentcoord list --all
-agentcoord check
-```
+See [AgentCoord CLI](agentcoord.md) for commands, flags, and examples.
 
 Local launch/run ownership is complementary, not a replacement for AgentCoord.
 `workspace-preflight` reads active AgentCoord write claims and
