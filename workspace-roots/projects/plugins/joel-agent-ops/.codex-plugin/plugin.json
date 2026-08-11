@@ -1,14 +1,13 @@
 {
   "id": "joel-agent-ops",
   "name": "joel-agent-ops",
-  "version": "0.1.0+codex.20260803160751",
+  "version": "0.1.0+codex.20260811212551",
   "description": "Shared coding-agent skills and a narrow Manager mission operator for Joel's workspace.",
   "author": {
     "name": "Joel Kehle",
     "email": "joel@kehle.com"
   },
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "repository": "https://github.com/joelkehle/agent-scripts",
   "keywords": [
     "codex",
