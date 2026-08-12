@@ -97,10 +97,26 @@ Expected output includes `kehle-contributor-agent`.
 
 ## Machine Checklist
 
-### `surface-wsl`
-- Install Infisical CLI.
-- Configure `~/.config/infisical/ua.agent.env`.
-- Verify `contributor-agent -- gh api user --jq .login`.
+### `surface-wsl` (retired 2026-08-12)
+- The laptop stopped running agent sessions when the dev VM took over
+  (manager#50). Its idle machine identity was renamed to `dev` and its old
+  client secret was deleted. Do not recreate a surface-wsl identity without
+  checking the org identity limit first (free plan: identities are capped,
+  humans and machines combined).
+
+### `dev`
+- Identity: `dev` (repurposed from `surface-wsl` on 2026-08-12; the org was at
+  its identity cap, so the idle identity was renamed instead of creating one).
+- Deliberately narrow scope: project role No Access plus one additional
+  privilege (`dev-cloudflare-access-read`) — Describe Secret and Read Secret
+  Value on exactly `CLOUDFLARE_ACCESS_TOKEN`, env `prod`, path `/shared`.
+  A list of `/shared` returns only that one secret. Widening dev's access is
+  a deliberate act: add another scoped privilege in the web UI; do not raise
+  the project role.
+- Install Infisical CLI (Infisical's signed Debian source).
+- Configure `~/.config/infisical/ua.agent.env` (dir `0700`, file `0600`).
+- Verify with a read of `CLOUDFLARE_ACCESS_TOKEN` (check its length, never
+  print the value).
 
 ### `beelink`
 - SSH in as bootstrap user.
