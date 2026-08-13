@@ -1,5 +1,5 @@
 ---
-summary: "Infisical rollout guide for shared agent CLI auth across surface-wsl, beelink, and macmini."
+summary: "Infisical rollout guide for shared agent CLI auth across dev, beelink, and macmini."
 read_when:
   - Setting up or rotating agent GitHub tokens.
   - Wiring Codex/Claude launch flows to Infisical runtime injection.
@@ -13,7 +13,7 @@ read_when:
 - Infisical project: `agent-secrets`
 - Project ID: `d73a32d5-f679-47a4-86e6-aad34a1dbd86`
 - Shared path: `/shared`
-- Machine paths: `/machines/beelink`, `/machines/macmini`, `/machines/surface-wsl`
+- Machine paths: `/machines/dev`, `/machines/beelink`, `/machines/macmini`
 - Default environment: `prod`
 
 ## GitHub identity separation
@@ -65,7 +65,8 @@ did not enforce a GitHub role identity.
 ## Universal Auth Setup
 
 Joel-only step in web UI:
-1. Create a Machine Identity for each host (`surface-wsl`, `beelink`, `macmini`).
+1. Create or maintain a Machine Identity for each active host (`dev`, `beelink`,
+   `macmini`). Do not recreate the retired `surface-wsl` identity.
 2. Grant least-privilege access to required env/path(s).
 3. Capture `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET`.
 
