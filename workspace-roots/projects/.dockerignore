@@ -1,7 +1,19 @@
-# Keep runtime service state and git history out of Docker build contexts
-# (contexts ../.. and ../../jk/jk-email-agents in ucla-tdg-email-triage compose).
+# Keep runtime service state and git history out of the ../.. (~/Projects)
+# Docker build context used by ucla-tdg-email-triage compose. This file
+# deploys to ~/Projects/.dockerignore (see "Docker ignore" in
+# docs/instruction-architecture.md) and only governs builds whose
+# context: is ../.. — it does NOT reach the separate context:
+# ../../jk/jk-email-agents build (Docker looks for .dockerignore at that
+# context's own root, not a parent directory's). That context already has
+# its own tracked jk-email-agents/.dockerignore with equivalent data/ and
+# .git/ rules, committed separately in that repo.
 # Added 2026-08-12 during the Postmaster cutover; tracked here so a fresh
 # machine's ~/Projects gets it (ucla-tdg-email-triage#23).
+#
+# The jk/jk-email-agents/data/ line below still matters here: the ../..
+# context covers the whole workspace, including the jk-email-agents
+# subtree, for the ucla-tdg-next-email / ucla-tdg-inbox-triage /
+# ucla-tdg-contact-resolver builds.
 jk/jk-email-agents/data/
 ucla-tdg/ucla-tdg-email-triage/data/
 .git/
