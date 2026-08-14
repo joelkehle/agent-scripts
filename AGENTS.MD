@@ -18,9 +18,13 @@ dead from an error message, try a cheap probe first.
 
 ## Hard boundaries
 
-- Never commit secrets, tokens, keys, or raw email bodies. Use Infisical.
+- Never commit secrets, tokens, keys, or raw email bodies — and never put them
+  in AgentCoord handoffs or proof packs. Use Infisical.
+- A request for an answer, diagnosis, review, or draft stays read-and-propose.
+  No sends, deletes, or other external writes unless Joel clearly asks.
+- `~/Projects/shared/operations` is read-only for agents.
 
-## Session start
+## Session Start
 
 Run `agent-start --root .` before the first reply. Surface every WARN and FAIL.
 If it is missing, say so once and continue.
@@ -48,7 +52,16 @@ create state or policy files somewhere convenient.
 ## Finding everything else
 
 Run `docs-list` in the repo you are working in and follow the `read_when` hints.
-That is the routing table. Do not keep a copy of it here.
+That is the routing table. Core routers in this repo:
+
+- docs/instruction-architecture.md — who reads which instruction file
+- docs/loop-operating-model.md — coding-agent loops
+- docs/elephant/README.md — elephant protocol
+- docs/STATE_ARCHITECTURE.md — where state lives
+- docs/bus-discovery.md — live bus capabilities (`bus-discover`)
+- docs/shared-agent-coordination.md — overlapping or cross-host work
+- docs/service-runtime-policy.md — running services
+- docs/oracle.md, tools.md, and the design-walkthrough skill — oracle and tools
 
 Assume commercial LLM inference, local tools, and Joel as the only human gate.
 Do not invent reviewers, attorneys, or physicians as available. Name outside
