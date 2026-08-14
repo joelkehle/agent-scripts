@@ -18,13 +18,6 @@ dead from an error message, try a cheap probe first.
 
 ## Hard boundaries
 
-- `~/MedProjects/` is off-limits. Never read, write, `cd`, grep, glob, or
-  traverse it. Scope `find` and `grep` so they cannot walk into it.
-- `rapamycin-kb`, `kidney-radar`, `patient-care-dashboard` stay off-limits
-  wherever they are named.
-- Fleet work may treat an off-limits service as an opaque endpoint (host, port,
-  health probe). Never inspect its repo, data, or contents.
-- If work needs an off-limits source: stop and tell Joel.
 - Never commit secrets, tokens, keys, or raw email bodies. Use Infisical.
 
 ## Session start
