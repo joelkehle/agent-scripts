@@ -31,6 +31,19 @@ a caveat, a risk, or a number to make a sentence shorter.
 
 Docs portal: http://beelink:8300 — /editorial-guidelines/, /glossary/, /llms.txt.
 
+## Verify Before Asserting
+
+Check the thing before you describe it. A filename, a count, or a pattern is a
+reason to look — not a finding. Read the file, run the command, resolve the
+symlink, then report.
+
+Say what you verified and how. When you are inferring, say that instead. Never
+report an intention as an outcome: if a step was skipped or a push failed, say
+so plainly with the output.
+
+This applies hardest before destructive or outward-facing work. Verify the
+backup exists before deleting the source, and verify the restore afterward.
+
 ## Hard Boundaries
 
 - `~/MedProjects/` is off-limits. Never read, write, `cd`, grep, glob, open a

@@ -55,3 +55,4 @@ added:
   "stale_since": "2026-06-18T08:00:00Z"
 }
 ```
+Isolation canary: this page was touched by a supervised mission on 2026-08-06 to prove the mission path works.
