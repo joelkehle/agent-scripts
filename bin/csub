@@ -43,6 +43,22 @@ RETAIN_DAYS=14
 MIN_CODEX_VERSION="0.145.0"
 SETSID_PY=$'import os, sys\nos.setsid()\nos.execvp(sys.argv[1], sys.argv[1:])'
 
+# Resolve the real script location through installer shims (agent-env-install
+# links this file into a prefix), so the repo's lib/ stays reachable. Done
+# early (before the CSUB_PHASED_SELFTEST short-circuit below, which needs
+# it) — this resolution depends only on $0, never on parsed args.
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+repo_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+# Process supervision (phased TERM->KILL, watchdog, forced-reap tree kill)
+# lives here — see lib/csub_supervisor.py for the contract. csub stays the
+# Bash CLI front; every process-tree signal below delegates to it.
+SUPERVISOR="$repo_root/lib/csub_supervisor.py"
+
 usage() {
   cat >&2 <<'EOF'
 Usage: csub [-D] [-w] [-C DIR] [-T SECS] [-t] "brief"
@@ -84,150 +100,12 @@ EOF
   exit 2
 }
 
-# kill_tree SIG PID: signal the pid's process group plus every live
-# descendant found by walking the process tree (catches subprocesses that
-# left the group via setsid while their parent is still alive — see the
-# containment contract). Exported so the watchdog and escalation helpers
-# (bash children) use the same logic.
-kill_tree() {
-  local sig=$1 root=$2 all queue next p kids
-  all=$(ps -Ao pid=,ppid= 2>/dev/null) || all=""
-  queue=$root
-  local victims=$root
-  while [ -n "$queue" ]; do
-    next=""
-    for p in $queue; do
-      kids=$(printf '%s\n' "$all" | awk -v pp="$p" '$2 == pp { print $1 }')
-      if [ -n "$kids" ]; then
-        next="$next $kids"
-        victims="$victims $kids"
-      fi
-    done
-    queue=$next
-  done
-  kill -s "$sig" -- "-$root" 2>/dev/null || true
-  for p in $victims; do
-    kill -s "$sig" "$p" 2>/dev/null || true
-  done
-}
-export -f kill_tree
-
-# kill_phased ROOT GRACE: two-phase TERM -> KILL. The victim set (pid +
-# start time) is snapshotted at TERM. Every DELAYED signal is identity
-# gated: the group-wide KILL and the fresh survivor walk run only when the
-# root still carries its saved identity, and saved victims are re-verified
-# by start time — a recycled PID (root or descendant) is never signaled.
-# `kill_phased --selftest` deterministically exercises the phase-2 decision
-# function (no real processes) and prints PHASED-SELFTEST-OK.
-kill_phased() {
-  python3 - "$@" <<'PY'
-import os, signal, subprocess, sys, time
-
-def snapshot():
-    try:
-        out = subprocess.run(["ps", "-Ao", "pid=,ppid=,lstart="],
-                             capture_output=True, text=True).stdout
-    except Exception:
-        return {}, {}
-    ids, kids = {}, {}
-    for line in out.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) < 3:
-            continue
-        try:
-            pid, ppid = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        ids[pid] = parts[2]
-        kids.setdefault(ppid, []).append(pid)
-    return ids, kids
-
-def walk(start, ids, kids):
-    seen = {}
-    queue = [start]
-    while queue:
-        p = queue.pop()
-        if p in seen:
-            continue
-        seen[p] = ids.get(p)
-        queue.extend(kids.get(p, []))
-    return seen
-
-def phase2_targets(root, victims, ids2, kids2):
-    """Identity-gated phase-2 plan: (allow_group_kill, {pid: start})."""
-    root_same = (
-        root in ids2
-        and victims.get(root) is not None
-        and ids2.get(root) == victims.get(root)
-    )
-    targets = {}
-    if root_same:
-        targets.update(walk(root, ids2, kids2))
-    for p, start in victims.items():
-        if p not in targets and start is not None and ids2.get(p) == start:
-            targets[p] = start
-    return root_same, targets
-
-def sig(pid, s):
-    try:
-        os.kill(pid, s)
-    except Exception:
-        pass
-
-if sys.argv[1] == "--selftest":
-    # Recycled root (saved start A, now B) with a fresh child: neither may
-    # be signaled; the identity-preserved orphan still must be.
-    victims = {100: "A", 150: "A2"}
-    ids2 = {100: "B", 200: "B2", 150: "A2"}
-    kids2 = {100: [200]}
-    do_group, targets = phase2_targets(100, victims, ids2, kids2)
-    assert not do_group, "group kill allowed on recycled root"
-    assert 100 not in targets and 200 not in targets, "recycled root or its child targeted"
-    assert 150 in targets, "identity-preserved orphan missed"
-    # Healthy root: same identity — group kill allowed; fresh descendant and
-    # preserved orphan all targeted.
-    victims = {100: "A", 150: "A2"}
-    ids2 = {100: "A", 300: "C", 150: "A2"}
-    kids2 = {100: [300]}
-    do_group, targets = phase2_targets(100, victims, ids2, kids2)
-    assert do_group and 100 in targets and 300 in targets and 150 in targets
-    # Vanished (not recycled) root: no group kill; orphans still targeted.
-    do_group, targets = phase2_targets(100, {100: "A", 150: "A2"}, {150: "A2"}, {})
-    assert not do_group and 150 in targets and 100 not in targets
-    print("PHASED-SELFTEST-OK")
-    sys.exit(0)
-
-root, grace = int(sys.argv[1]), int(sys.argv[2])
-
-ids, kids = snapshot()
-victims = walk(root, ids, kids)
-try:
-    os.killpg(root, signal.SIGTERM)
-except Exception:
-    pass
-for p in victims:
-    sig(p, signal.SIGTERM)
-
-time.sleep(grace)
-
-ids2, kids2 = snapshot()
-do_group, targets = phase2_targets(root, victims, ids2, kids2)
-if do_group:
-    try:
-        os.killpg(root, signal.SIGKILL)
-    except Exception:
-        pass
-for p in targets:
-    sig(p, signal.SIGKILL)
-PY
-}
-export -f kill_phased
-
 # Deterministic supervision regression entry (used by tests/csub.sh): runs
-# before argument parsing so it needs no brief, codex, or repo.
+# before argument parsing so it needs no brief, codex, or repo. Delegates to
+# the supervisor module's own selftest subcommand — see lib/csub_supervisor.py.
 if [ "${CSUB_PHASED_SELFTEST:-}" = "1" ]; then
   command -v python3 >/dev/null 2>&1 || exit 127
-  kill_phased --selftest
+  python3 "$SUPERVISOR" selftest
   exit $?
 fi
 
@@ -299,16 +177,6 @@ if ! git -C "$workdir" rev-parse --show-toplevel >/dev/null 2>&1; then
   printf 'csub: workdir %s is not inside a git worktree (csub is repo-bound; codex would refuse it)\n' "$workdir" >&2
   exit 2
 fi
-
-# Resolve the real script location through installer shims (agent-env-install
-# links this file into a prefix), so the repo's lib/ stays reachable.
-self="${BASH_SOURCE[0]}"
-while [ -L "$self" ]; do
-  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
-  self="$(readlink "$self")"
-  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
-done
-repo_root="$(cd -P "$(dirname "$self")/.." && pwd)"
 
 # Supported-version contract: fail closed below MIN, and a prerelease of the
 # floor (e.g. 0.145.0-alpha.4) does not meet the floor.
@@ -516,6 +384,24 @@ helper_pids=()
 signal_exit=""
 timeout_flag="$state_dir/$stamp.timedout"
 
+# reap_root SIG PID: force-terminate a background job THIS shell spawned,
+# plus its process-tree descendants. PID's own signal must go through this
+# shell's `kill` builtin, with no subprocess started between that kill and
+# the caller's subsequent `wait` on PID — bash marks a tracked job as
+# intentionally killed only when nothing else races its SIGCHLD bookkeeping
+# in between, and otherwise prints a "Killed ..." notice at that `wait`
+# regardless of stream redirection on it (verified empirically; this is
+# what test 14c in tests/csub.sh guards). Descendant discovery, which is
+# real supervision logic, runs first through the Python module while PID is
+# still alive — safe, since PID's own signal (the sensitive part) still
+# comes from bash, after.
+reap_root() {
+  local sig=$1 pid=$2
+  python3 "$SUPERVISOR" descendants "$sig" "$pid" 2>/dev/null || true
+  kill -s "$sig" -- "-$pid" 2>/dev/null || true
+  kill -s "$sig" "$pid" 2>/dev/null || true
+}
+
 # reap_with_deadline PID SECS: give a helper whose phased kill may still be
 # in flight up to SECS to finish its KILL phase, then force-reap. Aborting a
 # mid-phase helper would strand TERM-resistant descendants.
@@ -525,7 +411,7 @@ reap_with_deadline() {
     sleep 0.2
     waited=$((waited + 1))
   done
-  kill_tree KILL "$pid"
+  reap_root KILL "$pid"
   wait "$pid" 2>/dev/null || true
 }
 
@@ -543,12 +429,12 @@ cleanup() {
     if [ "$p" = "${watchdog_pid:-}" ] && [ -e "$timeout_flag" ]; then
       reap_with_deadline "$p" $((KILL_GRACE + 2))
     else
-      kill_tree KILL "$p"
+      reap_root KILL "$p"
       wait "$p" 2>/dev/null || true
     fi
   done
   if [ -n "${child_pid:-}" ]; then
-    kill_tree KILL "$child_pid"
+    reap_root KILL "$child_pid"
     wait "$child_pid" 2>/dev/null || true
   fi
   helper_pids=()
@@ -558,10 +444,10 @@ trap cleanup EXIT
 
 terminate_child() {
   [ -n "$child_pid" ] || return 0
-  # kill_phased TERMs immediately and KILLs after the grace with identity
-  # checks — no raw PID is retained across the grace window.
-  CSUB_ESC_G="$KILL_GRACE" CSUB_ESC_C="$child_pid" \
-    python3 -c "$SETSID_PY" bash -c 'kill_phased "$CSUB_ESC_C" "$CSUB_ESC_G"' "csub-esc:$state_dir" 2>/dev/null &
+  # The supervisor's `phased` subcommand TERMs immediately and KILLs after
+  # the grace with identity checks — no raw PID is retained across the
+  # grace window. It setsids itself so it survives the group TERM it issues.
+  python3 "$SUPERVISOR" phased "$child_pid" "$KILL_GRACE" "csub-esc:$state_dir" 2>/dev/null &
   helper_pids+=($!)
 }
 
@@ -584,12 +470,7 @@ fi
 # Watchdog (own process group, reaped by cleanup): TERM to the child's tree
 # at the bound, KILL after the grace period. The flag file records that the
 # bound fired so the exit can be reported as 124.
-CSUB_WD_T="$timeout_secs" CSUB_WD_G="$KILL_GRACE" CSUB_WD_C="$child_pid" CSUB_WD_F="$timeout_flag" \
-  python3 -c "$SETSID_PY" bash -c '
-    sleep "$CSUB_WD_T"
-    touch "$CSUB_WD_F" 2>/dev/null
-    kill_phased "$CSUB_WD_C" "$CSUB_WD_G"
-  ' "csub-wd:$state_dir" 2>/dev/null &
+python3 "$SUPERVISOR" watchdog "$timeout_secs" "$KILL_GRACE" "$child_pid" "$timeout_flag" "csub-wd:$state_dir" 2>/dev/null &
 watchdog_pid=$!
 
 status=0
@@ -610,7 +491,7 @@ child_pid=""
 if [ -e "$timeout_flag" ]; then
   reap_with_deadline "$watchdog_pid" $((KILL_GRACE + 2))
 else
-  kill_tree KILL "$watchdog_pid"
+  reap_root KILL "$watchdog_pid"
   wait "$watchdog_pid" 2>/dev/null || true
 fi
 watchdog_pid=""
