@@ -36,6 +36,15 @@ the global file merely to make a rule visible.
 - Workspace link: `~/Projects/AGENTS.md` -> the workspace source.
 - `~/AGENTS.MD` is a compatibility symlink to the global source. If a platform
   requires a copy instead, verify byte equality after updates.
+- Docker ignore source: `workspace-roots/projects/.dockerignore`.
+- Docker ignore link: `~/Projects/.dockerignore` -> the workspace source. This
+  applies only to Docker builds whose `context:` is `../..` (i.e. `~/Projects`
+  itself); a compose service with a narrower `context:` (e.g. a sibling
+  repo's own directory) needs its own tracked `.dockerignore` at that
+  context's root — Docker does not look at a parent directory's ignore file.
+  No installer creates this link automatically today (same gap as the
+  `AGENTS.md` link above); a fresh machine must create it by hand, e.g.
+  `ln -s shared/agent-scripts/workspace-roots/projects/.dockerignore ~/Projects/.dockerignore`.
 - Shared skill source:
   `workspace-roots/projects/.agents/skills/`; installed links live under
   `~/Projects/.agents/skills/` and `~/.agents/skills/`.
