@@ -1,0 +1,8 @@
+# Keep runtime service state and git history out of Docker build contexts
+# (contexts ../.. and ../../jk/jk-email-agents in ucla-tdg-email-triage compose).
+# Added 2026-08-12 during the Postmaster cutover; tracked here so a fresh
+# machine's ~/Projects gets it (ucla-tdg-email-triage#23).
+jk/jk-email-agents/data/
+ucla-tdg/ucla-tdg-email-triage/data/
+.git/
+**/.git/
