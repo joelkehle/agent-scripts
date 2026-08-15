@@ -62,7 +62,9 @@ else
   if ! mkdir "$lock_dir" 2>/dev/null; then
     # A hard-killed run cannot clean its lock folder. Treat a lock older
     # than 6 hours as stale (runs take seconds; the timer fires hourly).
-    lock_mtime="$(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null)" || lock_mtime=""
+    lock_mtime="$(stat -c %Y "$lock_dir" 2>/dev/null)" || \
+      lock_mtime="$(stat -f %m "$lock_dir" 2>/dev/null)" || lock_mtime=""
+    case "$lock_mtime" in ''|*[!0-9]*) lock_mtime="" ;; esac
     now_epoch="$(date +%s)"
     if [ -n "$lock_mtime" ] && [ $((now_epoch - lock_mtime)) -gt 21600 ]; then
       log "WARNING: removing stale mkdir lock (older than 6 hours)"
