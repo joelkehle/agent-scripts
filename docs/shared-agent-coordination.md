@@ -1,7 +1,7 @@
 ---
-summary: "Shared NAS coordination contract for Codex and Claude Code build agents across beelink and macmini."
+summary: "Shared NAS coordination contract for Codex and Claude Code build agents across dev, beelink, and macmini."
 read_when:
-  - Coordinating Codex or Claude Code sessions across beelink and macmini.
+  - Coordinating Codex or Claude Code sessions across dev, beelink, and macmini.
   - Starting overlapping work where multiple coding agents may edit the same project.
   - Handing off work, proof packs, or patches through the Synology shared storage layer.
   - Hardening shared coding-agent coordination rules.
@@ -9,25 +9,25 @@ read_when:
 
 # Shared Agent Coordination
 
-This is the cross-host coordination layer for Codex and Claude Code build agents.
+This is the cross-host coordination layer for Codex and Claude Code build agents on Dev, Beelink, and Mac Mini.
 
-It is not the Pinakes bus. Pinakes agents are runtime/product services. This layer is for coding sessions coordinating claims, handoffs, patches, proof artifacts, and lightweight logs across beelink and macmini.
+It is not the Pinakes bus. Pinakes agents are runtime/product services. This layer is for coding sessions coordinating claims, handoffs, patches, proof artifacts, and lightweight logs across the three build hosts.
 
 ## Control Plane Model
 
 Default architecture:
 
 ```text
-Codex / Claude Code runs on beelink
-  -> edits and tests Linux/local projects on beelink
-  -> uses ssh macmini 'cd ~/Projects/<repo> && ...' for macOS-specific work
+Codex / Claude Code runs on dev
+  -> edits and tests projects on dev
+  -> uses ssh agent@macmini 'cd ~/Projects/<repo> && ...' for macOS-specific work
   -> stores claims, handoffs, patches, and proof packs in AgentCoord
   -> commits in the repo where the work actually lives
 ```
 
-Prefer launching coding agents from beelink. Use macmini as a remote execution target for macOS-only repos and workflows: launchd, TCC/GUI-adjacent checks, Photos, Voice Memos, Keychain, Apple app automation, and hardware-local probes.
+Prefer launching coding agents from Dev. Use Mac Mini as a remote execution target from Dev for macOS-only repos and workflows: launchd, TCC/GUI-adjacent checks, Photos, Voice Memos, Keychain, Apple app automation, and hardware-local probes.
 
-Do not start an independent long-running Codex or Claude Code session on macmini unless Joel explicitly asks, beelink cannot reach the needed macOS surface, or the task truly requires interactive local macOS control. If a macmini-local session is used, it must create/update `AgentCoord` claims and handoffs so beelink remains the coordination point.
+Do not start an independent long-running Codex or Claude Code session on Mac Mini unless Joel explicitly asks, Dev cannot reach the needed macOS surface, or the task truly requires interactive local macOS control. If a Mac Mini-local session is used, it must create/update `AgentCoord` claims and handoffs so Dev remains the coordination point.
 
 ## Service Identity
 
@@ -35,7 +35,7 @@ Do not start an independent long-running Codex or Claude Code session on macmini
 - Backing storage: Synology `Share1`
 - NAS export: `192.168.88.2:/volume1/Share1`
 - Shared directory: `AgentCoord/`
-- Canonical path on beelink and macmini: `/mnt/synology-share1/AgentCoord`
+- Canonical path on Dev, Beelink, and Mac Mini: `/mnt/synology-share1/AgentCoord`
 - macmini implements `/mnt` with `/etc/synthetic.d/joelkehle-mnt`; do not use `/Volumes/...` for this service.
 - Ops doc: `~/Projects/shared/manager/docs/services/agent-coordination-share.md`
 

@@ -50,7 +50,8 @@ Before work that answers “what should Joel do today?”, read
   bundle unrelated repositories into one commit or proof claim.
 - For overlapping edits, create an AgentCoord claim before writing. For
   cross-host handoff, write the handoff before switching runtimes.
-- Prefer launching Codex/Claude from beelink. Use macmini through SSH for
+- Prefer launching Codex/Claude from dev. Use macmini through SSH from dev for
   macOS-only execution unless Joel explicitly requests a macmini-local agent.
+  The fleet SSH grid blocks beelink from starting a macmini shell.
 - Validate locally with `agent-check` or the repo's documented full gate.
   GitHub Actions are not the standard validation surface.
