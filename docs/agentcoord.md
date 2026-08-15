@@ -27,6 +27,8 @@ agentcoord release --repo shared/agent-scripts --slug launch-ritual
 agentcoord sweep
 agentcoord sweep --stale-after-days 7
 agentcoord sweep --apply --stale-after-days 7
+agentcoord archive
+agentcoord archive --apply --older-than-days 30
 agentcoord handoff --repo shared/agent-scripts --slug launch-ritual \
   --goal 'Ship launch ritual' \
   --state 'agent-start implemented' \
@@ -40,11 +42,18 @@ The janitor splits expired claims into:
 
 - recent stale claims: expired, but younger than `--stale-after-days`;
 - eligible stale claims: expired at least `--stale-after-days` ago;
-- invalid claims: malformed claim files, never auto-released.
+- invalid claims: malformed claim files.
 
-With `--apply`, only eligible stale claims are marked released. Claim files are
-never deleted. The original claim fields stay in place and janitor metadata is
-added:
+With `--apply`, eligible stale claims are marked released. Invalid claims are
+also released when their file has not changed for `--stale-after-days` days.
+The janitor rewrites those as valid JSON with
+`release_reason: "invalid-expired"`. If the old content was parseable JSON, it
+is kept under an `original` key. If not, the raw bytes are kept next to the
+claim as `<name>.json.corrupt`. Fresh invalid claims are left alone.
+
+Claim files are never deleted; released claims are archived to
+`claims-archive/` after 30 days. The original claim fields stay in place and
+janitor metadata is added:
 
 ```json
 {
@@ -55,3 +64,41 @@ added:
   "stale_since": "2026-06-18T08:00:00Z"
 }
 ```
+
+## Archive tier
+
+`archive` moves released claims out of the way once they are old news.
+It is dry-run by default, like `sweep`.
+
+- It moves claims whose `released_at` is older than `--older-than-days`
+  (default 30) from `claims/` into `claims-archive/`.
+- The path under `claims-archive/` mirrors the path under `claims/`.
+- Nothing is deleted. `list`, `validate`, `sweep`, and preflight never read
+  `claims-archive/`.
+
+## Janitor timer
+
+A weekly systemd user timer runs the janitor: first `sweep --apply
+--stale-after-days 7`, then `archive --apply --older-than-days 30`.
+The units live in `systemd/`. Install them with:
+
+```bash
+install-agentcoord-janitor
+```
+
+The installer copies the units to `~/.config/systemd/user/`, reloads the user
+daemon, and enables the timer. It is safe to run again. It refuses cleanly if
+there is no systemd user session.
+
+## Canonical repo names
+
+`claim`, `list`, `sweep`, `release`, and `renew` normalize the repo name
+before use, so old spellings and the canonical one see the same claims:
+
+- `__` in a name becomes `/` (for example `shared__manager` ->
+  `shared/manager`);
+- a short static alias list maps known drifted names (`manager`,
+  `shared-manager` -> `shared/manager`; `llm-wiki` -> `jk/llm-wiki`;
+  `shared-agent-scripts` -> `shared/agent-scripts`; `shared-hall-monitor` ->
+  `shared/hall-monitor`);
+- anything else passes through unchanged. There is no fuzzy matching.

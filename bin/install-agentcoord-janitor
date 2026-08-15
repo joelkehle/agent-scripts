@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# install-agentcoord-janitor — install the weekly AgentCoord janitor timer
+# for the current user. Copies systemd/agentcoord-janitor.{service,timer}
+# into ~/.config/systemd/user/, reloads the user daemon, and enables the
+# timer. Idempotent: safe to run again after unit changes. Refuses cleanly
+# when no systemd user session is available.
+
+# Resolve the real script location through installer shims (agent-env-install
+# links this file into a prefix such as /usr/local/bin).
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+src_dir="$(cd -P "$(dirname "$self")/../systemd" && pwd)"
+
+if ! command -v systemctl >/dev/null 2>&1; then
+  printf 'install-agentcoord-janitor: systemctl not found; refusing\n' >&2
+  exit 1
+fi
+if ! systemctl --user show-environment >/dev/null 2>&1; then
+  printf 'install-agentcoord-janitor: no systemd user session available; refusing\n' >&2
+  printf 'install-agentcoord-janitor: log in as this user (or enable lingering) and retry\n' >&2
+  exit 1
+fi
+
+dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+mkdir -p "$dst_dir"
+
+for name in agentcoord-janitor.service agentcoord-janitor.timer; do
+  src="$src_dir/$name"
+  if [ ! -f "$src" ]; then
+    printf 'install-agentcoord-janitor: missing %s; refusing\n' "$src" >&2
+    exit 1
+  fi
+  if [ -f "$dst_dir/$name" ] && cmp -s "$src" "$dst_dir/$name"; then
+    printf 'install-agentcoord-janitor: %s already current\n' "$name"
+  else
+    cp "$src" "$dst_dir/$name"
+    printf 'install-agentcoord-janitor: installed %s\n' "$dst_dir/$name"
+  fi
+done
+
+systemctl --user daemon-reload
+systemctl --user enable --now agentcoord-janitor.timer
+printf 'install-agentcoord-janitor: timer enabled; next runs:\n'
+systemctl --user list-timers agentcoord-janitor.timer --no-pager || true

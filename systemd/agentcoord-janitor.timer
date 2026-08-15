@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly AgentCoord claim janitor run
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
