@@ -42,6 +42,8 @@ If it is missing, say so once and continue.
 - HTTPS remotes under `~/Projects`. No amend unless asked.
 - Validate with `agent-check` or the repo's gate. GitHub Actions are not the
   validation surface.
+- Between machines, use the agent-* aliases or `agent-ssh <target>` as shown
+  by `agent-start`. Never use Joel's personal keys or accounts for automation.
 
 ## Workspace
 

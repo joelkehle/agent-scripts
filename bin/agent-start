@@ -140,6 +140,43 @@ function sectionFromCommand(title, result, maxLines = 80) {
   return { title, command: result.command, status: result.status, signal: result.signal, output };
 }
 
+function collectSshGrid(host) {
+  const gridPath = path.join(__dirname, "..", "lib", "ssh-grid.json");
+  try {
+    const grid = JSON.parse(fs.readFileSync(gridPath, "utf8"));
+    const row = (grid.grid && grid.grid[host]) || {};
+    const allowed = Object.entries(row).map(([target, cell]) => ({
+      target,
+      method: cell.method,
+      command: cell.command,
+      note: cell.note || null,
+    }));
+    const blocked = (grid.hosts || []).filter((name) => name !== host && !row[name]);
+    return { available: true, host, allowed, blocked, rule: grid.rule, error: null };
+  } catch (error) {
+    return { available: false, host, allowed: [], blocked: [], rule: null, error: error.message };
+  }
+}
+
+function renderSshGrid(sshGrid) {
+  const out = ["== SSH Grid =="];
+  if (!sshGrid.available) {
+    out.push(`grid unavailable: ${sshGrid.error}`);
+    return out;
+  }
+  if (!sshGrid.allowed.length) {
+    out.push(`From ${sshGrid.host}, agents may not SSH to any other machine.`);
+  } else {
+    for (const cell of sshGrid.allowed) {
+      const how = cell.command ? `run \`${cell.command}\`` : cell.note || cell.method;
+      out.push(`From ${sshGrid.host} you may reach ${cell.target}: ${how}.`);
+    }
+  }
+  if (sshGrid.blocked.length) out.push(`Blocked from ${sshGrid.host}: ${sshGrid.blocked.join(", ")}.`);
+  out.push(sshGrid.rule || "Never use joelkehle keys or accounts for automation.");
+  return out.slice(0, 8);
+}
+
 function normalizeWorkbenchPayload(payload) {
   const summary = payload && payload.summary ? payload.summary : payload;
   const artifacts = payload && payload.artifacts ? payload.artifacts : {};
@@ -266,6 +303,7 @@ function collect(args) {
     root,
     tools: Object.fromEntries(REQUIRED_TOOLS.map((tool) => [tool, commandExists(tool) || null])),
     workbench: readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
+    sshGrid: collectSshGrid(os.hostname().split(".")[0]),
     shouldSurface: false,
     surfaceReasons: [],
     results: [],
@@ -357,6 +395,8 @@ function renderText(packet) {
       if (run.quarantine_reason) out.push(`  quarantine: ${run.quarantine_reason}`);
     }
   }
+  out.push("");
+  out.push(...renderSshGrid(packet.sshGrid));
   out.push("");
   out.push("== Workbench ==");
   out.push(`summary: ${packet.workbench.path}`);
