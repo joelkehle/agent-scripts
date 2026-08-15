@@ -15,7 +15,8 @@ while [ -L "$self" ]; do
   self="$(readlink "$self")"
   case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
 done
-src_dir="$(cd -P "$(dirname "$self")/../systemd" && pwd)"
+src_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+src_dir="$src_root/systemd"
 
 if ! command -v systemctl >/dev/null 2>&1; then
   printf 'install-agentcoord-janitor: systemctl not found; refusing\n' >&2
@@ -30,16 +31,30 @@ fi
 dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 mkdir -p "$dst_dir"
 
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+# The unit templates reference the repo checkout path. Rewrite that prefix to
+# wherever this script actually resolved from (repo checkout or an
+# agent-env-install prefix), so ExecStart points at a real agentcoord.
+template_prefix='%h/Projects/shared/agent-scripts'
+if [ ! -x "$src_root/bin/agentcoord" ]; then
+  printf 'install-agentcoord-janitor: missing %s; refusing\n' "$src_root/bin/agentcoord" >&2
+  exit 1
+fi
+
 for name in agentcoord-janitor.service agentcoord-janitor.timer; do
   src="$src_dir/$name"
   if [ ! -f "$src" ]; then
     printf 'install-agentcoord-janitor: missing %s; refusing\n' "$src" >&2
     exit 1
   fi
-  if [ -f "$dst_dir/$name" ] && cmp -s "$src" "$dst_dir/$name"; then
+  rendered="$tmp_dir/$name"
+  sed "s|$template_prefix|$src_root|g" "$src" > "$rendered"
+  if [ -f "$dst_dir/$name" ] && cmp -s "$rendered" "$dst_dir/$name"; then
     printf 'install-agentcoord-janitor: %s already current\n' "$name"
   else
-    cp "$src" "$dst_dir/$name"
+    cp "$rendered" "$dst_dir/$name"
     printf 'install-agentcoord-janitor: installed %s\n' "$dst_dir/$name"
   fi
 done

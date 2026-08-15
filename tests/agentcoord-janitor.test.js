@@ -12,6 +12,10 @@ const {
   prepareClaimForWrite,
   readClaims,
 } = require("../lib/agentcoord-claims");
+const {
+  normalizeRepositoryIdentity,
+  readClaims: preflightReadClaims,
+} = require("../lib/workspace-preflight");
 
 const repoRoot = path.resolve(__dirname, "..");
 const cli = path.join(repoRoot, "bin/agentcoord");
@@ -128,6 +132,19 @@ test("list, validate, and sweep skip claims-archive entirely", (t) => {
   assert.equal(sweepReport.summary.invalid, 0);
 });
 
+test("repo normalization never returns inherited Object.prototype members", () => {
+  // Before the null-prototype fix these returned the Object constructor /
+  // Object.prototype instead of a string.
+  assert.equal(normalizeRepo("constructor"), "constructor");
+  assert.equal(normalizeRepo("hasOwnProperty"), "hasOwnProperty");
+  assert.equal(normalizeRepo("toString"), "toString");
+  // "__proto__" still gets the documented `__` -> `/` rule, but the result
+  // is a plain string, not the prototype object.
+  const proto = normalizeRepo("__proto__");
+  assert.equal(typeof proto, "string");
+  assert.equal(proto, "/proto/");
+});
+
 test("repo normalization maps observed variants and passes unknown names through", () => {
   assert.equal(normalizeRepo("manager"), "shared/manager");
   assert.equal(normalizeRepo("shared-manager"), "shared/manager");
@@ -241,4 +258,169 @@ test("sweep releases expired-invalid claims and skips fresh-invalid ones", (t) =
   const again = runCli(t, ["sweep", "--root", root, "--stale-after-days", "7", "--apply", "--json"]);
   assert.equal(again.status, 0, again.stderr);
   assert.equal(JSON.parse(again.stdout).summary.released_invalid, 0);
+});
+
+test("swept invalid tombstones read as released and clear workspace preflight", (t) => {
+  const root = makeRoot(t, "tombstone");
+  const old = daysAgo(10);
+  const parseable = writeClaim(root, "shared/agent-scripts", "bad-scope.codex.beelink", baseClaim({
+    slug: "bad-scope",
+    scope: "not-an-array",
+  }));
+  fs.utimesSync(parseable, old, old);
+  const corrupt = writeClaim(root, "shared/agent-scripts", "crashed.codex.beelink", "{not-json");
+  fs.utimesSync(corrupt, old, old);
+
+  // Before the sweep, preflight flags both for this repo.
+  const aliases = new Set([normalizeRepositoryIdentity("shared/agent-scripts")]);
+  const before = preflightReadClaims(root, aliases, root);
+  assert.equal(before.invalid.length, 2);
+
+  const applied = runCli(t, ["sweep", "--root", root, "--stale-after-days", "7", "--apply", "--json"]);
+  if (!applied) return;
+  assert.equal(applied.status, 0, applied.stderr);
+  assert.equal(JSON.parse(applied.stdout).summary.released_invalid, 2);
+
+  // Every tombstone is a fully valid claim that reads as released.
+  const entries = readClaims(root);
+  assert.equal(entries.length, 2);
+  for (const entry of entries) {
+    assert.deepEqual(entry.issues, [], entry.file);
+    assert.equal(entry.status, "released", entry.file);
+  }
+  // ...so preflight no longer reports agentcoord_claim_ambiguous input.
+  const after = preflightReadClaims(root, aliases, root);
+  assert.equal(after.invalid.length, 0);
+  assert.equal(after.active.length, 0);
+
+  // Parseable original: fields carried over where sane.
+  const carried = entries.find((entry) => entry.file === parseable).data;
+  assert.equal(carried.slug, "bad-scope");
+  assert.equal(carried.repo, "shared/agent-scripts");
+  assert.deepEqual(carried.scope, ["unknown"]);
+  assert.equal(carried.original.scope, "not-an-array");
+
+  // Corrupt original: placeholders synthesized, sidecar referenced.
+  const synthesized = entries.find((entry) => entry.file === corrupt).data;
+  assert.equal(synthesized.repo, "shared/agent-scripts");
+  assert.equal(synthesized.safety, "read");
+  assert.deepEqual(synthesized.scope, ["unknown"]);
+  assert.equal(synthesized.next_action, "released by janitor");
+  assert.equal(synthesized.original_file, "crashed.codex.beelink.json.corrupt");
+});
+
+test("ambiguous normalized lookup errors and lists every matching file", (t) => {
+  const root = makeRoot(t, "ambiguous");
+  const canonical = writeClaim(root, "shared/manager", "dup.codex.beelink", baseClaim({
+    repo: "shared/manager",
+    slug: "dup",
+  }));
+  const legacy = writeClaim(root, "shared-manager", "dup.codex.beelink", baseClaim({
+    repo: "shared-manager",
+    slug: "dup",
+  }));
+
+  const released = runCli(t, [
+    "release", "--root", root,
+    "--repo", "manager", "--slug", "dup",
+    "--agent", "codex", "--host", "beelink",
+  ]);
+  if (!released) return;
+  assert.equal(released.status, 1);
+  assert.match(released.stderr, /ambiguous claim/);
+  assert.ok(released.stderr.includes(canonical), released.stderr);
+  assert.ok(released.stderr.includes(legacy), released.stderr);
+  // Neither claim was silently released.
+  assert.equal(JSON.parse(fs.readFileSync(canonical, "utf8")).released_at, undefined);
+  assert.equal(JSON.parse(fs.readFileSync(legacy, "utf8")).released_at, undefined);
+
+  // A single match still resolves.
+  fs.rmSync(legacy);
+  const retried = runCli(t, [
+    "release", "--root", root,
+    "--repo", "manager", "--slug", "dup",
+    "--agent", "codex", "--host", "beelink", "--json",
+  ]);
+  assert.equal(retried.status, 0, retried.stderr);
+  assert.ok(JSON.parse(retried.stdout).claim.released_at);
+});
+
+test("archive collision gets a deterministic released_at suffix", (t) => {
+  const root = makeRoot(t, "collision");
+  const releasedAt = iso(daysAgo(45));
+  const claim = writeClaim(root, "shared/agent-scripts", "dup-name", baseClaim({
+    released_at: releasedAt,
+    released_by: "agentcoord-janitor",
+  }));
+  // An earlier archive run already used the plain relative name.
+  const archiveDir = path.join(root, "claims-archive", "shared", "agent-scripts");
+  fs.mkdirSync(archiveDir, { recursive: true });
+  fs.writeFileSync(path.join(archiveDir, "dup-name.json"), "{}\n");
+
+  const applied = runCli(t, ["archive", "--root", root, "--apply", "--json"]);
+  if (!applied) return;
+  assert.equal(applied.status, 0, applied.stderr);
+  const report = JSON.parse(applied.stdout);
+  assert.equal(report.summary.archived, 1);
+  assert.equal(report.summary.errors, 0);
+  const suffixed = path.join(archiveDir, `dup-name.released-${releasedAt.replace(/:/g, "-")}.json`);
+  assert.equal(fs.existsSync(suffixed), true);
+  assert.equal(fs.existsSync(claim), false);
+  // The pre-existing archive entry is untouched.
+  assert.equal(fs.readFileSync(path.join(archiveDir, "dup-name.json"), "utf8"), "{}\n");
+});
+
+test("invalid claim with unparseable released_at is swept, not leaked", (t) => {
+  const root = makeRoot(t, "bad-released");
+  const old = daysAgo(10);
+  const file = writeClaim(root, "shared/agent-scripts", "bad-released.codex.beelink", baseClaim({
+    slug: "bad-released",
+    scope: "not-an-array",
+    released_at: "not-a-date",
+  }));
+  fs.utimesSync(file, old, old);
+
+  const applied = runCli(t, ["sweep", "--root", root, "--stale-after-days", "7", "--apply", "--json"]);
+  if (!applied) return;
+  assert.equal(applied.status, 0, applied.stderr);
+  assert.equal(JSON.parse(applied.stdout).summary.released_invalid, 1);
+
+  const entries = readClaims(root);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].status, "released");
+  assert.equal(entries[0].data.release_reason, "invalid-expired");
+  assert.equal(entries[0].data.original.released_at, "not-a-date");
+});
+
+test("archive moves the corrupt sidecar together with its tombstone", (t) => {
+  const root = makeRoot(t, "sidecar");
+  const old = daysAgo(10);
+  const file = writeClaim(root, "shared/agent-scripts", "crashed.codex.beelink", "{not-json");
+  fs.utimesSync(file, old, old);
+
+  const swept = runCli(t, ["sweep", "--root", root, "--stale-after-days", "7", "--apply", "--json"]);
+  if (!swept) return;
+  assert.equal(swept.status, 0, swept.stderr);
+  const sidecar = `${file}.corrupt`;
+  assert.equal(fs.existsSync(sidecar), true);
+
+  // Age the tombstone's released_at past the archive threshold.
+  const tomb = JSON.parse(fs.readFileSync(file, "utf8"));
+  tomb.released_at = iso(daysAgo(45));
+  fs.writeFileSync(file, `${JSON.stringify(tomb, null, 2)}\n`);
+
+  const archived = runCli(t, ["archive", "--root", root, "--apply", "--json"]);
+  assert.equal(archived.status, 0, archived.stderr);
+  const report = JSON.parse(archived.stdout);
+  assert.equal(report.summary.archived, 1);
+  assert.equal(report.summary.errors, 0);
+  const archiveDir = path.join(root, "claims-archive", "shared", "agent-scripts");
+  assert.equal(fs.existsSync(path.join(archiveDir, "crashed.codex.beelink.json")), true);
+  assert.equal(fs.existsSync(path.join(archiveDir, "crashed.codex.beelink.json.corrupt")), true);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(sidecar), false);
+  assert.equal(report.archived[0].sidecar_to, path.join(archiveDir, "crashed.codex.beelink.json.corrupt"));
+  // The archived tombstone still references its sidecar by basename.
+  const moved = JSON.parse(fs.readFileSync(path.join(archiveDir, "crashed.codex.beelink.json"), "utf8"));
+  assert.equal(moved.original_file, "crashed.codex.beelink.json.corrupt");
 });

@@ -46,10 +46,15 @@ The janitor splits expired claims into:
 
 With `--apply`, eligible stale claims are marked released. Invalid claims are
 also released when their file has not changed for `--stale-after-days` days.
-The janitor rewrites those as valid JSON with
-`release_reason: "invalid-expired"`. If the old content was parseable JSON, it
+The janitor rewrites those as a fully valid released claim with
+`release_reason: "invalid-expired"`. Fields it cannot recover get safe
+placeholders (`safety: "read"`, `scope: ["unknown"]`, `started_at` from the
+file's change time), so later reads see a released claim, not an invalid one,
+and preflight stops blocking on it. If the old content was parseable JSON, it
 is kept under an `original` key. If not, the raw bytes are kept next to the
-claim as `<name>.json.corrupt`. Fresh invalid claims are left alone.
+claim as `<name>.json.corrupt`. A `released_at` value that is not a real
+timestamp does not count as released; the sweep still handles that claim.
+Fresh invalid claims are left alone.
 
 Claim files are never deleted; released claims are archived to
 `claims-archive/` after 30 days. The original claim fields stay in place and
@@ -72,7 +77,12 @@ It is dry-run by default, like `sweep`.
 
 - It moves claims whose `released_at` is older than `--older-than-days`
   (default 30) from `claims/` into `claims-archive/`.
-- The path under `claims-archive/` mirrors the path under `claims/`.
+- The path under `claims-archive/` mirrors the path under `claims/`. If the
+  same name was already archived by an earlier run, the new file gets a
+  `.released-<timestamp>.json` suffix built from its `released_at`, so
+  re-used claim names still archive.
+- A `<name>.json.corrupt` sidecar referenced by a janitor tombstone moves to
+  the archive together with the tombstone.
 - Nothing is deleted. `list`, `validate`, `sweep`, and preflight never read
   `claims-archive/`.
 
@@ -90,6 +100,12 @@ The installer copies the units to `~/.config/systemd/user/`, reloads the user
 daemon, and enables the timer. It is safe to run again. It refuses cleanly if
 there is no systemd user session.
 
+The units and the installer are part of the `agent-env-install` payload, so
+installed machines get them too. The installer finds the units next to its
+own resolved location (repo checkout or install prefix) and rewrites the
+unit's `agentcoord` path to match, so the timer runs the right binary in
+both layouts.
+
 ## Canonical repo names
 
 `claim`, `list`, `sweep`, `release`, and `renew` normalize the repo name
@@ -102,3 +118,8 @@ before use, so old spellings and the canonical one see the same claims:
   `shared-agent-scripts` -> `shared/agent-scripts`; `shared-hall-monitor` ->
   `shared/hall-monitor`);
 - anything else passes through unchanged. There is no fuzzy matching.
+
+If normalization makes more than one claim file match the same
+repo + slug + agent + host, `release` and `renew` stop with an error that
+lists every matching file instead of silently picking one. Release or remove
+the duplicates, then retry.

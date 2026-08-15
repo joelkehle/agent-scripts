@@ -250,7 +250,14 @@ function findExistingClaim(args) {
     return normalizeRepo(data.repo) === wanted && data.slug === args.slug && (!args.agent || data.agent === args.agent) && (!args.host || data.host === args.host);
   });
   if (!matches.length) throw new Error(`claim not found: ${args.repo}/${args.slug}`);
-  matches.sort((a, b) => a.file.localeCompare(b.file));
+  if (matches.length > 1) {
+    matches.sort((a, b) => a.file.localeCompare(b.file));
+    throw new Error(
+      `ambiguous claim ${args.repo}/${args.slug}: ${matches.length} files match after repo normalization:\n` +
+      matches.map((entry) => `  ${entry.file}`).join("\n") +
+      "\nresolve by releasing or removing the duplicates, then retry",
+    );
+  }
   return matches[0];
 }
 
@@ -296,6 +303,34 @@ function janitorSummary({ entries, eligible, skippedRecent, released, invalid, i
   };
 }
 
+// A released tombstone for an invalid claim must itself be a fully valid
+// claim, or every later read re-classifies it invalid and workspace
+// preflight keeps blocking writes on agentcoord_claim_ambiguous. Synthesize
+// required fields from the original where parseable, else use placeholders.
+function invalidTombstone(entry, now, releasedBy) {
+  const original = entry.data && typeof entry.data === "object" && !Array.isArray(entry.data)
+    ? entry.data
+    : null;
+  const text = (value) => (typeof value === "string" && value.trim() ? value.trim() : "");
+  const mtime = new Date(fs.statSync(entry.file).mtimeMs);
+  const data = {
+    repo: text(original?.repo) ? normalizeRepo(original.repo) : (entry.directory_repo || "unknown"),
+    slug: text(original?.slug) || safeSlug(path.basename(entry.file, ".json")),
+    agent: text(original?.agent) || "unknown",
+    host: text(original?.host) || "unknown",
+    safety: SAFETY.has(original?.safety) ? original.safety : "read",
+    scope: Array.isArray(original?.scope) && original.scope.length ? original.scope : ["unknown"],
+    started_at: parseTimestamp(original?.started_at) ? normalizeTimestamp(original.started_at) : iso(mtime),
+    expires_at: parseTimestamp(original?.expires_at) ? normalizeTimestamp(original.expires_at) : iso(mtime),
+    next_action: "released by janitor",
+    released_at: iso(now),
+    released_by: releasedBy,
+    release_reason: "invalid-expired",
+    previous_status: "invalid",
+  };
+  return { data, original };
+}
+
 function commandSweep(args) {
   const now = new Date();
   const entries = readClaims(args.root);
@@ -310,7 +345,9 @@ function commandSweep(args) {
     else skippedRecent.push(entry);
   }
   const invalidEligible = invalid.filter((entry) => {
-    if (entry.data && entry.data.released_at) return false;
+    // A truthy but unparseable released_at does not count as released;
+    // otherwise the claim escapes both this sweep and the archive tier.
+    if (parseTimestamp(entry.data?.released_at)) return false;
     try {
       return fileAgeDays(entry.file, now) >= args.staleAfterDays;
     } catch {
@@ -345,20 +382,15 @@ function commandSweep(args) {
     }
     for (const entry of invalidEligible) {
       try {
-        const data = {
-          released_at: iso(now),
-          released_by: args.releasedBy,
-          release_reason: "invalid-expired",
-          previous_status: "invalid",
-        };
-        if (entry.data !== null) {
-          data.original = entry.data;
+        const { data, original } = invalidTombstone(entry, now, args.releasedBy);
+        if (original !== null) {
+          data.original = original;
         } else {
           const corrupt = `${entry.file}.corrupt`;
           fs.writeFileSync(corrupt, fs.readFileSync(entry.file));
           data.original_file = path.basename(corrupt);
         }
-        atomicWrite(args.root, entry.file, data);
+        atomicWrite(args.root, entry.file, prepareClaimForWrite(data));
         releasedInvalid.push(readClaim(entry.file, { claimsRoot: claimsRoot(args.root), now }));
       } catch (error) {
         errors.push({ file: entry.file, error: error.message });
@@ -421,11 +453,45 @@ function commandArchive(args) {
         if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
           throw new Error("claim file is outside the claims directory");
         }
-        const target = path.join(archiveRoot(args.root), relative);
-        fs.mkdirSync(path.dirname(target), { recursive: true });
-        if (fs.existsSync(target)) throw new Error(`archive target already exists: ${target}`);
+        const targetDir = path.join(archiveRoot(args.root), path.dirname(relative));
+        fs.mkdirSync(targetDir, { recursive: true });
+        // Reused slug+agent+host after an earlier archive collides on the
+        // same relative name. Suffix with released_at: deterministic and
+        // collision-safe per release.
+        const stamp = normalizeTimestamp(entry.data.released_at).replace(/:/g, "-");
+        const baseName = path.basename(entry.file);
+        let target = path.join(targetDir, baseName);
+        if (fs.existsSync(target)) {
+          target = path.join(targetDir, baseName.replace(/\.json$/, `.released-${stamp}.json`));
+          if (fs.existsSync(target)) throw new Error(`archive target already exists: ${target}`);
+        }
+        // A corrupt-sidecar reference travels with its tombstone so the
+        // evidence is not orphaned and original_file keeps resolving.
+        const move = { from: entry.file, to: target };
+        const sidecarName = typeof entry.data.original_file === "string"
+          && entry.data.original_file
+          && path.basename(entry.data.original_file) === entry.data.original_file
+          ? entry.data.original_file
+          : null;
+        const sidecarSource = sidecarName ? path.join(path.dirname(entry.file), sidecarName) : null;
+        if (sidecarSource && fs.existsSync(sidecarSource)) {
+          let sidecarTargetName = sidecarName;
+          let sidecarTarget = path.join(targetDir, sidecarTargetName);
+          if (fs.existsSync(sidecarTarget)) {
+            sidecarTargetName = `${sidecarName}.released-${stamp}`;
+            sidecarTarget = path.join(targetDir, sidecarTargetName);
+            if (fs.existsSync(sidecarTarget)) throw new Error(`archive target already exists: ${sidecarTarget}`);
+            // Keep the tombstone's reference resolving after the rename.
+            atomicWrite(args.root, entry.file, { ...entry.data, original_file: sidecarTargetName });
+          }
+          // Sidecar first: if the tombstone move then fails, a re-run still
+          // finds the tombstone in claims/ and skips the moved sidecar.
+          fs.renameSync(sidecarSource, sidecarTarget);
+          move.sidecar_from = sidecarSource;
+          move.sidecar_to = sidecarTarget;
+        }
         fs.renameSync(entry.file, target);
-        archived.push({ from: entry.file, to: target });
+        archived.push(move);
       } catch (error) {
         errors.push({ file: entry.file, error: error.message });
       }
