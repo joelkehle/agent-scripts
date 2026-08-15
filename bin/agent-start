@@ -21,7 +21,7 @@ const {
 const DEFAULT_AGENTCOORD_ROOT = process.env.AGENTCOORD_ROOT || "/mnt/synology-share1/AgentCoord";
 const DEFAULT_WORKBENCH_SUMMARY = process.env.AGENT_WORKBENCH_SUMMARY || "/home/joelkehle/Projects/shared/dev-dashboard/codex-output/agentic-software-ops/agent-workbench/latest/summary.json";
 const DEFAULT_WORKBENCH_URL = process.env.AGENT_WORKBENCH_URL || "http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/latest/";
-const REQUIRED_TOOLS = ["agent-start", "agent-focus", "workspace-preflight", "agent-workspace", "agentcoord", "machine-compliance", "committer", "docs-list", "bus-discover", "wwi", "claude", "codex", "agent-check"];
+const REQUIRED_TOOLS = ["agent-start", "agent-focus", "workspace-preflight", "agent-workspace", "agentcoord", "committer", "docs-list", "bus-discover", "claude", "codex", "agent-check"];
 
 function usage() {
   console.log(`Usage: agent-start [--root DIR] [--mode read|write] [--session-kind repository|workspace] [--goal GOAL_ID]
@@ -29,7 +29,7 @@ function usage() {
                    [--skip-bus|--no-bus] [--timeout MS]
                    [--workbench-summary PATH] [--workbench-url URL]
 
-Prints a coding-agent launch packet: WWI, compliance, bus discovery, AgentCoord,
+Prints a coding-agent launch packet: bus discovery, AgentCoord,
 repo docs, git state, and validation entrypoint.
 
 Use --notice from Codex/Claude launch wrappers. It reads the latest workbench
@@ -127,13 +127,6 @@ function docsList(root, timeoutMs) {
   return { ok: false, output: (result.stderr || result.error || "docs-list unavailable").trim(), command: result.command };
 }
 
-function compliance(timeoutMs) {
-  const primary = run("machine-compliance", ["--agent-startup", "--format", "text"], { timeoutMs });
-  if (primary.status === 0 || primary.stdout || primary.stderr) return primary;
-  const fallback = path.join(os.homedir(), "Projects/shared/manager/bin/machine-compliance");
-  return run(fallback, ["--agent-startup", "--format", "text"], { timeoutMs });
-}
-
 function busDiscovery(timeoutMs) {
   const primary = run("bus-discover", [], { timeoutMs });
   if (primary.status === 0 || primary.stdout) return primary;
@@ -145,10 +138,6 @@ function busDiscovery(timeoutMs) {
 function sectionFromCommand(title, result, maxLines = 80) {
   const output = lines(result.stdout || result.stderr || result.error || "").slice(0, maxLines);
   return { title, command: result.command, status: result.status, signal: result.signal, output };
-}
-
-function complianceAlerts(section) {
-  return section.output.filter((line) => /^(FAIL|WARN)\s+[^:]+:/.test(String(line).trim())).map((line) => line.trim());
 }
 
 function normalizeWorkbenchPayload(payload) {
@@ -200,8 +189,6 @@ function buildSurface(packet) {
   for (const [tool, location] of Object.entries(packet.tools)) {
     if (!location) reasons.push(`missing tool: ${tool}`);
   }
-  const compliance = packet.results.find((item) => item.title === "Machine Compliance");
-  if (compliance) reasons.push(...complianceAlerts(compliance));
   for (const section of packet.results) {
     if (["AgentCoord Validate", "Docs", "Validation Entrypoint"].includes(section.title) && section.status !== 0) {
       reasons.push(`${section.title} failed: ${section.command}`);
@@ -284,8 +271,6 @@ function collect(args) {
     results: [],
     ...collectSafety(args, root),
   };
-  packet.results.push(sectionFromCommand("WWI", run("wwi", [], { cwd: root, timeoutMs: args.timeoutMs }), 40));
-  packet.results.push(sectionFromCommand("Machine Compliance", compliance(args.timeoutMs), 80));
   if (!args.skipBus) packet.results.push(sectionFromCommand("Bus Discovery", busDiscovery(Math.max(args.timeoutMs, 8000)), 120));
   packet.results.push(sectionFromCommand("AgentCoord Validate", run(coordCmd, ["validate", "--root", DEFAULT_AGENTCOORD_ROOT], { cwd: root, timeoutMs: args.timeoutMs }), 40));
   packet.results.push(sectionFromCommand("AgentCoord Active Claims", run(coordCmd, ["list", "--root", DEFAULT_AGENTCOORD_ROOT, "--active"], { cwd: root, timeoutMs: args.timeoutMs }), 40));
