@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+name="install-self-update"
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+repo_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+
+case "$repo_root" in
+  *$'\n'*)
+    printf '%s: checkout path contains a newline; refusing\n' "$name"
+    exit 1
+    ;;
+esac
+[ -x "$repo_root/bin/agent-scripts-self-update" ] || {
+  printf '%s: updater is missing or not executable: %s\n' "$name" "$repo_root/bin/agent-scripts-self-update"
+  exit 1
+}
+
+copy_if_changed() {
+  local source="$1"
+  local destination="$2"
+  if [ -f "$destination" ] && cmp -s "$source" "$destination"; then
+    printf '%s: already current: %s\n' "$name" "$destination"
+  else
+    cp "$source" "$destination"
+    printf '%s: installed: %s\n' "$name" "$destination"
+  fi
+}
+
+install_linux() {
+  local source_dir="$repo_root/systemd"
+  local destination_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  local stage_dir
+  local source rendered unit systemd_root sed_root
+
+  command -v systemctl >/dev/null 2>&1 || {
+    printf '%s: systemctl was not found; refusing\n' "$name"
+    exit 1
+  }
+  systemctl --user show-environment >/dev/null 2>&1 || {
+    printf '%s: no systemd user session is ready; log in and try again\n' "$name"
+    exit 1
+  }
+
+  mkdir -p "$destination_dir"
+  stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-scripts-self-update.XXXXXX")"
+  trap 'rm -rf "$stage_dir"' RETURN
+
+  systemd_root=${repo_root//%/%%}
+  systemd_root=${systemd_root//\\/\\\\}
+  systemd_root=${systemd_root//\"/\\\"}
+  sed_root=$(printf '%s' "$systemd_root" | sed -e 's/[\\&|]/\\&/g')
+
+  for unit in agent-scripts-self-update.service agent-scripts-self-update.timer; do
+    source="$source_dir/$unit"
+    [ -f "$source" ] || {
+      printf '%s: missing unit: %s\n' "$name" "$source"
+      exit 1
+    }
+    rendered="$stage_dir/$unit"
+    sed "s|%h/Projects/shared/agent-scripts|$sed_root|g" "$source" > "$rendered"
+    chmod 644 "$rendered"
+    copy_if_changed "$rendered" "$destination_dir/$unit"
+  done
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now agent-scripts-self-update.timer
+  printf '%s: reloaded user units and enabled agent-scripts-self-update.timer\n' "$name"
+  systemctl --user list-timers agent-scripts-self-update.timer --no-pager || true
+  rm -rf "$stage_dir"
+  trap - RETURN
+}
+
+install_macos() {
+  local source="$repo_root/launchd/com.joelkehle.agent-scripts-self-update.plist"
+  local destination_dir="$HOME/Library/LaunchAgents"
+  local destination="$destination_dir/com.joelkehle.agent-scripts-self-update.plist"
+  local rendered domain label xml_root sed_root
+
+  command -v launchctl >/dev/null 2>&1 || {
+    printf '%s: launchctl was not found; refusing\n' "$name"
+    exit 1
+  }
+  [ -f "$source" ] || {
+    printf '%s: missing plist: %s\n' "$name" "$source"
+    exit 1
+  }
+
+  mkdir -p "$destination_dir"
+  rendered="$(mktemp "${TMPDIR:-/tmp}/agent-scripts-self-update.plist.XXXXXX")"
+  trap 'rm -f "$rendered"' RETURN
+  xml_root=$(printf '%s' "$repo_root" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+  sed_root=$(printf '%s' "$xml_root" | sed -e 's/[\\&|]/\\&/g')
+  sed "s|__AGENT_SCRIPTS_ROOT__|$sed_root|g" "$source" > "$rendered"
+  chmod 644 "$rendered"
+  copy_if_changed "$rendered" "$destination"
+
+  domain="gui/$(id -u)"
+  label="com.joelkehle.agent-scripts-self-update"
+  if launchctl print "$domain/$label" >/dev/null 2>&1; then
+    launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
+    printf '%s: stopped the old launchd job\n' "$name"
+  fi
+  if launchctl bootstrap "$domain" "$destination"; then
+    printf '%s: bootstrapped %s\n' "$name" "$label"
+  else
+    printf '%s: bootstrap failed; trying launchctl load\n' "$name"
+    launchctl unload "$destination" >/dev/null 2>&1 || true
+    launchctl load -w "$destination"
+    printf '%s: loaded %s with the older launchctl command\n' "$name" "$label"
+  fi
+  rm -f "$rendered"
+  trap - RETURN
+}
+
+case "$(uname -s)" in
+  Linux) install_linux ;;
+  Darwin) install_macos ;;
+  *)
+    printf '%s: unsupported system: %s\n' "$name" "$(uname -s)"
+    exit 1
+    ;;
+esac
