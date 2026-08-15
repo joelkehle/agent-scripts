@@ -1,7 +1,7 @@
 ---
-summary: Coding-agent launch ritual that prints the same startup packet for Codex and Claude Code on beelink/macmini.
+summary: Coding-agent launch ritual that prints the same startup packet for Codex and Claude Code on dev, beelink, and macmini.
 read_when:
-  - Starting Codex or Claude Code work from beelink.
+  - Starting Codex or Claude Code work from dev, beelink, or macmini.
   - Debugging missing startup context, PATH drift, AgentCoord claims, bus visibility, or validation entrypoints.
   - Updating shared coding-agent launch instructions or workbench reports.
 ---
