@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+name="agent-scripts-self-update"
+required_remote="https://github.com/joelkehle/agent-scripts.git"
+required_branch="main"
+jitter=0
+
+log() {
+  printf '%s: %s\n' "$name" "$*"
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: agent-scripts-self-update [--jitter]
+
+Fast-forward the agent-scripts checkout from its pinned origin/main.
+--jitter waits a random 0-120 seconds before the update.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --jitter) jitter=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) log "ERROR: unknown argument: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+repo_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+state_dir="$state_home/agent-scripts-self-update"
+last_update_file="$state_dir/last-update"
+failure_file="$state_dir/consecutive-failures"
+lock_file="$state_dir/run.lock"
+lock_dir="$state_dir/run.lock.d"
+
+umask 077
+if ! mkdir -p "$state_dir"; then
+  log "ERROR: could not create state directory: $state_dir"
+  exit 1
+fi
+
+lock_kind=""
+if [ "$(uname -s)" != "Darwin" ] && command -v flock >/dev/null 2>&1; then
+  exec 9>"$lock_file"
+  if ! flock -n 9; then
+    log "another run holds the lock; skipping"
+    exit 0
+  fi
+  lock_kind="flock"
+else
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    # A hard-killed run cannot clean its lock folder. Treat a lock older
+    # than 6 hours as stale (runs take seconds; the timer fires hourly).
+    lock_mtime="$(stat -c %Y "$lock_dir" 2>/dev/null)" || \
+      lock_mtime="$(stat -f %m "$lock_dir" 2>/dev/null)" || lock_mtime=""
+    case "$lock_mtime" in ''|*[!0-9]*) lock_mtime="" ;; esac
+    now_epoch="$(date +%s)"
+    if [ -n "$lock_mtime" ] && [ $((now_epoch - lock_mtime)) -gt 21600 ]; then
+      log "WARNING: removing stale mkdir lock (older than 6 hours)"
+      rmdir "$lock_dir" 2>/dev/null || true
+    fi
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+      log "another run holds the mkdir lock; skipping"
+      exit 0
+    fi
+  fi
+  lock_kind="mkdir"
+fi
+
+read_failure_count() {
+  local count="0"
+  if [ -r "$failure_file" ]; then
+    IFS= read -r count < "$failure_file" || count="0"
+  fi
+  case "$count" in
+    ''|*[!0-9]*) count="0" ;;
+  esac
+  printf '%s\n' "$count"
+}
+
+write_failure_count() {
+  local count="$1"
+  local tmp="$state_dir/consecutive-failures.tmp.$$"
+  printf '%s\n' "$count" > "$tmp" && mv "$tmp" "$failure_file"
+}
+
+record_failure() {
+  local count
+  count="$(read_failure_count)"
+  count=$((count + 1))
+  if ! write_failure_count "$count"; then
+    log "WARNING: could not record the failure count"
+    return
+  fi
+  log "failure count: $count"
+  if [ "$count" -ge 3 ]; then
+    log "WARNING: $count consecutive self-update failures; this machine needs attention"
+  fi
+}
+
+cleanup() {
+  local status="$?"
+  trap - EXIT HUP INT TERM
+  if [ "$status" -ne 0 ]; then
+    record_failure
+  fi
+  if [ "$lock_kind" = "mkdir" ]; then
+    rmdir "$lock_dir" 2>/dev/null || true
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+fatal() {
+  log "ERROR: $*"
+  exit 1
+}
+
+if [ "$jitter" -eq 1 ]; then
+  delay=$((RANDOM % 121))
+  log "startup jitter: ${delay}s"
+  sleep "$delay"
+fi
+
+git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || \
+  fatal "script is not inside a Git checkout: $repo_root"
+
+remote_urls="$(git -C "$repo_root" config --get-all remote.origin.url 2>/dev/null)" || \
+  fatal "remote origin is missing"
+[ "$remote_urls" = "$required_remote" ] || \
+  fatal "origin must be exactly $required_remote (found: ${remote_urls:-none})"
+
+branch="$(git -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null)" || \
+  fatal "checkout has a detached HEAD; branch main is required"
+[ "$branch" = "$required_branch" ] || \
+  fatal "checkout is on branch $branch; branch main is required"
+
+dirty="$(git -C "$repo_root" status --porcelain --untracked-files=normal)" || \
+  fatal "could not read checkout status"
+[ -z "$dirty" ] || fatal "checkout is dirty; commit, stash, or remove local changes first"
+
+if ! git -C "$repo_root" show-ref --verify --quiet refs/remotes/origin/main; then
+  fatal "origin/main is missing; fetch it before enabling self-update"
+fi
+if ! git -C "$repo_root" merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+  fatal "local main is ahead of or diverged from origin/main"
+fi
+
+before_sha="$(git -C "$repo_root" rev-parse HEAD)" || fatal "could not read installed SHA"
+log "checking origin/main from $before_sha"
+if ! git -C "$repo_root" pull --ff-only origin main 2>&1; then
+  if git -C "$repo_root" show-ref --verify --quiet refs/remotes/origin/main && \
+     ! git -C "$repo_root" merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+    fatal "checkout diverged from origin/main; fast-forward pull refused"
+  fi
+  fatal "git pull --ff-only failed"
+fi
+
+installed_sha="$(git -C "$repo_root" rev-parse HEAD)" || fatal "could not read installed SHA after pull"
+origin_sha="$(git -C "$repo_root" rev-parse refs/remotes/origin/main)" || \
+  fatal "could not read origin/main after pull"
+[ "$installed_sha" = "$origin_sha" ] || \
+  fatal "installed SHA does not match origin/main after pull"
+
+timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')" || fatal "could not read the current time"
+last_update_tmp="$state_dir/last-update.tmp.$$"
+if ! {
+  printf 'sha=%s\n' "$installed_sha"
+  printf 'timestamp=%s\n' "$timestamp"
+} > "$last_update_tmp" || ! mv "$last_update_tmp" "$last_update_file"; then
+  fatal "could not record the installed SHA and timestamp"
+fi
+write_failure_count 0 || fatal "could not reset the failure count"
+
+if [ "$installed_sha" = "$before_sha" ]; then
+  log "already current at $installed_sha"
+else
+  log "updated $before_sha to $installed_sha"
+fi
+log "recorded install state in $last_update_file"

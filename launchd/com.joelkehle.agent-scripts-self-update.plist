@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.joelkehle.agent-scripts-self-update</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__AGENT_SCRIPTS_ROOT__/bin/agent-scripts-self-update</string>
+    <string>--jitter</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/agent-scripts-self-update.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/agent-scripts-self-update.log</string>
+</dict>
+</plist>
+

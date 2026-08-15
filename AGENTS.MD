@@ -71,6 +71,7 @@ That is the routing table. Core routers in this repo:
 - docs/stack-priority.md — layer labels and the pick-next-work rule
 - docs/shared-agent-coordination.md — overlapping or cross-host work
 - docs/service-runtime-policy.md — running services
+- docs/self-update.md — fleet checkout self-update timer
 - docs/oracle.md, tools.md, and the design-walkthrough skill — oracle and tools
 
 Assume commercial LLM inference, local tools, and Joel as the only human gate.

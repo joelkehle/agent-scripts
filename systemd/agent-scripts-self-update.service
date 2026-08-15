@@ -1,0 +1,8 @@
+[Unit]
+Description=Fast-forward the agent-scripts checkout from origin/main
+Documentation=file://%h/Projects/shared/agent-scripts/docs/self-update.md
+
+[Service]
+Type=oneshot
+ExecStart="%h/Projects/shared/agent-scripts/bin/agent-scripts-self-update"
+
