@@ -14,3 +14,5 @@ From dev, run `agent-ssh <target>` — it hops through the shared `agent` accoun
 Beelink reaches keystone through a tunnel only; there is no shell. Every other direction is blocked.
 `agent-start` prints your machine's row, so every session starts knowing its allowed hops.
 The rule under it all: never use joelkehle keys or accounts for automation.
+`agent-ssh` is a convenience router, not a security boundary — real enforcement
+comes from SSH keys, `from=` pins in authorized_keys, and Tailscale policy.

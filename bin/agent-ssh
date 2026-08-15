@@ -24,7 +24,8 @@ if [ ! -f "$grid_file" ]; then
   exit 1
 fi
 
-src="${AGENT_SSH_HOST:-$(hostname -s)}"
+# The source host comes from the machine itself, never from the caller.
+src="$(hostname -s)"
 
 # Ask node (always present in this workspace) to read the grid for us.
 # Output: one line — KNOWN|UNKNOWN, then ALLOWED <method> or BLOCKED, then valid targets.

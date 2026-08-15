@@ -232,6 +232,9 @@ function buildSurface(packet) {
     }
   }
   if (packet.workbench) reasons.push(...workbenchReasons(packet.workbench));
+  if (packet.sshGrid && !packet.sshGrid.available) {
+    reasons.push(`ssh grid unavailable: ${packet.sshGrid.error}`);
+  }
   if (!packet.weeklyFocus.ok) reasons.push(`weekly focus invalid: ${packet.weeklyFocus.error}`);
   if (packet.workspacePreflight.shouldSurface) {
     reasons.push(...packet.workspacePreflight.issues.map((item) => `${item.code}: ${item.message}`));

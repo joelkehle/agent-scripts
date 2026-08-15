@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { spawnSync } = require("node:child_process");
@@ -10,11 +11,28 @@ const repoRoot = path.resolve(__dirname, "..");
 const agentSshBin = path.join(repoRoot, "bin", "agent-ssh");
 const gridPath = path.join(repoRoot, "lib", "ssh-grid.json");
 
-function runAgentSsh(args, host) {
-  return spawnSync(agentSshBin, args, {
-    encoding: "utf8",
-    env: { ...process.env, AGENT_SSH_HOST: host },
-  });
+// agent-ssh derives its source host only from hostname(1), so the tests put a
+// fake `hostname` executable first on PATH instead of using an env override.
+function makeHostnameShim(host) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-ssh-hostname-"));
+  fs.writeFileSync(
+    path.join(dir, "hostname"),
+    `#!/usr/bin/env bash\necho "${host}"\n`,
+    { mode: 0o755 }
+  );
+  return dir;
+}
+
+function runAgentSsh(args, host, extraEnv = {}) {
+  const shimDir = makeHostnameShim(host);
+  try {
+    return spawnSync(agentSshBin, args, {
+      encoding: "utf8",
+      env: { ...process.env, ...extraEnv, PATH: `${shimDir}:${process.env.PATH}` },
+    });
+  } finally {
+    fs.rmSync(shimDir, { recursive: true, force: true });
+  }
 }
 
 test("ssh-grid.json parses and matches the approved grid shape", () => {
@@ -70,6 +88,13 @@ test("agent-ssh points laptop sessions at the shell alias", () => {
   const result = runAgentSsh(["beelink"], "laptop");
   assert.equal(result.status, 1);
   assert.match(result.stderr, /agent-beelink/);
+});
+
+test("agent-ssh ignores AGENT_SSH_HOST and trusts only hostname(1)", () => {
+  // The real host is lab (blocked from dev); the env tries to claim dev.
+  const result = runAgentSsh(["dev"], "lab", { AGENT_SSH_HOST: "dev" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /blocked by the SSH grid: lab -> dev/);
 });
 
 test("agent-ssh with no arguments prints usage", () => {

@@ -80,10 +80,10 @@ if [ "$verify" -eq 1 ]; then
 fi
 
 commands=(
-  agent-check agent-env-install agent-focus agent-start agent-workspace agentcoord
-  bus-discover codex-bg committer contributor-agent csub dirty-audit docs-list
-  install-agentcoord-janitor install-claude-agents loop-audit loop-receipt
-  loop-resume workspace-preflight trash
+  agent-check agent-env-install agent-focus agent-ssh agent-start agent-workspace
+  agentcoord bus-discover codex-bg committer contributor-agent csub dirty-audit
+  docs-list install-agentcoord-janitor install-claude-agents loop-audit
+  loop-receipt loop-resume workspace-preflight trash
 )
 
 payload_paths=()
@@ -123,7 +123,7 @@ install -d -m 755 "$stage/bin" "$stage/lib" "$stage/systemd" "$stage/workspace-r
 normalized_mode() {
   local relative="$1" git_mode
   case "$relative" in
-    bin/*|agent-check|agent-env-install|agent-focus|agent-start|agent-workspace|agentcoord|bus-discover|codex-bg|committer|contributor-agent|csub|dirty-audit|docs-list|install-agentcoord-janitor|install-claude-agents|loop-audit|loop-receipt|loop-resume|workspace-preflight|trash)
+    bin/*|agent-check|agent-env-install|agent-focus|agent-ssh|agent-start|agent-workspace|agentcoord|bus-discover|codex-bg|committer|contributor-agent|csub|dirty-audit|docs-list|install-agentcoord-janitor|install-claude-agents|loop-audit|loop-receipt|loop-resume|workspace-preflight|trash)
       printf '755\n'
       return
       ;;
