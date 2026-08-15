@@ -197,7 +197,7 @@ NODE
 old_stale_file="$sweep_root/claims/sweep/old-stale.codex-test.beelink.json"
 recent_stale_file="$sweep_root/claims/sweep/recent-stale.codex-test.beelink.json"
 sweep_dry="$(AGENTCOORD_ROOT="$sweep_root" agentcoord sweep --stale-after-days 7)"
-assert_contains "$sweep_dry" "janitor dry-run stale=2 eligible=1 skipped_recent=1 released=0 invalid=0 errors=0 stale_after_days=7"
+assert_contains "$sweep_dry" "janitor dry-run stale=2 eligible=1 skipped_recent=1 released=0 invalid=0 invalid_eligible=0 released_invalid=0 skipped_changed=0 errors=0 stale_after_days=7"
 assert_contains "$sweep_dry" "old-stale"
 assert_contains "$sweep_dry" "skipped 1 recent stale"
 [ -f "$old_stale_file" ] || fail "old stale claim deleted during dry-run"

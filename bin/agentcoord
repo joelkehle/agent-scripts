@@ -5,7 +5,10 @@ const os = require("node:os");
 const path = require("node:path");
 const {
   SAFETY,
+  normalizeRepo,
   normalizeTimestamp,
+  parseTimestamp,
+  prepareClaimForWrite,
   readClaim,
   readClaims,
 } = require("../lib/agentcoord-claims");
@@ -20,6 +23,7 @@ function usage() {
   agentcoord renew --repo REPO --slug SLUG [options]
   agentcoord release --repo REPO --slug SLUG [options]
   agentcoord sweep [--root DIR] [--stale-after-days DAYS] [--apply] [--json]
+  agentcoord archive [--root DIR] [--older-than-days DAYS] [--apply] [--json]
   agentcoord handoff --repo REPO --slug SLUG --goal TEXT --state TEXT --next-action TEXT [options]
 
 Options:
@@ -38,7 +42,8 @@ Options:
   --note TEXT             Handoff note; repeatable
   --stale-after-days DAYS For sweep: only release claims stale this many days (default: 7)
   --released-by NAME      For sweep: released_by metadata (default: agentcoord-janitor)
-  --apply                 For sweep: mark eligible stale claims released instead of dry-run
+  --older-than-days DAYS  For archive: only move claims released this many days ago (default: 30)
+  --apply                 For sweep/archive: write changes instead of dry-run
   --json                  Emit JSON
 
 AgentCoord is a coordination hint layer for coding agents, not a lock service.`);
@@ -62,6 +67,7 @@ function parseArgs(argv) {
     help: false,
     apply: false,
     staleAfterDays: 7,
+    olderThanDays: 30,
     releasedBy: "agentcoord-janitor",
     goal: "",
     state: [],
@@ -100,6 +106,7 @@ function parseArgs(argv) {
     else if (key === "next-action") args.nextAction = value;
     else if (key === "ttl-hours") args.ttlHours = Number(value);
     else if (key === "stale-after-days") args.staleAfterDays = Number(value);
+    else if (key === "older-than-days") args.olderThanDays = Number(value);
     else if (key === "released-by") args.releasedBy = value;
     else if (key === "goal") args.goal = value;
     else if (key === "state") args.state.push(value);
@@ -111,10 +118,12 @@ function parseArgs(argv) {
   }
   if (args.command === "check") args.command = "validate";
   if (!Number.isFinite(args.staleAfterDays) || args.staleAfterDays < 0) throw new Error("--stale-after-days must be zero or positive");
+  if (!Number.isFinite(args.olderThanDays) || args.olderThanDays < 0) throw new Error("--older-than-days must be zero or positive");
   return args;
 }
 
 function claimsRoot(root) { return path.join(root, "claims"); }
+function archiveRoot(root) { return path.join(root, "claims-archive"); }
 function handoffsRoot(root) { return path.join(root, "handoffs"); }
 function tmpRoot(root) { return path.join(root, "tmp"); }
 
@@ -138,7 +147,7 @@ function claimPath(root, claim) {
 }
 
 function matches(entry, args) {
-  if (args.repo && entry.data?.repo !== args.repo) return false;
+  if (args.repo && normalizeRepo(entry.data?.repo) !== normalizeRepo(args.repo)) return false;
   if (args.mode === "all") return true;
   return entry.status === args.mode;
 }
@@ -213,32 +222,42 @@ function commandValidate(args) {
 function commandClaim(args) {
   requireClaimArgs(args);
   const now = new Date();
+  const repo = normalizeRepo(args.repo);
   const claim = {
-    repo: args.repo,
+    repo,
     slug: args.slug,
     agent: args.agent,
     host: args.host,
     safety: args.safety,
-    scope: args.scope.length ? args.scope : [args.repo],
+    scope: args.scope.length ? args.scope : [repo],
     started_at: iso(now),
     expires_at: iso(new Date(now.getTime() + args.ttlHours * 3600000)),
     next_action: args.nextAction || "Claim created; update next_action before handoff.",
     contact: "Joel Kehle <joel@kehle.com>",
   };
+  const serialized = prepareClaimForWrite(claim);
   const target = claimPath(args.root, claim);
-  atomicWrite(args.root, target, claim);
+  atomicWrite(args.root, target, serialized);
   if (args.json) console.log(JSON.stringify({ file: target, claim }, null, 2));
   else console.log(`agentcoord: claimed ${target}`);
 }
 
 function findExistingClaim(args) {
   if (!args.repo || !args.slug) throw new Error("--repo and --slug are required");
+  const wanted = normalizeRepo(args.repo);
   const matches = readClaims(args.root).filter((entry) => {
     const data = entry.data || {};
-    return data.repo === args.repo && data.slug === args.slug && (!args.agent || data.agent === args.agent) && (!args.host || data.host === args.host);
+    return normalizeRepo(data.repo) === wanted && data.slug === args.slug && (!args.agent || data.agent === args.agent) && (!args.host || data.host === args.host);
   });
   if (!matches.length) throw new Error(`claim not found: ${args.repo}/${args.slug}`);
-  matches.sort((a, b) => a.file.localeCompare(b.file));
+  if (matches.length > 1) {
+    matches.sort((a, b) => a.file.localeCompare(b.file));
+    throw new Error(
+      `ambiguous claim ${args.repo}/${args.slug}: ${matches.length} files match after repo normalization:\n` +
+      matches.map((entry) => `  ${entry.file}`).join("\n") +
+      "\nresolve by releasing or removing the duplicates, then retry",
+    );
+  }
   return matches[0];
 }
 
@@ -267,15 +286,50 @@ function staleAgeDays(entry, now = new Date()) {
   return Math.max(0, (now.getTime() - entry.expires.getTime()) / 86400000);
 }
 
-function janitorSummary({ entries, eligible, skippedRecent, released, invalid, errors }) {
+function fileAgeDays(file, now = new Date()) {
+  return Math.max(0, (now.getTime() - fs.statSync(file).mtimeMs) / 86400000);
+}
+
+function janitorSummary({ entries, eligible, skippedRecent, released, invalid, invalidEligible, releasedInvalid, skippedChanged, errors }) {
   return {
     stale: entries.length,
     eligible: eligible.length,
     skipped_recent: skippedRecent.length,
     released: released.length,
     invalid: invalid.length,
+    invalid_eligible: invalidEligible.length,
+    released_invalid: releasedInvalid.length,
+    skipped_changed: skippedChanged.length,
     errors: errors.length,
   };
+}
+
+// A released tombstone for an invalid claim must itself be a fully valid
+// claim, or every later read re-classifies it invalid and workspace
+// preflight keeps blocking writes on agentcoord_claim_ambiguous. Synthesize
+// required fields from the original where parseable, else use placeholders.
+function invalidTombstone(entry, now, releasedBy) {
+  const original = entry.data && typeof entry.data === "object" && !Array.isArray(entry.data)
+    ? entry.data
+    : null;
+  const text = (value) => (typeof value === "string" && value.trim() ? value.trim() : "");
+  const mtime = new Date(fs.statSync(entry.file).mtimeMs);
+  const data = {
+    repo: text(original?.repo) ? normalizeRepo(original.repo) : (entry.directory_repo || "unknown"),
+    slug: text(original?.slug) || safeSlug(path.basename(entry.file, ".json")),
+    agent: text(original?.agent) || "unknown",
+    host: text(original?.host) || "unknown",
+    safety: SAFETY.has(original?.safety) ? original.safety : "read",
+    scope: Array.isArray(original?.scope) && original.scope.length ? original.scope : ["unknown"],
+    started_at: parseTimestamp(original?.started_at) ? normalizeTimestamp(original.started_at) : iso(mtime),
+    expires_at: parseTimestamp(original?.expires_at) ? normalizeTimestamp(original.expires_at) : iso(mtime),
+    next_action: "released by janitor",
+    released_at: iso(now),
+    released_by: releasedBy,
+    release_reason: "invalid-expired",
+    previous_status: "invalid",
+  };
+  return { data, original };
 }
 
 function commandSweep(args) {
@@ -291,7 +345,19 @@ function commandSweep(args) {
     if (age >= args.staleAfterDays) eligible.push(entry);
     else skippedRecent.push(entry);
   }
+  const invalidEligible = invalid.filter((entry) => {
+    // A truthy but unparseable released_at does not count as released;
+    // otherwise the claim escapes both this sweep and the archive tier.
+    if (parseTimestamp(entry.data?.released_at)) return false;
+    try {
+      return fileAgeDays(entry.file, now) >= args.staleAfterDays;
+    } catch {
+      return false;
+    }
+  });
   const released = [];
+  const releasedInvalid = [];
+  const skippedChanged = [];
   const errors = [];
   if (args.apply) {
     for (const entry of eligible) {
@@ -316,9 +382,42 @@ function commandSweep(args) {
         errors.push({ file: entry.file, error: error.message });
       }
     }
+    for (const entry of invalidEligible) {
+      try {
+        // Re-read immediately before replacing: the claim may have been
+        // repaired into a valid claim (or released) since the initial scan.
+        const current = readClaim(entry.file, { claimsRoot: claimsRoot(args.root), now });
+        let currentAge = null;
+        try {
+          currentAge = fileAgeDays(current.file, now);
+        } catch {
+          currentAge = null;
+        }
+        const stillEligible = current.status === "invalid"
+          && !parseTimestamp(current.data?.released_at)
+          && currentAge !== null
+          && currentAge >= args.staleAfterDays;
+        if (!stillEligible) {
+          skippedChanged.push({ file: entry.file, note: "claim changed since scan; no longer sweep-eligible" });
+          continue;
+        }
+        const { data, original } = invalidTombstone(current, now, args.releasedBy);
+        if (original !== null) {
+          data.original = original;
+        } else {
+          const corrupt = `${entry.file}.corrupt`;
+          fs.writeFileSync(corrupt, fs.readFileSync(entry.file));
+          data.original_file = path.basename(corrupt);
+        }
+        atomicWrite(args.root, entry.file, prepareClaimForWrite(data));
+        releasedInvalid.push(readClaim(entry.file, { claimsRoot: claimsRoot(args.root), now }));
+      } catch (error) {
+        errors.push({ file: entry.file, error: error.message });
+      }
+    }
   }
   const decorate = (entry) => ({ ...publicEntry(args.root, entry), stale_age_days: Number(staleAgeDays(entry, now).toFixed(3)) });
-  const summary = janitorSummary({ entries: stale, eligible, skippedRecent, released, invalid, errors });
+  const summary = janitorSummary({ entries: stale, eligible, skippedRecent, released, invalid, invalidEligible, releasedInvalid, skippedChanged, errors });
   if (args.json) console.log(JSON.stringify({
     root: args.root,
     dry_run: !args.apply,
@@ -330,15 +429,133 @@ function commandSweep(args) {
     eligible: eligible.map(decorate),
     skipped_recent: skippedRecent.map(decorate),
     invalid: invalid.map((entry) => publicEntry(args.root, entry)),
+    invalid_eligible: invalidEligible.map((entry) => publicEntry(args.root, entry)),
     released: released.map((entry) => publicEntry(args.root, entry)),
-    changed: released.map((entry) => publicEntry(args.root, entry)),
+    released_invalid: releasedInvalid.map((entry) => publicEntry(args.root, entry)),
+    skipped_changed: skippedChanged,
+    changed: [...released, ...releasedInvalid].map((entry) => publicEntry(args.root, entry)),
     errors,
   }, null, 2));
   else {
-    console.log(`agentcoord: ${args.apply ? "janitor applied" : "janitor dry-run"} stale=${summary.stale} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} released=${summary.released} invalid=${summary.invalid} errors=${summary.errors} stale_after_days=${args.staleAfterDays}`);
-    const shown = args.apply ? released : eligible;
+    console.log(`agentcoord: ${args.apply ? "janitor applied" : "janitor dry-run"} stale=${summary.stale} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} released=${summary.released} invalid=${summary.invalid} invalid_eligible=${summary.invalid_eligible} released_invalid=${summary.released_invalid} skipped_changed=${summary.skipped_changed} errors=${summary.errors} stale_after_days=${args.staleAfterDays}`);
+    const shown = args.apply ? [...released, ...releasedInvalid] : [...eligible, ...invalidEligible];
     if (shown.length) console.log(renderList(shown, args.root));
     if (skippedRecent.length) console.log(`agentcoord: skipped ${skippedRecent.length} recent stale claim(s) below threshold`);
+    if (skippedChanged.length) console.log(skippedChanged.map((skip) => `agentcoord: skipped ${path.relative(args.root, skip.file)}: ${skip.note}`).join("\n"));
+    if (errors.length) console.log(errors.map((error) => `agentcoord: error ${path.relative(args.root, error.file)} ${error.error}`).join("\n"));
+  }
+  if (errors.length) process.exitCode = 1;
+}
+
+function releasedAgeDays(entry, now = new Date()) {
+  const released = parseTimestamp(entry.data?.released_at);
+  if (!released) return null;
+  return Math.max(0, (now.getTime() - released.getTime()) / 86400000);
+}
+
+function commandArchive(args) {
+  const now = new Date();
+  const entries = readClaims(args.root);
+  const eligible = [];
+  const skippedRecent = [];
+  for (const entry of entries) {
+    const age = releasedAgeDays(entry, now);
+    if (age === null) continue;
+    entry.released_age_days = age;
+    if (age >= args.olderThanDays) eligible.push(entry);
+    else skippedRecent.push(entry);
+  }
+  const archived = [];
+  const skippedChanged = [];
+  const errors = [];
+  if (args.apply) {
+    for (const entry of eligible) {
+      try {
+        // Re-read immediately before the rename: a renew may have atomically
+        // replaced this path with an active claim since the initial scan.
+        const current = readClaim(entry.file, { claimsRoot: claimsRoot(args.root), now });
+        const currentAge = releasedAgeDays(current, now);
+        if (currentAge === null || currentAge < args.olderThanDays) {
+          skippedChanged.push({ file: entry.file, note: "claim changed since scan; no longer archive-eligible" });
+          continue;
+        }
+        const relative = path.relative(claimsRoot(args.root), current.file);
+        if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+          throw new Error("claim file is outside the claims directory");
+        }
+        const targetDir = path.join(archiveRoot(args.root), path.dirname(relative));
+        fs.mkdirSync(targetDir, { recursive: true });
+        // Reused slug+agent+host after an earlier archive collides on the
+        // same relative name. Suffix with released_at: deterministic and
+        // collision-safe per release.
+        const stamp = normalizeTimestamp(current.data.released_at).replace(/:/g, "-");
+        const baseName = path.basename(current.file);
+        let target = path.join(targetDir, baseName);
+        if (fs.existsSync(target)) {
+          target = path.join(targetDir, baseName.replace(/\.json$/, `.released-${stamp}.json`));
+          if (fs.existsSync(target)) throw new Error(`archive target already exists: ${target}`);
+        }
+        // A corrupt-sidecar reference travels with its tombstone so the
+        // evidence is not orphaned and original_file keeps resolving.
+        const move = { from: entry.file, to: target };
+        const sidecarName = typeof current.data.original_file === "string"
+          && current.data.original_file
+          && path.basename(current.data.original_file) === current.data.original_file
+          ? current.data.original_file
+          : null;
+        const sidecarSource = sidecarName ? path.join(path.dirname(entry.file), sidecarName) : null;
+        if (sidecarSource && fs.existsSync(sidecarSource)) {
+          let sidecarTargetName = sidecarName;
+          let sidecarTarget = path.join(targetDir, sidecarTargetName);
+          if (fs.existsSync(sidecarTarget)) {
+            sidecarTargetName = `${sidecarName}.released-${stamp}`;
+            sidecarTarget = path.join(targetDir, sidecarTargetName);
+            if (fs.existsSync(sidecarTarget)) throw new Error(`archive target already exists: ${sidecarTarget}`);
+            // Keep the tombstone's reference resolving after the rename.
+            atomicWrite(args.root, entry.file, { ...current.data, original_file: sidecarTargetName });
+          }
+          // Sidecar first: if the tombstone move then fails, a re-run still
+          // finds the tombstone in claims/ and skips the moved sidecar.
+          fs.renameSync(sidecarSource, sidecarTarget);
+          move.sidecar_from = sidecarSource;
+          move.sidecar_to = sidecarTarget;
+        }
+        fs.renameSync(entry.file, target);
+        archived.push(move);
+      } catch (error) {
+        errors.push({ file: entry.file, error: error.message });
+      }
+    }
+  }
+  const decorate = (entry) => ({ ...publicEntry(args.root, entry), released_age_days: Number(entry.released_age_days.toFixed(3)) });
+  const summary = {
+    released: eligible.length + skippedRecent.length,
+    eligible: eligible.length,
+    skipped_recent: skippedRecent.length,
+    archived: archived.length,
+    skipped_changed: skippedChanged.length,
+    errors: errors.length,
+  };
+  if (args.json) console.log(JSON.stringify({
+    root: args.root,
+    dry_run: !args.apply,
+    apply: args.apply,
+    older_than_days: args.olderThanDays,
+    summary,
+    eligible: eligible.map(decorate),
+    skipped_recent: skippedRecent.map(decorate),
+    archived,
+    skipped_changed: skippedChanged,
+    errors,
+  }, null, 2));
+  else {
+    console.log(`agentcoord: ${args.apply ? "archive applied" : "archive dry-run"} released=${summary.released} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} archived=${summary.archived} skipped_changed=${summary.skipped_changed} errors=${summary.errors} older_than_days=${args.olderThanDays}`);
+    if (args.apply) {
+      if (archived.length) console.log(archived.map((move) => `agentcoord: archived ${path.relative(args.root, move.from)} -> ${path.relative(args.root, move.to)}`).join("\n"));
+    } else if (eligible.length) {
+      console.log(renderList(eligible, args.root));
+    }
+    if (skippedChanged.length) console.log(skippedChanged.map((skip) => `agentcoord: skipped ${path.relative(args.root, skip.file)}: ${skip.note}`).join("\n"));
     if (errors.length) console.log(errors.map((error) => `agentcoord: error ${path.relative(args.root, error.file)} ${error.error}`).join("\n"));
   }
   if (errors.length) process.exitCode = 1;
@@ -388,6 +605,7 @@ function main() {
   else if (args.command === "renew") commandRenew(args);
   else if (args.command === "release") commandRelease(args);
   else if (args.command === "sweep") commandSweep(args);
+  else if (args.command === "archive") commandArchive(args);
   else if (args.command === "handoff") commandHandoff(args);
   else throw new Error(`unknown command: ${args.command}`);
 }

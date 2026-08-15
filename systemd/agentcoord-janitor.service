@@ -1,0 +1,8 @@
+[Unit]
+Description=AgentCoord claim janitor: release stale claims, then archive old released claims
+Documentation=file://%h/Projects/shared/agent-scripts/docs/agentcoord.md
+
+[Service]
+Type=oneshot
+ExecStart="%h/Projects/shared/agent-scripts/bin/agentcoord" sweep --apply --stale-after-days 7
+ExecStart="%h/Projects/shared/agent-scripts/bin/agentcoord" archive --apply --older-than-days 30

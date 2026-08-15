@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# install-agentcoord-janitor — install the weekly AgentCoord janitor timer
+# for the current user. Copies systemd/agentcoord-janitor.{service,timer}
+# into ~/.config/systemd/user/, reloads the user daemon, and enables the
+# timer. Idempotent: safe to run again after unit changes. Refuses cleanly
+# when no systemd user session is available.
+
+# Resolve the real script location through installer shims (agent-env-install
+# links this file into a prefix such as /usr/local/bin).
+self="${BASH_SOURCE[0]}"
+while [ -L "$self" ]; do
+  self_dir="$(cd -P "$(dirname "$self")" && pwd)"
+  self="$(readlink "$self")"
+  case "$self" in /*) ;; *) self="$self_dir/$self" ;; esac
+done
+src_root="$(cd -P "$(dirname "$self")/.." && pwd)"
+src_dir="$src_root/systemd"
+
+if ! command -v systemctl >/dev/null 2>&1; then
+  printf 'install-agentcoord-janitor: systemctl not found; refusing\n' >&2
+  exit 1
+fi
+if ! systemctl --user show-environment >/dev/null 2>&1; then
+  printf 'install-agentcoord-janitor: no systemd user session available; refusing\n' >&2
+  printf 'install-agentcoord-janitor: log in as this user (or enable lingering) and retry\n' >&2
+  exit 1
+fi
+
+dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+mkdir -p "$dst_dir"
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+# The unit templates reference the repo checkout path. Rewrite that prefix to
+# wherever this script actually resolved from (repo checkout or an
+# agent-env-install prefix), so ExecStart points at a real agentcoord.
+template_prefix='%h/Projects/shared/agent-scripts'
+if [ ! -x "$src_root/bin/agentcoord" ]; then
+  printf 'install-agentcoord-janitor: missing %s; refusing\n' "$src_root/bin/agentcoord" >&2
+  exit 1
+fi
+case "$src_root" in
+  *$'\n'*)
+    printf 'install-agentcoord-janitor: checkout path contains a newline; refusing\n' >&2
+    exit 1
+    ;;
+esac
+case "${AGENTCOORD_ROOT:-}" in
+  *$'\n'*)
+    printf 'install-agentcoord-janitor: AGENTCOORD_ROOT contains a newline; refusing\n' >&2
+    exit 1
+    ;;
+esac
+
+# The template's ExecStart path sits inside systemd double quotes, so
+# whitespace-containing prefixes work. Escape the characters systemd treats
+# specially (a literal % becomes %%; backslash and double quote get
+# backslash-escaped inside the quotes), then escape the result for use as a
+# sed replacement (backslash, ampersand, the | delimiter).
+systemd_root=${src_root//%/%%}
+systemd_root=${systemd_root//\\/\\\\}
+systemd_root=${systemd_root//\"/\\\"}
+sed_root=$(printf '%s' "$systemd_root" | sed -e 's/[\\&|]/\\&/g')
+
+# Documentation= takes a space-separated URI list, so percent-encode the
+# characters that would split or corrupt the file:// URL, then double every
+# literal % for systemd.
+doc_root=${src_root//%/%25}
+doc_root=${doc_root// /%20}
+doc_root=${doc_root//\"/%22}
+doc_root=${doc_root//%/%%}
+doc_sed=$(printf '%s' "$doc_root" | sed -e 's/[\\&|]/\\&/g')
+
+for name in agentcoord-janitor.service agentcoord-janitor.timer; do
+  src="$src_dir/$name"
+  if [ ! -f "$src" ]; then
+    printf 'install-agentcoord-janitor: missing %s; refusing\n' "$src" >&2
+    exit 1
+  fi
+  rendered="$tmp_dir/$name"
+  sed -e "/^Documentation=/ s|$template_prefix|$doc_sed|g" \
+      -e "/^Documentation=/! s|$template_prefix|$sed_root|g" "$src" > "$rendered"
+  # Preserve a nondefault claim store: render AGENTCOORD_ROOT from the
+  # installing shell into the service so the timer sweeps the same root the
+  # agents use, not the compiled-in default.
+  if [ "$name" = agentcoord-janitor.service ] && [ -n "${AGENTCOORD_ROOT:-}" ]; then
+    env_root=${AGENTCOORD_ROOT//%/%%}
+    env_root=${env_root//\\/\\\\}
+    env_root=${env_root//\"/\\\"}
+    rendered_env="$tmp_dir/$name.env-render"
+    while IFS= read -r line; do
+      printf '%s\n' "$line"
+      if [ "$line" = '[Service]' ]; then
+        printf 'Environment="AGENTCOORD_ROOT=%s"\n' "$env_root"
+      fi
+    done < "$rendered" > "$rendered_env"
+    mv "$rendered_env" "$rendered"
+    printf 'install-agentcoord-janitor: rendering AGENTCOORD_ROOT=%s into %s\n' "$AGENTCOORD_ROOT" "$name"
+  fi
+  if [ -f "$dst_dir/$name" ] && cmp -s "$rendered" "$dst_dir/$name"; then
+    printf 'install-agentcoord-janitor: %s already current\n' "$name"
+  else
+    cp "$rendered" "$dst_dir/$name"
+    printf 'install-agentcoord-janitor: installed %s\n' "$dst_dir/$name"
+  fi
+done
+
+systemctl --user daemon-reload
+systemctl --user enable --now agentcoord-janitor.timer
+printf 'install-agentcoord-janitor: timer enabled; next runs:\n'
+systemctl --user list-timers agentcoord-janitor.timer --no-pager || true
