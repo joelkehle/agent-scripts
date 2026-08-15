@@ -290,7 +290,7 @@ function fileAgeDays(file, now = new Date()) {
   return Math.max(0, (now.getTime() - fs.statSync(file).mtimeMs) / 86400000);
 }
 
-function janitorSummary({ entries, eligible, skippedRecent, released, invalid, invalidEligible, releasedInvalid, errors }) {
+function janitorSummary({ entries, eligible, skippedRecent, released, invalid, invalidEligible, releasedInvalid, skippedChanged, errors }) {
   return {
     stale: entries.length,
     eligible: eligible.length,
@@ -299,6 +299,7 @@ function janitorSummary({ entries, eligible, skippedRecent, released, invalid, i
     invalid: invalid.length,
     invalid_eligible: invalidEligible.length,
     released_invalid: releasedInvalid.length,
+    skipped_changed: skippedChanged.length,
     errors: errors.length,
   };
 }
@@ -356,6 +357,7 @@ function commandSweep(args) {
   });
   const released = [];
   const releasedInvalid = [];
+  const skippedChanged = [];
   const errors = [];
   if (args.apply) {
     for (const entry of eligible) {
@@ -382,7 +384,24 @@ function commandSweep(args) {
     }
     for (const entry of invalidEligible) {
       try {
-        const { data, original } = invalidTombstone(entry, now, args.releasedBy);
+        // Re-read immediately before replacing: the claim may have been
+        // repaired into a valid claim (or released) since the initial scan.
+        const current = readClaim(entry.file, { claimsRoot: claimsRoot(args.root), now });
+        let currentAge = null;
+        try {
+          currentAge = fileAgeDays(current.file, now);
+        } catch {
+          currentAge = null;
+        }
+        const stillEligible = current.status === "invalid"
+          && !parseTimestamp(current.data?.released_at)
+          && currentAge !== null
+          && currentAge >= args.staleAfterDays;
+        if (!stillEligible) {
+          skippedChanged.push({ file: entry.file, note: "claim changed since scan; no longer sweep-eligible" });
+          continue;
+        }
+        const { data, original } = invalidTombstone(current, now, args.releasedBy);
         if (original !== null) {
           data.original = original;
         } else {
@@ -398,7 +417,7 @@ function commandSweep(args) {
     }
   }
   const decorate = (entry) => ({ ...publicEntry(args.root, entry), stale_age_days: Number(staleAgeDays(entry, now).toFixed(3)) });
-  const summary = janitorSummary({ entries: stale, eligible, skippedRecent, released, invalid, invalidEligible, releasedInvalid, errors });
+  const summary = janitorSummary({ entries: stale, eligible, skippedRecent, released, invalid, invalidEligible, releasedInvalid, skippedChanged, errors });
   if (args.json) console.log(JSON.stringify({
     root: args.root,
     dry_run: !args.apply,
@@ -413,14 +432,16 @@ function commandSweep(args) {
     invalid_eligible: invalidEligible.map((entry) => publicEntry(args.root, entry)),
     released: released.map((entry) => publicEntry(args.root, entry)),
     released_invalid: releasedInvalid.map((entry) => publicEntry(args.root, entry)),
+    skipped_changed: skippedChanged,
     changed: [...released, ...releasedInvalid].map((entry) => publicEntry(args.root, entry)),
     errors,
   }, null, 2));
   else {
-    console.log(`agentcoord: ${args.apply ? "janitor applied" : "janitor dry-run"} stale=${summary.stale} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} released=${summary.released} invalid=${summary.invalid} invalid_eligible=${summary.invalid_eligible} released_invalid=${summary.released_invalid} errors=${summary.errors} stale_after_days=${args.staleAfterDays}`);
+    console.log(`agentcoord: ${args.apply ? "janitor applied" : "janitor dry-run"} stale=${summary.stale} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} released=${summary.released} invalid=${summary.invalid} invalid_eligible=${summary.invalid_eligible} released_invalid=${summary.released_invalid} skipped_changed=${summary.skipped_changed} errors=${summary.errors} stale_after_days=${args.staleAfterDays}`);
     const shown = args.apply ? [...released, ...releasedInvalid] : [...eligible, ...invalidEligible];
     if (shown.length) console.log(renderList(shown, args.root));
     if (skippedRecent.length) console.log(`agentcoord: skipped ${skippedRecent.length} recent stale claim(s) below threshold`);
+    if (skippedChanged.length) console.log(skippedChanged.map((skip) => `agentcoord: skipped ${path.relative(args.root, skip.file)}: ${skip.note}`).join("\n"));
     if (errors.length) console.log(errors.map((error) => `agentcoord: error ${path.relative(args.root, error.file)} ${error.error}`).join("\n"));
   }
   if (errors.length) process.exitCode = 1;
@@ -445,11 +466,20 @@ function commandArchive(args) {
     else skippedRecent.push(entry);
   }
   const archived = [];
+  const skippedChanged = [];
   const errors = [];
   if (args.apply) {
     for (const entry of eligible) {
       try {
-        const relative = path.relative(claimsRoot(args.root), entry.file);
+        // Re-read immediately before the rename: a renew may have atomically
+        // replaced this path with an active claim since the initial scan.
+        const current = readClaim(entry.file, { claimsRoot: claimsRoot(args.root), now });
+        const currentAge = releasedAgeDays(current, now);
+        if (currentAge === null || currentAge < args.olderThanDays) {
+          skippedChanged.push({ file: entry.file, note: "claim changed since scan; no longer archive-eligible" });
+          continue;
+        }
+        const relative = path.relative(claimsRoot(args.root), current.file);
         if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
           throw new Error("claim file is outside the claims directory");
         }
@@ -458,8 +488,8 @@ function commandArchive(args) {
         // Reused slug+agent+host after an earlier archive collides on the
         // same relative name. Suffix with released_at: deterministic and
         // collision-safe per release.
-        const stamp = normalizeTimestamp(entry.data.released_at).replace(/:/g, "-");
-        const baseName = path.basename(entry.file);
+        const stamp = normalizeTimestamp(current.data.released_at).replace(/:/g, "-");
+        const baseName = path.basename(current.file);
         let target = path.join(targetDir, baseName);
         if (fs.existsSync(target)) {
           target = path.join(targetDir, baseName.replace(/\.json$/, `.released-${stamp}.json`));
@@ -468,10 +498,10 @@ function commandArchive(args) {
         // A corrupt-sidecar reference travels with its tombstone so the
         // evidence is not orphaned and original_file keeps resolving.
         const move = { from: entry.file, to: target };
-        const sidecarName = typeof entry.data.original_file === "string"
-          && entry.data.original_file
-          && path.basename(entry.data.original_file) === entry.data.original_file
-          ? entry.data.original_file
+        const sidecarName = typeof current.data.original_file === "string"
+          && current.data.original_file
+          && path.basename(current.data.original_file) === current.data.original_file
+          ? current.data.original_file
           : null;
         const sidecarSource = sidecarName ? path.join(path.dirname(entry.file), sidecarName) : null;
         if (sidecarSource && fs.existsSync(sidecarSource)) {
@@ -482,7 +512,7 @@ function commandArchive(args) {
             sidecarTarget = path.join(targetDir, sidecarTargetName);
             if (fs.existsSync(sidecarTarget)) throw new Error(`archive target already exists: ${sidecarTarget}`);
             // Keep the tombstone's reference resolving after the rename.
-            atomicWrite(args.root, entry.file, { ...entry.data, original_file: sidecarTargetName });
+            atomicWrite(args.root, entry.file, { ...current.data, original_file: sidecarTargetName });
           }
           // Sidecar first: if the tombstone move then fails, a re-run still
           // finds the tombstone in claims/ and skips the moved sidecar.
@@ -503,6 +533,7 @@ function commandArchive(args) {
     eligible: eligible.length,
     skipped_recent: skippedRecent.length,
     archived: archived.length,
+    skipped_changed: skippedChanged.length,
     errors: errors.length,
   };
   if (args.json) console.log(JSON.stringify({
@@ -514,15 +545,17 @@ function commandArchive(args) {
     eligible: eligible.map(decorate),
     skipped_recent: skippedRecent.map(decorate),
     archived,
+    skipped_changed: skippedChanged,
     errors,
   }, null, 2));
   else {
-    console.log(`agentcoord: ${args.apply ? "archive applied" : "archive dry-run"} released=${summary.released} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} archived=${summary.archived} errors=${summary.errors} older_than_days=${args.olderThanDays}`);
+    console.log(`agentcoord: ${args.apply ? "archive applied" : "archive dry-run"} released=${summary.released} eligible=${summary.eligible} skipped_recent=${summary.skipped_recent} archived=${summary.archived} skipped_changed=${summary.skipped_changed} errors=${summary.errors} older_than_days=${args.olderThanDays}`);
     if (args.apply) {
       if (archived.length) console.log(archived.map((move) => `agentcoord: archived ${path.relative(args.root, move.from)} -> ${path.relative(args.root, move.to)}`).join("\n"));
     } else if (eligible.length) {
       console.log(renderList(eligible, args.root));
     }
+    if (skippedChanged.length) console.log(skippedChanged.map((skip) => `agentcoord: skipped ${path.relative(args.root, skip.file)}: ${skip.note}`).join("\n"));
     if (errors.length) console.log(errors.map((error) => `agentcoord: error ${path.relative(args.root, error.file)} ${error.error}`).join("\n"));
   }
   if (errors.length) process.exitCode = 1;

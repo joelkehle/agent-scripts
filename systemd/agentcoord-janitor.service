@@ -4,5 +4,5 @@ Documentation=file://%h/Projects/shared/agent-scripts/docs/agentcoord.md
 
 [Service]
 Type=oneshot
-ExecStart=%h/Projects/shared/agent-scripts/bin/agentcoord sweep --apply --stale-after-days 7
-ExecStart=%h/Projects/shared/agent-scripts/bin/agentcoord archive --apply --older-than-days 30
+ExecStart="%h/Projects/shared/agent-scripts/bin/agentcoord" sweep --apply --stale-after-days 7
+ExecStart="%h/Projects/shared/agent-scripts/bin/agentcoord" archive --apply --older-than-days 30

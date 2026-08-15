@@ -104,7 +104,10 @@ The units and the installer are part of the `agent-env-install` payload, so
 installed machines get them too. The installer finds the units next to its
 own resolved location (repo checkout or install prefix) and rewrites the
 unit's `agentcoord` path to match, so the timer runs the right binary in
-both layouts.
+both layouts. The rendered path is quoted, so a prefix with spaces still
+works. If `AGENTCOORD_ROOT` is set when you run the installer, it is written
+into the service as an `Environment=` line, so the timer sweeps the same
+claim store your agents use.
 
 ## Canonical repo names
 

@@ -42,6 +42,37 @@ if [ ! -x "$src_root/bin/agentcoord" ]; then
   printf 'install-agentcoord-janitor: missing %s; refusing\n' "$src_root/bin/agentcoord" >&2
   exit 1
 fi
+case "$src_root" in
+  *$'\n'*)
+    printf 'install-agentcoord-janitor: checkout path contains a newline; refusing\n' >&2
+    exit 1
+    ;;
+esac
+case "${AGENTCOORD_ROOT:-}" in
+  *$'\n'*)
+    printf 'install-agentcoord-janitor: AGENTCOORD_ROOT contains a newline; refusing\n' >&2
+    exit 1
+    ;;
+esac
+
+# The template's ExecStart path sits inside systemd double quotes, so
+# whitespace-containing prefixes work. Escape the characters systemd treats
+# specially (a literal % becomes %%; backslash and double quote get
+# backslash-escaped inside the quotes), then escape the result for use as a
+# sed replacement (backslash, ampersand, the | delimiter).
+systemd_root=${src_root//%/%%}
+systemd_root=${systemd_root//\\/\\\\}
+systemd_root=${systemd_root//\"/\\\"}
+sed_root=$(printf '%s' "$systemd_root" | sed -e 's/[\\&|]/\\&/g')
+
+# Documentation= takes a space-separated URI list, so percent-encode the
+# characters that would split or corrupt the file:// URL, then double every
+# literal % for systemd.
+doc_root=${src_root//%/%25}
+doc_root=${doc_root// /%20}
+doc_root=${doc_root//\"/%22}
+doc_root=${doc_root//%/%%}
+doc_sed=$(printf '%s' "$doc_root" | sed -e 's/[\\&|]/\\&/g')
 
 for name in agentcoord-janitor.service agentcoord-janitor.timer; do
   src="$src_dir/$name"
@@ -50,7 +81,25 @@ for name in agentcoord-janitor.service agentcoord-janitor.timer; do
     exit 1
   fi
   rendered="$tmp_dir/$name"
-  sed "s|$template_prefix|$src_root|g" "$src" > "$rendered"
+  sed -e "/^Documentation=/ s|$template_prefix|$doc_sed|g" \
+      -e "/^Documentation=/! s|$template_prefix|$sed_root|g" "$src" > "$rendered"
+  # Preserve a nondefault claim store: render AGENTCOORD_ROOT from the
+  # installing shell into the service so the timer sweeps the same root the
+  # agents use, not the compiled-in default.
+  if [ "$name" = agentcoord-janitor.service ] && [ -n "${AGENTCOORD_ROOT:-}" ]; then
+    env_root=${AGENTCOORD_ROOT//%/%%}
+    env_root=${env_root//\\/\\\\}
+    env_root=${env_root//\"/\\\"}
+    rendered_env="$tmp_dir/$name.env-render"
+    while IFS= read -r line; do
+      printf '%s\n' "$line"
+      if [ "$line" = '[Service]' ]; then
+        printf 'Environment="AGENTCOORD_ROOT=%s"\n' "$env_root"
+      fi
+    done < "$rendered" > "$rendered_env"
+    mv "$rendered_env" "$rendered"
+    printf 'install-agentcoord-janitor: rendering AGENTCOORD_ROOT=%s into %s\n' "$AGENTCOORD_ROOT" "$name"
+  fi
   if [ -f "$dst_dir/$name" ] && cmp -s "$rendered" "$dst_dir/$name"; then
     printf 'install-agentcoord-janitor: %s already current\n' "$name"
   else

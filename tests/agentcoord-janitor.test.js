@@ -392,6 +392,40 @@ test("invalid claim with unparseable released_at is swept, not leaked", (t) => {
   assert.equal(entries[0].data.original.released_at, "not-a-date");
 });
 
+test("preflight readClaims matches alias-spelled claims to the canonical directory", (t) => {
+  const root = makeRoot(t, "preflight-alias");
+  // A legacy claim filed under the alias spelling, in the alias directory.
+  writeClaim(root, "shared-manager", "legacy.codex.beelink", baseClaim({
+    repo: "shared-manager",
+    slug: "legacy",
+    scope: ["*"],
+  }));
+
+  // The write-guard runs for the canonical workspace identity.
+  const canonicalAliases = new Set([normalizeRepositoryIdentity("shared/manager")]);
+  const found = preflightReadClaims(root, canonicalAliases, "/srv/checkouts/manager");
+  assert.equal(found.available, true);
+  assert.equal(found.active.length, 1);
+  assert.equal(found.active[0].claim.slug, "legacy");
+  assert.equal(found.active[0].claim.repo, "shared-manager");
+
+  // The reverse also holds: a workspace known only by an alias spelling
+  // still sees a claim filed under the canonical name.
+  writeClaim(root, "jk/llm-wiki", "canonical.codex.beelink", baseClaim({
+    repo: "jk/llm-wiki",
+    slug: "canonical",
+    scope: ["*"],
+  }));
+  const aliasAliases = new Set([normalizeRepositoryIdentity("llm-wiki")]);
+  const reverse = preflightReadClaims(root, aliasAliases, "/srv/checkouts/llm-wiki");
+  assert.equal(reverse.active.length, 1);
+  assert.equal(reverse.active[0].claim.slug, "canonical");
+
+  // Unrelated repos still do not match.
+  const unrelated = preflightReadClaims(root, new Set([normalizeRepositoryIdentity("shared/agent-scripts")]), "/srv/checkouts/agent-scripts");
+  assert.equal(unrelated.active.length, 0);
+});
+
 test("archive moves the corrupt sidecar together with its tombstone", (t) => {
   const root = makeRoot(t, "sidecar");
   const old = daysAgo(10);
