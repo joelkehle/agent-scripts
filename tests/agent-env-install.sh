@@ -104,6 +104,22 @@ printf '%s\n' '# Test' > "$tmp/doc-check/docs/README.md"
 [ ! -e "$install_root/bin/machine-compliance" ]
 test -r "$install_root/workspace-roots/projects/.agents/skills/ship-loop/SKILL.md"
 
+# agent-ssh must ship as an installed entry point next to its grid file, and
+# the installed copy must consult the grid (source hidden, so this is payload-only).
+[ -x "$install_root/agent-ssh" ] || { echo "installed agent-ssh launcher missing" >&2; exit 1; }
+[ -x "$install_root/bin/agent-ssh" ] || { echo "installed bin/agent-ssh missing" >&2; exit 1; }
+[ -r "$install_root/lib/ssh-grid.json" ] || { echo "installed lib/ssh-grid.json missing" >&2; exit 1; }
+hostname_shim="$tmp/hostname-shim"
+mkdir -p "$hostname_shim"
+printf '#!/usr/bin/env bash\necho lab\n' > "$hostname_shim/hostname"
+chmod 755 "$hostname_shim/hostname"
+set +e
+ssh_output="$(PATH="$hostname_shim:$PATH" "$install_root/agent-ssh" dev 2>&1)"
+ssh_status=$?
+set -e
+[ "$ssh_status" -ne 0 ] || { echo "installed agent-ssh did not enforce the grid" >&2; exit 1; }
+grep -q 'blocked by the SSH grid: lab -> dev' <<<"$ssh_output"
+
 printf '\nchanged\n' >> "$install_root/bin/docs-list"
 set +e
 changed_output="$("$install_root/agent-env-install" --verify --prefix "$install_root" 2>&1)"

@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# agent-ssh — hop to another machine only along the approved SSH grid.
+# The grid lives in lib/ssh-grid.json next to this script's repo.
+set -euo pipefail
+
+usage() {
+  echo "Usage: agent-ssh <target> [command...]" >&2
+}
+
+if [ "$#" -lt 1 ]; then
+  usage
+  exit 1
+fi
+
+target="$1"
+shift
+
+script_path="$(realpath "${BASH_SOURCE[0]}")"
+grid_file="$(dirname "$script_path")/../lib/ssh-grid.json"
+grid_file="$(realpath "$grid_file")"
+
+if [ ! -f "$grid_file" ]; then
+  echo "agent-ssh: grid file not found: $grid_file" >&2
+  exit 1
+fi
+
+# The source host comes from the machine itself, never from the caller.
+src="$(hostname -s)"
+
+# Ask node (always present in this workspace) to read the grid for us.
+# Output: one line — KNOWN|UNKNOWN, then ALLOWED <method> or BLOCKED, then valid targets.
+lookup="$(node -e '
+  const fs = require("fs");
+  const grid = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  const src = process.argv[2];
+  const target = process.argv[3];
+  const hosts = grid.hosts || [];
+  if (!hosts.includes(target)) {
+    console.log("UNKNOWN " + hosts.join(","));
+    process.exit(0);
+  }
+  const row = (grid.grid && grid.grid[src]) || {};
+  const cell = row[target];
+  if (!cell) {
+    console.log("BLOCKED");
+  } else {
+    console.log("ALLOWED " + cell.method);
+  }
+' "$grid_file" "$src" "$target")"
+
+verdict="${lookup%% *}"
+detail="${lookup#* }"
+
+case "$verdict" in
+  UNKNOWN)
+    echo "agent-ssh: unknown target '$target'. Valid targets: ${detail//,/, }" >&2
+    exit 1
+    ;;
+  BLOCKED)
+    echo "blocked by the SSH grid: $src -> $target. See agent-start output." >&2
+    exit 1
+    ;;
+  ALLOWED)
+    method="$detail"
+    ;;
+  *)
+    echo "agent-ssh: could not read the SSH grid ($lookup)" >&2
+    exit 1
+    ;;
+esac
+
+case "$method" in
+  sudo-agent)
+    if ! sudo -n -iu agent true 2>/dev/null; then
+      echo "agent-ssh: this needs the agent account. Ask Joel to grant passwordless sudo to 'agent' on $src." >&2
+      exit 1
+    fi
+    exec sudo -n -iu agent ssh -o BatchMode=yes -o IdentitiesOnly=yes "agent@$target" "$@"
+    ;;
+  alias)
+    echo "agent-ssh: from $src, use the shell alias instead: agent-$target" >&2
+    exit 1
+    ;;
+  tunnel-only)
+    echo "agent-ssh: $src -> $target is tunnel-only. No shell access. See agent-start output." >&2
+    exit 1
+    ;;
+  *)
+    echo "agent-ssh: unknown method '$method' in the grid for $src -> $target" >&2
+    exit 1
+    ;;
+esac
