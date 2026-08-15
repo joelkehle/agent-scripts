@@ -60,8 +60,18 @@ if [ "$(uname -s)" != "Darwin" ] && command -v flock >/dev/null 2>&1; then
   lock_kind="flock"
 else
   if ! mkdir "$lock_dir" 2>/dev/null; then
-    log "another run holds the mkdir lock; skipping"
-    exit 0
+    # A hard-killed run cannot clean its lock folder. Treat a lock older
+    # than 6 hours as stale (runs take seconds; the timer fires hourly).
+    lock_mtime="$(stat -f %m "$lock_dir" 2>/dev/null || stat -c %Y "$lock_dir" 2>/dev/null)" || lock_mtime=""
+    now_epoch="$(date +%s)"
+    if [ -n "$lock_mtime" ] && [ $((now_epoch - lock_mtime)) -gt 21600 ]; then
+      log "WARNING: removing stale mkdir lock (older than 6 hours)"
+      rmdir "$lock_dir" 2>/dev/null || true
+    fi
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+      log "another run holds the mkdir lock; skipping"
+      exit 0
+    fi
   fi
   lock_kind="mkdir"
 fi

@@ -96,7 +96,10 @@ install_macos() {
   trap 'rm -f "$rendered"' RETURN
   xml_root=$(printf '%s' "$repo_root" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
   sed_root=$(printf '%s' "$xml_root" | sed -e 's/[\\&|]/\\&/g')
-  sed "s|__AGENT_SCRIPTS_ROOT__|$sed_root|g" "$source" > "$rendered"
+  xml_home=$(printf '%s' "$HOME" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+  sed_home=$(printf '%s' "$xml_home" | sed -e 's/[\\&|]/\\&/g')
+  mkdir -p "$HOME/Library/Logs"
+  sed -e "s|__AGENT_SCRIPTS_ROOT__|$sed_root|g" -e "s|__HOME__|$sed_home|g" "$source" > "$rendered"
   chmod 644 "$rendered"
   copy_if_changed "$rendered" "$destination"
 

@@ -11,6 +11,10 @@
   </array>
   <key>StartInterval</key>
   <integer>3600</integer>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/agent-scripts-self-update.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/agent-scripts-self-update.log</string>
 </dict>
 </plist>
 

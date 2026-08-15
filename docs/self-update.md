@@ -52,9 +52,11 @@ journalctl --user -u agent-scripts-self-update.service
 
 ```bash
 launchctl print "gui/$(id -u)/com.joelkehle.agent-scripts-self-update"
+tail ~/Library/Logs/agent-scripts-self-update.log
 ```
 
-The `last exit code` in that output shows whether the last run worked. You can
+The `last exit code` in that output shows whether the last run worked. The
+log file holds each run's messages. You can
 also run the updater by hand from the checkout:
 
 ```bash
@@ -100,8 +102,10 @@ error cannot be counted because the count lives in that folder.
 Only one run may work at a time. Linux uses `flock`. macOS uses a folder lock.
 A second run prints a skip line and exits without changing the failure count.
 If a macOS process is killed so hard that cleanup cannot run, its empty
-`run.lock.d` folder may remain. Check that no updater is running, then remove
-only that folder before trying again.
+`run.lock.d` folder may remain. The next run removes that folder by itself
+once it is more than six hours old, and says so with a `WARNING` line. To
+clear it sooner, check that no updater is running, then remove only that
+folder.
 
 The installer refuses an unsupported system. It also refuses when the updater,
 unit files, plist, `systemctl`, or `launchctl` is missing. On Linux, a user
