@@ -140,10 +140,19 @@ function sectionFromCommand(title, result, maxLines = 80) {
   return { title, command: result.command, status: result.status, signal: result.signal, output };
 }
 
-function collectSshGrid(host) {
+function collectSshGrid(rawHost) {
   const gridPath = path.join(__dirname, "..", "lib", "ssh-grid.json");
   try {
     const grid = JSON.parse(fs.readFileSync(gridPath, "utf8"));
+    // Normalize the real hostname (lowercase, drop any domain suffix), then
+    // map real hostnames to grid names via hostAliases before the lookup.
+    let host = String(rawHost).trim().toLowerCase().split(".")[0];
+    const aliases = grid.hostAliases || {};
+    if (Object.prototype.hasOwnProperty.call(aliases, host)) host = aliases[host];
+    const hosts = grid.hosts || [];
+    if (!hosts.includes(host)) {
+      return { available: true, host, rawHost, known: false, allowed: [], blocked: hosts.slice(), rule: grid.rule, error: null };
+    }
     const row = (grid.grid && grid.grid[host]) || {};
     const allowed = Object.entries(row).map(([target, cell]) => ({
       target,
@@ -151,10 +160,10 @@ function collectSshGrid(host) {
       command: cell.command,
       note: cell.note || null,
     }));
-    const blocked = (grid.hosts || []).filter((name) => name !== host && !row[name]);
-    return { available: true, host, allowed, blocked, rule: grid.rule, error: null };
+    const blocked = hosts.filter((name) => name !== host && !row[name]);
+    return { available: true, host, rawHost, known: true, allowed, blocked, rule: grid.rule, error: null };
   } catch (error) {
-    return { available: false, host, allowed: [], blocked: [], rule: null, error: error.message };
+    return { available: false, host: rawHost, rawHost, known: false, allowed: [], blocked: [], rule: null, error: error.message };
   }
 }
 
@@ -162,6 +171,12 @@ function renderSshGrid(sshGrid) {
   const out = ["== SSH Grid =="];
   if (!sshGrid.available) {
     out.push(`grid unavailable: ${sshGrid.error}`);
+    return out;
+  }
+  if (sshGrid.known === false) {
+    out.push(`This machine's hostname '${sshGrid.rawHost}' is not in the SSH grid, so all SSH is blocked.`);
+    out.push("If it is a known machine, add its lowercase hostname to hostAliases in lib/ssh-grid.json.");
+    out.push(sshGrid.rule || "Never use joelkehle keys or accounts for automation.");
     return out;
   }
   if (!sshGrid.allowed.length) {
@@ -306,7 +321,7 @@ function collect(args) {
     root,
     tools: Object.fromEntries(REQUIRED_TOOLS.map((tool) => [tool, commandExists(tool) || null])),
     workbench: readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
-    sshGrid: collectSshGrid(os.hostname().split(".")[0]),
+    sshGrid: collectSshGrid(os.hostname()),
     shouldSurface: false,
     surfaceReasons: [],
     results: [],

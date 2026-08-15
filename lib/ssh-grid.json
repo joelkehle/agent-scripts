@@ -1,6 +1,10 @@
 {
   "comment": "Approved 6x6 SSH grid by source host. Cells not listed are blocked. Keystone is human-only from the laptop and out of scope for agents.",
   "hosts": ["laptop", "dev", "beelink", "lab", "keystone", "macmini"],
+  "hostAliasesComment": "Lowercase real hostnames -> grid names. Only list hostnames that differ from the grid name.",
+  "hostAliases": {
+    "joelsurface5": "laptop"
+  },
   "grid": {
     "laptop": {
       "dev": { "method": "alias", "command": "agent-dev" },
