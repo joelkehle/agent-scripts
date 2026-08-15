@@ -69,6 +69,7 @@ That is the routing table. Core routers in this repo:
 - docs/STATE_ARCHITECTURE.md — where state lives
 - docs/bus-discovery.md — live bus capabilities (`bus-discover`)
 - docs/stack-priority.md — layer labels and the pick-next-work rule
+- docs/github-issues.md — canonical issue labeling and filing conventions
 - docs/shared-agent-coordination.md — overlapping or cross-host work
 - docs/service-runtime-policy.md — running services
 - docs/self-update.md — fleet checkout self-update timer
