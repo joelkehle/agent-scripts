@@ -25,43 +25,59 @@ if [ ! -f "$grid_file" ]; then
 fi
 
 # The source host comes from the machine itself, never from the caller.
-src="$(hostname -s)"
+raw_src="$(hostname -s)"
 
 # Ask node (always present in this workspace) to read the grid for us.
-# Output: one line — KNOWN|UNKNOWN, then ALLOWED <method> or BLOCKED, then valid targets.
+# Node normalizes the hostname (lowercase, drop any domain suffix) and maps
+# real hostnames to grid names via hostAliases before the lookup.
+# Output: one line — UNKNOWN_SRC <src>, UNKNOWN_TARGET <hosts>,
+# BLOCKED <src>, or ALLOWED <src> <method>.
 lookup="$(node -e '
   const fs = require("fs");
   const grid = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-  const src = process.argv[2];
+  const rawSrc = process.argv[2];
   const target = process.argv[3];
   const hosts = grid.hosts || [];
+  let src = rawSrc.trim().toLowerCase().split(".")[0];
+  const aliases = grid.hostAliases || {};
+  if (Object.prototype.hasOwnProperty.call(aliases, src)) src = aliases[src];
+  if (!hosts.includes(src)) {
+    console.log("UNKNOWN_SRC " + src);
+    process.exit(0);
+  }
   if (!hosts.includes(target)) {
-    console.log("UNKNOWN " + hosts.join(","));
+    console.log("UNKNOWN_TARGET " + hosts.join(","));
     process.exit(0);
   }
   const row = (grid.grid && grid.grid[src]) || {};
   const cell = row[target];
   if (!cell) {
-    console.log("BLOCKED");
+    console.log("BLOCKED " + src);
   } else {
-    console.log("ALLOWED " + cell.method);
+    console.log("ALLOWED " + src + " " + cell.method);
   }
-' "$grid_file" "$src" "$target")"
+' "$grid_file" "$raw_src" "$target")"
 
 verdict="${lookup%% *}"
 detail="${lookup#* }"
 
 case "$verdict" in
-  UNKNOWN)
+  UNKNOWN_SRC)
+    echo "agent-ssh: this machine's hostname '$raw_src' is not in the SSH grid, so all SSH is blocked. If it is a known machine, add its lowercase hostname to hostAliases in $grid_file." >&2
+    exit 1
+    ;;
+  UNKNOWN_TARGET)
     echo "agent-ssh: unknown target '$target'. Valid targets: ${detail//,/, }" >&2
     exit 1
     ;;
   BLOCKED)
+    src="$detail"
     echo "blocked by the SSH grid: $src -> $target. See agent-start output." >&2
     exit 1
     ;;
   ALLOWED)
-    method="$detail"
+    src="${detail%% *}"
+    method="${detail#* }"
     ;;
   *)
     echo "agent-ssh: could not read the SSH grid ($lookup)" >&2

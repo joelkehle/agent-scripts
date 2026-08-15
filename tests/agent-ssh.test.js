@@ -63,6 +63,37 @@ test("ssh-grid.json parses and matches the approved grid shape", () => {
   assert.deepEqual(grid.grid.macmini, {});
 
   assert.equal(grid.rule, "Never use joelkehle keys or accounts for automation.");
+  assert.deepEqual(grid.hostAliases, { joelsurface5: "laptop" });
+});
+
+test("agent-ssh maps the real laptop hostname JoelSurface5 to the laptop row", () => {
+  // Every laptop target is allowed via a shell alias, so agent-ssh should
+  // point at the alias (proof the row matched) rather than report a block.
+  for (const target of ["dev", "beelink", "lab", "macmini"]) {
+    const result = runAgentSsh([target], "JoelSurface5");
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, new RegExp(`agent-${target}`));
+    assert.doesNotMatch(result.stderr, /blocked by the SSH grid/);
+    assert.doesNotMatch(result.stderr, /not in the SSH grid/);
+  }
+  // Keystone stays blocked from the laptop, under the grid name.
+  const keystone = runAgentSsh(["keystone"], "JoelSurface5");
+  assert.equal(keystone.status, 1);
+  assert.match(keystone.stderr, /blocked by the SSH grid: laptop -> keystone/);
+});
+
+test("agent-ssh lowercases and strips the domain before the alias lookup", () => {
+  const result = runAgentSsh(["dev"], "JOELSURFACE5.local");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /agent-dev/);
+  assert.doesNotMatch(result.stderr, /not in the SSH grid/);
+});
+
+test("agent-ssh fails closed on an unknown hostname and points at hostAliases", () => {
+  const result = runAgentSsh(["dev"], "mystery-box");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /'mystery-box' is not in the SSH grid/);
+  assert.match(result.stderr, /hostAliases/);
 });
 
 test("agent-ssh blocks a forbidden cell with exit 1", () => {
