@@ -45,6 +45,13 @@ If it is missing, say so once and continue.
 - Between machines, use the agent-* aliases or `agent-ssh <target>` as shown
   by `agent-start`. Never use Joel's personal keys or accounts for automation.
 
+## Picking work: the stack rule
+
+Issues carry a `layer:L0`–`layer:L5` label (L5 = Joel's paid deliverables,
+L0 = machines). Higher layer wins. A lower-layer issue jumps the queue only
+if it currently blocks named higher-layer work — "could be cleaner" never
+jumps. Details: docs/stack-priority.md.
+
 ## Workspace
 
 `~/Projects`. Joel's repos under `jk`, `ucla-tdg`, `shared`. Third-party under
@@ -61,6 +68,7 @@ That is the routing table. Core routers in this repo:
 - docs/elephant/README.md — elephant protocol
 - docs/STATE_ARCHITECTURE.md — where state lives
 - docs/bus-discovery.md — live bus capabilities (`bus-discover`)
+- docs/stack-priority.md — layer labels and the pick-next-work rule
 - docs/shared-agent-coordination.md — overlapping or cross-host work
 - docs/service-runtime-policy.md — running services
 - docs/oracle.md, tools.md, and the design-walkthrough skill — oracle and tools
