@@ -307,6 +307,44 @@ function makeAgentStartSupport(fixture) {
   };
 }
 
+test("bare-base worktree with canonical tracking passes write preflight", (t) => {
+  const fixture = makeRunFixture(t, "bare-base");
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-safety-bare-base-"));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const bare = path.join(support, "repo.git");
+  git(support, "clone", "-q", "--bare", fixture.root, bare);
+  const head = git(bare, "rev-parse", "HEAD");
+  git(bare, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+  git(bare, "update-ref", "refs/remotes/origin/main", head);
+  git(bare, "config", "branch.main.remote", "origin");
+  git(bare, "config", "branch.main.merge", "refs/heads/main");
+  const worktree = path.join(support, "ws-main");
+  git(bare, "worktree", "add", "-q", worktree, "main");
+  const preflight = preflightWorkspace(worktree, "write", fixture);
+  const codes = preflight.issues.map(({ code }) => code);
+  assert.ok(codes.includes("primary_bare_base"));
+  assert.ok(!codes.includes("primary_status_ambiguous"));
+  assert.ok(!codes.includes("tracking_branch_ambiguous"));
+  assert.equal(preflight.blocking_issues.length, 0);
+  assert.equal(preflight.ok, true);
+});
+
+test("bare-base worktree without tracking configuration still refuses write", (t) => {
+  const fixture = makeRunFixture(t, "bare-base-untracked");
+  const support = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-safety-bare-untracked-"));
+  t.after(() => fs.rmSync(support, { recursive: true, force: true }));
+  const bare = path.join(support, "repo.git");
+  git(support, "clone", "-q", "--bare", fixture.root, bare);
+  const worktree = path.join(support, "ws-main");
+  git(bare, "worktree", "add", "-q", worktree, "main");
+  const preflight = preflightWorkspace(worktree, "write", fixture);
+  const codes = preflight.issues.map(({ code }) => code);
+  assert.ok(codes.includes("primary_bare_base"));
+  assert.ok(!codes.includes("primary_status_ambiguous"));
+  assert.ok(codes.includes("tracking_branch_ambiguous"));
+  assert.equal(preflight.ok, false);
+});
+
 test("agent-start requires explicit workspace admission and then uses read safety", (t) => {
   const fixture = makeWorkspaceFixture(t, "agent-start-workspace");
   const support = makeAgentStartSupport(fixture);
