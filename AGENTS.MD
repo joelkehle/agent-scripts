@@ -42,8 +42,9 @@ If it is missing, say so once and continue.
 - HTTPS remotes under `~/Projects`. No amend unless asked.
 - Validate with `agent-check` or the repo's gate. GitHub Actions are not the
   validation surface.
-- Between machines, use the agent-* aliases or `agent-ssh <target>` as shown
-  by `agent-start`. Never use Joel's personal keys or accounts for automation.
+- Between machines, use `agent-ssh <target>` as shown by `agent-start`. It keeps
+  the approved host grid while using the current helper's normal SSH identity.
+  Never copy, print, or move private keys.
 
 ## Picking work: the stack rule
 
@@ -57,6 +58,11 @@ jumps. Details: docs/stack-priority.md.
 `~/Projects`. Joel's repos under `jk`, `ucla-tdg`, `shared`. Third-party under
 `oss`. Files belong to the owning repo or `shared/agent-scripts` — do not
 create state or policy files somewhere convenient.
+
+Interactive Codex and Claude sessions are Joel's delegated helpers. Run them
+under Joel's operating-system account and work in these normal checkouts.
+Reserve separate Unix accounts for persistent services and untrusted work.
+GitHub writes still use the repo-approved contributor identity.
 
 ## Finding everything else
 

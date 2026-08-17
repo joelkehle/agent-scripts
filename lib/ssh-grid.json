@@ -1,5 +1,5 @@
 {
-  "comment": "Approved 6x6 SSH grid by source host. Cells not listed are blocked. Keystone is human-only from the laptop and out of scope for agents.",
+  "comment": "Approved 6x6 SSH grid by source host. Cells not listed are blocked. Interactive helpers use the caller's normal SSH identity. Keystone is outside this helper grid.",
   "hosts": ["laptop", "dev", "beelink", "lab", "keystone", "macmini"],
   "hostAliasesComment": "Lowercase real hostnames -> grid names. Only list hostnames that differ from the grid name.",
   "hostAliases": {
@@ -7,15 +7,15 @@
   },
   "grid": {
     "laptop": {
-      "dev": { "method": "alias", "command": "agent-dev" },
-      "beelink": { "method": "alias", "command": "agent-beelink" },
-      "lab": { "method": "alias", "command": "agent-lab" },
-      "macmini": { "method": "alias", "command": "agent-macmini" }
+      "dev": { "method": "direct", "command": "agent-ssh dev" },
+      "beelink": { "method": "direct", "command": "agent-ssh beelink" },
+      "lab": { "method": "direct", "command": "agent-ssh lab" },
+      "macmini": { "method": "direct", "command": "agent-ssh macmini" }
     },
     "dev": {
-      "beelink": { "method": "sudo-agent", "command": "agent-ssh beelink" },
-      "lab": { "method": "sudo-agent", "command": "agent-ssh lab" },
-      "macmini": { "method": "sudo-agent", "command": "agent-ssh macmini" }
+      "beelink": { "method": "direct", "command": "agent-ssh beelink" },
+      "lab": { "method": "direct", "command": "agent-ssh lab" },
+      "macmini": { "method": "direct", "command": "agent-ssh macmini" }
     },
     "beelink": {
       "keystone": { "method": "tunnel-only", "command": null, "note": "tunnel only, no shell" }
@@ -24,5 +24,5 @@
     "keystone": {},
     "macmini": {}
   },
-  "rule": "Never use joelkehle keys or accounts for automation."
+  "rule": "Interactive helpers use the caller's normal SSH identity. Never copy, print, or move private keys."
 }

@@ -20,6 +20,11 @@ function makeHostnameShim(host) {
     `#!/usr/bin/env bash\necho "${host}"\n`,
     { mode: 0o755 }
   );
+  fs.writeFileSync(
+    path.join(dir, "ssh"),
+    "#!/usr/bin/env bash\nprintf 'ssh:%s\\n' \"$*\"\n",
+    { mode: 0o755 }
+  );
   return dir;
 }
 
@@ -44,13 +49,13 @@ test("ssh-grid.json parses and matches the approved grid shape", () => {
 
   assert.deepEqual(Object.keys(grid.grid.laptop), ["dev", "beelink", "lab", "macmini"]);
   for (const [target, cell] of Object.entries(grid.grid.laptop)) {
-    assert.equal(cell.method, "alias");
-    assert.equal(cell.command, `agent-${target}`);
+    assert.equal(cell.method, "direct");
+    assert.equal(cell.command, `agent-ssh ${target}`);
   }
 
   assert.deepEqual(Object.keys(grid.grid.dev), ["beelink", "lab", "macmini"]);
   for (const [target, cell] of Object.entries(grid.grid.dev)) {
-    assert.equal(cell.method, "sudo-agent");
+    assert.equal(cell.method, "direct");
     assert.equal(cell.command, `agent-ssh ${target}`);
   }
 
@@ -62,17 +67,15 @@ test("ssh-grid.json parses and matches the approved grid shape", () => {
   assert.deepEqual(grid.grid.keystone, {});
   assert.deepEqual(grid.grid.macmini, {});
 
-  assert.equal(grid.rule, "Never use joelkehle keys or accounts for automation.");
+  assert.equal(grid.rule, "Interactive helpers use the caller's normal SSH identity. Never copy, print, or move private keys.");
   assert.deepEqual(grid.hostAliases, { joelsurface5: "laptop" });
 });
 
 test("agent-ssh maps the real laptop hostname JoelSurface5 to the laptop row", () => {
-  // Every laptop target is allowed via a shell alias, so agent-ssh should
-  // point at the alias (proof the row matched) rather than report a block.
   for (const target of ["dev", "beelink", "lab", "macmini"]) {
     const result = runAgentSsh([target], "JoelSurface5");
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, new RegExp(`agent-${target}`));
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, `ssh:-o BatchMode=yes ${target}\n`);
     assert.doesNotMatch(result.stderr, /blocked by the SSH grid/);
     assert.doesNotMatch(result.stderr, /not in the SSH grid/);
   }
@@ -84,8 +87,8 @@ test("agent-ssh maps the real laptop hostname JoelSurface5 to the laptop row", (
 
 test("agent-ssh lowercases and strips the domain before the alias lookup", () => {
   const result = runAgentSsh(["dev"], "JOELSURFACE5.local");
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /agent-dev/);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "ssh:-o BatchMode=yes dev\n");
   assert.doesNotMatch(result.stderr, /not in the SSH grid/);
 });
 
@@ -115,10 +118,10 @@ test("agent-ssh refuses tunnel-only cells with a plain explanation", () => {
   assert.match(result.stderr, /tunnel-only/);
 });
 
-test("agent-ssh points laptop sessions at the shell alias", () => {
-  const result = runAgentSsh(["beelink"], "laptop");
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /agent-beelink/);
+test("agent-ssh uses the caller's normal SSH identity on allowed hops", () => {
+  const result = runAgentSsh(["beelink", "id", "-un"], "dev");
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "ssh:-o BatchMode=yes beelink id -un\n");
 });
 
 test("agent-ssh ignores AGENT_SSH_HOST and trusts only hostname(1)", () => {
