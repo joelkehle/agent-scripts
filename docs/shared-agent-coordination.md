@@ -20,10 +20,14 @@ Default architecture:
 ```text
 Codex / Claude Code runs on dev
   -> edits and tests projects on dev
-  -> uses ssh agent@macmini 'cd ~/Projects/<repo> && ...' for macOS-specific work
+  -> uses agent-ssh macmini 'cd ~/Projects/<repo> && ...' for macOS-specific work
   -> stores claims, handoffs, patches, and proof packs in AgentCoord
   -> commits in the repo where the work actually lives
 ```
+
+`agent-ssh` uses Joel's normal SSH identity for interactive helper work. A
+separate Unix account is only for a named service or untrusted workload whose
+runbook requires one.
 
 Prefer launching coding agents from Dev. Use Mac Mini as a remote execution target from Dev for macOS-only repos and workflows: launchd, TCC/GUI-adjacent checks, Photos, Voice Memos, Keychain, Apple app automation, and hardware-local probes.
 
