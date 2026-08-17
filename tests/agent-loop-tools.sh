@@ -398,11 +398,11 @@ cat > "$workbench_summary" <<'JSON'
     "shouldSurface": true,
     "surfaceReasons": [
       "missing tool: codex",
-      "Machine Compliance failed"
+      "workspace report failed"
     ],
     "counts": {
       "missingTools": 1,
-      "complianceAlerts": 1
+      "otherAlerts": 1
     }
   },
   "artifacts": {

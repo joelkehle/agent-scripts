@@ -30,8 +30,6 @@ The packet includes:
   `workspace-preflight` result for `read` or `write` mode;
 - active and quarantined local workspace-run manifests;
 - command availability for the core agent workbench tools;
-- `wwi` open loops;
-- `machine-compliance --agent-startup --format text`;
 - `bus-discover` when available;
 - AgentCoord validation plus active and stale claims;
 - docs-list output;
@@ -43,11 +41,11 @@ Use `--skip-bus` only when bus probing is unrelated or temporarily noisy. The no
 
 ## Named Codex Threads
 
-Codex 0.146 can name new threads. Keep WWI as the work authority and use the
-loop slug as the human-readable thread name when it is unique:
+Codex 0.146 can name new threads. Use a short task slug as the human-readable
+thread name when it is unique:
 
 ```text
-/rename <wwi-loop-slug>
+/rename <task-slug>
 /new <child-mission-slug>
 /clear <child-mission-slug>
 ```
@@ -74,7 +72,7 @@ When the workbench requests attention, notice mode prints:
 ```text
 Agent workbench warning: 2 issues
 - missing tool: codex
-- Machine Compliance failed
+- workspace report failed
 Proof: http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/latest/
 ```
 
@@ -130,10 +128,6 @@ safe and produces the same payload.
 
 The installer refuses tracked or staged payload changes before it copies any
 files. This makes the manifest revision proof of the installed source bytes.
-
-`machine-compliance` is not part of the Agent Scripts payload. It is a required
-Manager component. The Manager installer must provide the real compliance
-command. Agent Scripts does not provide a fallback or a passing stub.
 
 Manager wraps this via `~/Projects/shared/manager/bin/install-agent-system-links` so bootstrap and runbooks do not depend on the agent-scripts implementation path.
 
