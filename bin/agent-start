@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { relevantRunStates } = require("../lib/agent-workspace");
+const { normalizeTimestamp } = require("../lib/agentcoord-claims");
 const {
   DEFAULT_FOCUS_FILE,
   loadFocus,
@@ -18,7 +19,6 @@ const {
   publicPreflight,
 } = require("../lib/workspace-preflight");
 
-const DEFAULT_AGENTCOORD_ROOT = process.env.AGENTCOORD_ROOT || "/mnt/synology-share1/AgentCoord";
 const DEFAULT_WORKBENCH_SUMMARY = process.env.AGENT_WORKBENCH_SUMMARY || "/home/joelkehle/Projects/shared/dev-dashboard/codex-output/agentic-software-ops/agent-workbench/latest/summary.json";
 const DEFAULT_WORKBENCH_URL = process.env.AGENT_WORKBENCH_URL || "http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/latest/";
 const REQUIRED_TOOLS = ["agent-start", "agent-focus", "workspace-preflight", "agent-workspace", "agentcoord", "committer", "docs-list", "bus-discover", "claude", "codex", "agent-check"];
@@ -145,6 +145,124 @@ function busDiscovery(timeoutMs) {
 function sectionFromCommand(title, result, maxLines = 80) {
   const output = lines(result.stdout || result.stderr || result.error || "").slice(0, maxLines);
   return { title, command: result.command, status: result.status, signal: result.signal, output };
+}
+
+function resolveAgentCoordCommand() {
+  if (process.env.AGENTCOORD_BIN) return process.env.AGENTCOORD_BIN;
+  const sibling = path.join(__dirname, "agentcoord");
+  if (fs.existsSync(sibling)) return sibling;
+  const installed = commandExists("agentcoord");
+  if (installed) return installed;
+  return path.join(os.homedir(), "Projects/shared/agent-scripts/bin/agentcoord");
+}
+
+function summarizeClaims(entries) {
+  const summary = { total: entries.length, active: 0, stale: 0, invalid: 0, released: 0 };
+  for (const entry of entries) summary[entry.status] += 1;
+  return summary;
+}
+
+function collectAgentCoord(root, timeoutMs) {
+  const command = resolveAgentCoordCommand();
+  const result = run(command, ["list", "--root", root, "--all", "--json"], {
+    timeoutMs,
+    env: { UV_THREADPOOL_SIZE: "32" },
+  });
+  const failed = (message) => ({
+    available: false,
+    error: message,
+    command: result.command,
+    status: result.status,
+    signal: result.signal,
+    entries: [],
+    summary: { total: 0, active: 0, stale: 0, invalid: 0, released: 0 },
+  });
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.error || (result.signal ? `terminated by ${result.signal}` : "unknown failure")).trim();
+    return failed(detail || "claim scan failed without an error message");
+  }
+  let payload;
+  try {
+    payload = JSON.parse(result.stdout);
+  } catch (error) {
+    return failed(`claim scan returned invalid JSON: ${error.message}`);
+  }
+  if (!payload || !Array.isArray(payload.claims)) {
+    return failed("claim scan response is missing claims");
+  }
+  const entries = [];
+  for (const item of payload.claims) {
+    if (!item || typeof item.file !== "string" || !["active", "stale", "invalid", "released"].includes(item.status)) {
+      return failed("claim scan response contains an invalid claim entry");
+    }
+    entries.push({
+      file: item.file,
+      data: item.claim,
+      directory_repo: item.directory_repo || "",
+      status: item.status,
+      issues: Array.isArray(item.issues) ? item.issues : [],
+    });
+  }
+  return {
+    available: true,
+    error: null,
+    command: result.command,
+    status: result.status,
+    signal: result.signal,
+    entries,
+    summary: summarizeClaims(entries),
+  };
+}
+
+function renderClaims(entries, root) {
+  if (!entries.length) return ["agentcoord: no matching claims"];
+  return entries.map((entry) => {
+    const data = entry.data || {};
+    const issues = entry.issues.length ? ` issues=${entry.issues.join("; ")}` : "";
+    return [
+      entry.status,
+      data.repo || "unknown-repo",
+      data.slug || path.basename(entry.file),
+      data.agent || "unknown-agent",
+      data.host || "unknown-host",
+      data.safety || "unknown-safety",
+      `expires=${normalizeTimestamp(data.expires_at)}`,
+      `file=${path.relative(root, entry.file)}`,
+      `next=${data.next_action || ""}`,
+      issues,
+    ].filter(Boolean).join(" ");
+  });
+}
+
+function agentCoordSections(claimState, root) {
+  if (!claimState.available) {
+    const section = (title) => ({
+      title,
+      command: claimState.command,
+      status: 1,
+      signal: claimState.signal,
+      output: [`agentcoord: claim scan failed: ${claimState.error}`],
+    });
+    return [
+      section("AgentCoord Validate"),
+      section("AgentCoord Active Claims"),
+      section("AgentCoord Stale Claims"),
+    ];
+  }
+  const invalid = claimState.entries.filter((entry) => entry.status === "invalid");
+  const active = claimState.entries.filter((entry) => entry.status === "active");
+  const stale = claimState.entries.filter((entry) => entry.status === "stale");
+  const summary = claimState.summary;
+  const validateOutput = [
+    `agentcoord: root=${root}`,
+    `agentcoord: total=${summary.total} active=${summary.active} stale=${summary.stale} released=${summary.released} invalid=${summary.invalid}`,
+  ];
+  if (invalid.length) validateOutput.push(...renderClaims(invalid, root));
+  return [
+    { title: "AgentCoord Validate", command: claimState.command, status: invalid.length ? 1 : 0, signal: null, output: validateOutput },
+    { title: "AgentCoord Active Claims", command: claimState.command, status: 0, signal: null, output: renderClaims(active, root) },
+    { title: "AgentCoord Stale Claims", command: claimState.command, status: 0, signal: null, output: renderClaims(stale, root) },
+  ];
 }
 
 function collectSshGrid(rawHost) {
@@ -303,13 +421,16 @@ function collectWeeklyFocus(args) {
   }
 }
 
-function collectSafety(args, root) {
+function collectSafety(args, root, claimState) {
   const weeklyFocus = collectWeeklyFocus(args);
   const workspacePreflight = publicPreflight(preflightWorkspace(root, args.mode, {
     agentcoordRoot: args.agentcoordRoot,
     quarantineRoot: args.quarantineRoot,
     stateRoot: args.stateRoot,
     sessionKind: args.sessionKind,
+    ...(claimState.available
+      ? { claimEntries: claimState.entries }
+      : { claimStateError: claimState.error }),
   }));
   const runStates = relevantRunStates(root, { stateRoot: args.stateRoot });
   return { weeklyFocus, workspacePreflight, runStates };
@@ -317,8 +438,7 @@ function collectSafety(args, root) {
 
 function collect(args) {
   const root = args.sessionKind === "workspace" ? path.resolve(args.root) : gitRoot(args.root);
-  const agentcoordPath = path.join(os.homedir(), "Projects/shared/agent-scripts/bin/agentcoord");
-  const coordCmd = commandExists("agentcoord") || (fs.existsSync(agentcoordPath) ? agentcoordPath : "agentcoord");
+  const claimState = collectAgentCoord(args.agentcoordRoot, args.timeoutMs);
   const packet = {
     label: "Coding-agent startup brief",
     safetyClass: "read",
@@ -332,12 +452,16 @@ function collect(args) {
     shouldSurface: false,
     surfaceReasons: [],
     results: [],
-    ...collectSafety(args, root),
+    agentCoord: {
+      available: claimState.available,
+      error: claimState.error,
+      command: claimState.command,
+      summary: claimState.summary,
+    },
+    ...collectSafety(args, root, claimState),
   };
   if (!args.skipBus) packet.results.push(sectionFromCommand("Bus Discovery", busDiscovery(Math.max(args.timeoutMs, 8000)), 120));
-  packet.results.push(sectionFromCommand("AgentCoord Validate", run(coordCmd, ["validate", "--root", DEFAULT_AGENTCOORD_ROOT], { cwd: root, timeoutMs: args.timeoutMs }), 40));
-  packet.results.push(sectionFromCommand("AgentCoord Active Claims", run(coordCmd, ["list", "--root", DEFAULT_AGENTCOORD_ROOT, "--active"], { cwd: root, timeoutMs: args.timeoutMs }), 40));
-  packet.results.push(sectionFromCommand("AgentCoord Stale Claims", run(coordCmd, ["list", "--root", DEFAULT_AGENTCOORD_ROOT, "--stale"], { cwd: root, timeoutMs: args.timeoutMs }), 40));
+  packet.results.push(...agentCoordSections(claimState, args.agentcoordRoot));
   const docs = docsList(root, args.timeoutMs);
   packet.results.push({ title: "Docs", command: docs.command || "docs-list", status: docs.ok ? 0 : 1, signal: null, output: lines(docs.output).slice(0, 120) });
   if (args.sessionKind === "workspace") {
@@ -480,17 +604,19 @@ try {
   }
   if (args.notice) {
     const root = args.sessionKind === "workspace" ? path.resolve(args.root) : gitRoot(args.root);
-    const safety = collectSafety(args, root);
+    const claimState = collectAgentCoord(args.agentcoordRoot, args.timeoutMs);
+    const safety = collectSafety(args, root, claimState);
     process.stdout.write(renderNotice(
       readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
       safety,
     ));
-    process.exit(0);
+    process.exit(claimState.available ? 0 : 1);
   }
   const packet = collect(args);
   if (args.cardPath) writeCard(args.cardPath, packet);
   if (args.json) console.log(JSON.stringify(packet, null, 2));
   else process.stdout.write(renderText(packet));
+  if (!packet.agentCoord.available) process.exitCode = 1;
 } catch (error) {
   console.error(`agent-start: ${error.message}`);
   process.exit(1);
