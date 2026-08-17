@@ -148,11 +148,14 @@ remote or checkout.
 
 Read mode does not block on repository write hazards, but still reports them
 and sets `shouldSurface=true`. The default session kind is `repository`, so a
-non-Git root refuses in both modes. Operator admission is explicit through
-`agent-workspace begin --session-kind workspace` or
-`agent-start --session-kind workspace`. That workspace path always uses read
-safety and grants no code-write authority. Missing paths and non-directories
-remain refusals. No fake repository is made.
+non-Git root normally refuses in both modes. `agent-start` recognizes the
+caller's exact `~/Projects` directory as the normal cross-repository workspace
+without requiring another flag. It uses read safety for that workspace root
+and leaves Git status and validation to the child repository being changed.
+Other operator admission is explicit through `agent-workspace begin
+--session-kind workspace` or `agent-start --session-kind workspace`. Workspace
+paths always use read safety and grant no code-write authority. Missing paths
+and non-directories remain refusals. No fake repository is made.
 
 Fixture/test overrides:
 

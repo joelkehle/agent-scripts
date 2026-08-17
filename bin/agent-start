@@ -50,6 +50,7 @@ function parseArgs(argv) {
     workbenchUrl: DEFAULT_WORKBENCH_URL,
     mode: "",
     sessionKind: "repository",
+    sessionKindExplicit: false,
     goalId: process.env.AGENT_FOCUS_GOAL_ID || "",
     focusFile: DEFAULT_FOCUS_FILE,
     agentcoordRoot: PREFLIGHT_AGENTCOORD_ROOT,
@@ -64,7 +65,10 @@ function parseArgs(argv) {
     else if (arg === "--skip-bus" || arg === "--no-bus") args.skipBus = true;
     else if (arg === "--root") args.root = argv[++i];
     else if (arg === "--mode") args.mode = argv[++i];
-    else if (arg === "--session-kind") args.sessionKind = argv[++i];
+    else if (arg === "--session-kind") {
+      args.sessionKind = argv[++i];
+      args.sessionKindExplicit = true;
+    }
     else if (arg === "--goal") args.goalId = argv[++i];
     else if (arg === "--focus-file") args.focusFile = argv[++i];
     else if (arg === "--card") args.cardPath = argv[++i];
@@ -78,10 +82,13 @@ function parseArgs(argv) {
   }
   if (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0) throw new Error("--timeout must be positive milliseconds");
   if (!["repository", "workspace"].includes(args.sessionKind)) throw new Error("--session-kind must be repository or workspace");
+  args.root = path.resolve(args.root);
+  if (!args.sessionKindExplicit && args.root === path.resolve(os.homedir(), "Projects")) {
+    args.sessionKind = "workspace";
+  }
   if (!args.mode) args.mode = args.sessionKind === "workspace" ? "read" : "write";
   if (!["read", "write"].includes(args.mode)) throw new Error("--mode must be read or write");
   if (args.sessionKind === "workspace" && args.mode !== "read") throw new Error("workspace sessions require --mode read");
-  args.root = path.resolve(args.root);
   return args;
 }
 
@@ -333,8 +340,25 @@ function collect(args) {
   packet.results.push(sectionFromCommand("AgentCoord Stale Claims", run(coordCmd, ["list", "--root", DEFAULT_AGENTCOORD_ROOT, "--stale"], { cwd: root, timeoutMs: args.timeoutMs }), 40));
   const docs = docsList(root, args.timeoutMs);
   packet.results.push({ title: "Docs", command: docs.command || "docs-list", status: docs.ok ? 0 : 1, signal: null, output: lines(docs.output).slice(0, 120) });
-  packet.results.push(sectionFromCommand("Git Status", run("git", ["-C", root, "status", "--short", "--branch"], { timeoutMs: args.timeoutMs }), 80));
-  packet.results.push(sectionFromCommand("Validation Entrypoint", run("agent-check", ["--root", root, "--dry-run"], { cwd: root, timeoutMs: args.timeoutMs }), 20));
+  if (args.sessionKind === "workspace") {
+    packet.results.push({
+      title: "Git Status",
+      command: "not applicable for a cross-repository workspace root",
+      status: 0,
+      signal: null,
+      output: ["Run Git checks inside the repository being changed."],
+    });
+    packet.results.push({
+      title: "Validation Entrypoint",
+      command: "not applicable for a cross-repository workspace root",
+      status: 0,
+      signal: null,
+      output: ["Run agent-check inside the repository being changed."],
+    });
+  } else {
+    packet.results.push(sectionFromCommand("Git Status", run("git", ["-C", root, "status", "--short", "--branch"], { timeoutMs: args.timeoutMs }), 80));
+    packet.results.push(sectionFromCommand("Validation Entrypoint", run("agent-check", ["--root", root, "--dry-run"], { cwd: root, timeoutMs: args.timeoutMs }), 20));
+  }
   buildSurface(packet);
   return packet;
 }
@@ -342,7 +366,9 @@ function collect(args) {
 function safetyReasons(safety) {
   const reasons = [];
   if (!safety.weeklyFocus.ok) reasons.push(`weekly focus invalid: ${safety.weeklyFocus.error}`);
-  reasons.push(...safety.workspacePreflight.issues.map((item) => `${item.code}: ${item.message}`));
+  if (safety.workspacePreflight.shouldSurface) {
+    reasons.push(...safety.workspacePreflight.issues.map((item) => `${item.code}: ${item.message}`));
+  }
   return reasons;
 }
 
@@ -404,7 +430,9 @@ function renderText(packet) {
     out.push(`origin fetch: ${packet.workspacePreflight.origin_fetch_url || "(unavailable)"}`);
     out.push(`origin push: ${packet.workspacePreflight.origin_push_urls.length ? packet.workspacePreflight.origin_push_urls.join(", ") : "(unavailable)"}`);
   }
-  for (const item of packet.workspacePreflight.issues) out.push(`- ${item.code}: ${item.message}`);
+  if (packet.workspacePreflight.shouldSurface) {
+    for (const item of packet.workspacePreflight.issues) out.push(`- ${item.code}: ${item.message}`);
+  }
   if (packet.runStates.length) {
     out.push("runs:");
     for (const run of packet.runStates) {
