@@ -181,7 +181,8 @@ test("explicit workspace read preflight permits a non-Git operator session", (t)
   });
   assert.equal(preflight.ok, true);
   assert.equal(preflight.session_kind, "workspace");
-  assert.match(preflight.issues.map((item) => item.code).join("\n"), /workspace_operator_session/);
+  assert.equal(preflight.shouldSurface, false);
+  assert.deepEqual(preflight.issues, []);
   const writeAttempt = preflightWorkspace(fixture.root, "write", {
     ...fixture,
     sessionKind: "workspace",
@@ -372,6 +373,48 @@ test("agent-start requires explicit workspace admission and then uses read safet
   assert.equal(packet.workspacePreflight.ok, true);
   assert.equal(packet.workspacePreflight.mode, "read");
   assert.equal(packet.workspacePreflight.session_kind, "workspace");
+});
+
+test("agent-start quietly recognizes the caller's Projects directory as a workspace", (t) => {
+  const fixture = makeWorkspaceFixture(t, "agent-start-projects-root");
+  const support = makeAgentStartSupport(fixture);
+  const env = {
+    ...support.env,
+    HOME: path.dirname(fixture.root),
+  };
+  const baseArgs = [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--goal", "W31-CORE",
+    "--focus-file", fixture.focusFile,
+    "--workbench-summary", support.workbench,
+    "--no-bus",
+  ];
+  const result = spawnSync("node", [...baseArgs, "--json"], {
+    encoding: "utf8",
+    env,
+  });
+  if (result.error?.code === "EPERM") {
+    t.skip("sandbox blocks nested process execution");
+    return;
+  }
+  assert.equal(result.status, 0, result.stderr);
+  const packet = JSON.parse(result.stdout);
+  assert.equal(packet.workspacePreflight.ok, true);
+  assert.equal(packet.workspacePreflight.mode, "read");
+  assert.equal(packet.workspacePreflight.session_kind, "workspace");
+  assert.equal(packet.shouldSurface, false);
+  assert.ok(!result.stdout.includes("git_repository_required"));
+  assert.ok(!result.stdout.includes("no validation command found"));
+  assert.equal(packet.results.find(({ title }) => title === "Git Status").status, 0);
+  assert.equal(packet.results.find(({ title }) => title === "Validation Entrypoint").status, 0);
+
+  const notice = spawnSync("node", [...baseArgs, "--notice"], {
+    encoding: "utf8",
+    env,
+  });
+  assert.equal(notice.status, 0, notice.stderr);
+  assert.equal(notice.stdout, "");
 });
 
 test("valid weekly focus supports no execution_refs", () => {
