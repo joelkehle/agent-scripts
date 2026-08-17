@@ -1716,6 +1716,73 @@ process.stdout.write(${JSON.stringify(`${JSON.stringify(payload)}\n`)});
   assert.match(result.stdout, /agentcoord_claim_ambiguous/);
 });
 
+test("agent-start gives one delayed claim child time to feed all three reports", (t) => {
+  const fixture = makeRunFixture(t, "agent-start-delayed-claim-scan");
+  const support = makeAgentStartSupport(fixture);
+  const countFile = path.join(path.dirname(fixture.stateRoot), "delayed-claim-scan-count.txt");
+  const stub = path.join(path.dirname(fixture.stateRoot), "agentcoord-delayed-scan");
+  const repo = "kehle-tdg-dev/agent-start-delayed-claim-scan";
+  const claim = (slug, expiresAt) => ({
+    repo,
+    slug,
+    agent: "codex",
+    host: "beelink",
+    safety: "write",
+    scope: ["README.md"],
+    started_at: "2026-08-17T00:00:00Z",
+    expires_at: expiresAt,
+    next_action: "test delayed snapshot reuse",
+  });
+  const claimFile = (name) => path.join(fixture.agentcoordRoot, "claims", ...repo.split("/"), `${name}.json`);
+  const payload = {
+    root: fixture.agentcoordRoot,
+    claims: [
+      {
+        file: claimFile("active"),
+        directory_repo: repo,
+        status: "active",
+        issues: [],
+        claim: claim("active-from-delayed-snapshot", "2099-01-01T00:00:00Z"),
+      },
+      {
+        file: claimFile("stale"),
+        directory_repo: repo,
+        status: "stale",
+        issues: [],
+        claim: claim("stale-from-delayed-snapshot", "2000-01-01T00:00:00Z"),
+      },
+    ],
+  };
+  fs.writeFileSync(stub, `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.appendFileSync(process.env.AGENTCOORD_SCAN_COUNT_FILE, "scan\\n");
+setTimeout(() => process.stdout.write(${JSON.stringify(`${JSON.stringify(payload)}\n`)}), 300);
+`, { mode: 0o755 });
+
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--focus-file", fixture.focusFile,
+    "--no-bus",
+    "--timeout", "200",
+    "--workbench-summary", support.workbench,
+  ], {
+    encoding: "utf8",
+    env: {
+      ...support.env,
+      AGENTCOORD_BIN: stub,
+      AGENTCOORD_SCAN_COUNT_FILE: countFile,
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(countFile, "utf8"), "scan\n");
+  assert.doesNotMatch(result.stdout, /ETIMEDOUT/);
+  assert.match(result.stdout, /== AgentCoord Validate ==[\s\S]*?status: 0/);
+  assert.match(result.stdout, /== AgentCoord Active Claims ==[\s\S]*?status: 0[\s\S]*?active-from-delayed-snapshot/);
+  assert.match(result.stdout, /== AgentCoord Stale Claims ==[\s\S]*?status: 0[\s\S]*?stale-from-delayed-snapshot/);
+});
+
 test("agent-start exits non-zero and warns when the claim snapshot fails", (t) => {
   const fixture = makeRunFixture(t, "agent-start-claim-failure");
   const support = makeAgentStartSupport(fixture);
