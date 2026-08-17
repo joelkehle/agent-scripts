@@ -1642,6 +1642,103 @@ test("agent-start displays weekly focus, execution binding, and clean workspace 
   assert.match(result.stdout, /origin push: https:\/\/github\.com\/kehle-tdg-dev\/agent-start\.git/);
 });
 
+test("agent-start reuses one claim snapshot for safety and all claim reports", (t) => {
+  const fixture = makeRunFixture(t, "agent-start-single-scan");
+  const support = makeAgentStartSupport(fixture);
+  const countFile = path.join(path.dirname(fixture.stateRoot), "claim-scan-count.txt");
+  const stub = path.join(path.dirname(fixture.stateRoot), "agentcoord-single-scan");
+  const repo = "kehle-tdg-dev/agent-start-single-scan";
+  const claim = (slug, expiresAt) => ({
+    repo,
+    slug,
+    agent: "codex",
+    host: "beelink",
+    safety: "write",
+    scope: ["README.md"],
+    started_at: "2026-08-17T00:00:00Z",
+    expires_at: expiresAt,
+    next_action: "test snapshot reuse",
+  });
+  const claimFile = (name) => path.join(fixture.agentcoordRoot, "claims", ...repo.split("/"), `${name}.json`);
+  const payload = {
+    root: fixture.agentcoordRoot,
+    claims: [
+      {
+        file: claimFile("active"),
+        directory_repo: repo,
+        status: "active",
+        issues: [],
+        claim: claim("active-from-snapshot", "2099-01-01T00:00:00Z"),
+      },
+      {
+        file: claimFile("stale"),
+        directory_repo: repo,
+        status: "stale",
+        issues: [],
+        claim: claim("stale-from-snapshot", "2000-01-01T00:00:00Z"),
+      },
+      {
+        file: claimFile("invalid"),
+        directory_repo: repo,
+        status: "invalid",
+        issues: ["invalid JSON: test fixture"],
+        claim: null,
+      },
+    ],
+  };
+  fs.writeFileSync(stub, `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.appendFileSync(process.env.AGENTCOORD_SCAN_COUNT_FILE, "scan:" + process.env.UV_THREADPOOL_SIZE + "\\n");
+process.stdout.write(${JSON.stringify(`${JSON.stringify(payload)}\n`)});
+`, { mode: 0o755 });
+
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--focus-file", fixture.focusFile,
+    "--no-bus",
+    "--workbench-summary", support.workbench,
+  ], {
+    encoding: "utf8",
+    env: {
+      ...support.env,
+      AGENTCOORD_BIN: stub,
+      AGENTCOORD_SCAN_COUNT_FILE: countFile,
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.readFileSync(countFile, "utf8"), "scan:32\n");
+  assert.match(result.stdout, /active-from-snapshot/);
+  assert.match(result.stdout, /stale-from-snapshot/);
+  assert.match(result.stdout, /invalid JSON: test fixture/);
+  assert.match(result.stdout, /active_agentcoord_writer/);
+  assert.match(result.stdout, /agentcoord_claim_ambiguous/);
+});
+
+test("agent-start exits non-zero and warns when the claim snapshot fails", (t) => {
+  const fixture = makeRunFixture(t, "agent-start-claim-failure");
+  const support = makeAgentStartSupport(fixture);
+  const stub = path.join(path.dirname(fixture.stateRoot), "agentcoord-failure");
+  fs.writeFileSync(stub, "#!/bin/sh\nprintf 'NFS claim read failed\\n' >&2\nexit 2\n", { mode: 0o755 });
+
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--focus-file", fixture.focusFile,
+    "--no-bus",
+    "--workbench-summary", support.workbench,
+  ], {
+    encoding: "utf8",
+    env: { ...support.env, AGENTCOORD_BIN: stub },
+  });
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /shouldSurface=true/);
+  assert.match(result.stdout, /agentcoord_unavailable/);
+  assert.match(result.stdout, /claim scan failed: NFS claim read failed/);
+});
+
 test("agent-start read mode permits but surfaces repository hazards", (t) => {
   const fixture = makeRunFixture(t, "agent-start-read-hazard");
   const support = makeAgentStartSupport(fixture);

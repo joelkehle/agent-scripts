@@ -11,6 +11,7 @@ const {
   normalizeRepo,
   prepareClaimForWrite,
   readClaims,
+  readClaimsAsync,
 } = require("../lib/agentcoord-claims");
 const {
   normalizeRepositoryIdentity,
@@ -100,6 +101,40 @@ test("archive moves only old released claims and preserves the relative path", (
   assert.equal(fs.existsSync(active), true);
   // Nothing deleted: archived content is byte-identical claim data.
   assert.equal(JSON.parse(fs.readFileSync(target, "utf8")).slug, "janitor-test");
+});
+
+test("parallel claim scan keeps 210 delayed reads inside the startup deadline", async (t) => {
+  const root = makeRoot(t, "parallel-startup");
+  for (let index = 0; index < 208; index += 1) {
+    writeClaim(root, "shared/agent-scripts", `active-${String(index).padStart(3, "0")}`, baseClaim({
+      slug: `active-${index}`,
+    }));
+  }
+  writeClaim(root, "shared/agent-scripts", "stale", baseClaim({
+    slug: "stale",
+    expires_at: "2000-01-01T00:00:00Z",
+  }));
+  writeClaim(root, "shared/agent-scripts", "invalid", "{not-json");
+
+  let reads = 0;
+  const started = Date.now();
+  const entries = await readClaimsAsync(root, {
+    concurrency: 32,
+    readFile: async (file, encoding) => {
+      reads += 1;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return fs.promises.readFile(file, encoding);
+    },
+  });
+  const elapsedMs = Date.now() - started;
+  const statuses = entries.reduce((counts, entry) => {
+    counts[entry.status] = (counts[entry.status] || 0) + 1;
+    return counts;
+  }, {});
+
+  assert.equal(reads, 210);
+  assert.deepEqual(statuses, { active: 208, invalid: 1, stale: 1 });
+  assert.ok(elapsedMs < 5000, `parallel scan took ${elapsedMs}ms; startup limit is 5000ms`);
 });
 
 test("list, validate, and sweep skip claims-archive entirely", (t) => {

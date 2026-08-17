@@ -38,6 +38,12 @@ The packet includes:
 - `agent-check --dry-run` validation entrypoint.
 - the latest daily coding-agent workbench summary, when present.
 
+AgentCoord claim checks use one shared snapshot. Claim files are read in
+parallel, then the same checked data feeds workspace safety, validation, active
+claims, and stale claims. The snapshot keeps the normal command timeout. If it
+cannot be read or parsed in time, startup reports AgentCoord as unavailable and
+exits non-zero instead of treating the claim store as empty.
+
 Use `--skip-bus` only when bus probing is unrelated or temporarily noisy. The normal startup path should keep bus visibility because many Joel workflows should reuse existing Pinakes agents before new local code.
 
 ## Named Codex Threads

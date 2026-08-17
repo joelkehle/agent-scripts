@@ -11,6 +11,7 @@ const {
   prepareClaimForWrite,
   readClaim,
   readClaims,
+  readClaimsAsync,
 } = require("../lib/agentcoord-claims");
 
 const DEFAULT_ROOT = "/mnt/synology-share1/AgentCoord";
@@ -197,11 +198,18 @@ function atomicWrite(root, target, data) {
 }
 
 function publicEntry(root, entry) {
-  return { file: entry.file, relative_file: path.relative(root, entry.file), status: entry.status, issues: entry.issues, claim: entry.data };
+  return {
+    file: entry.file,
+    relative_file: path.relative(root, entry.file),
+    directory_repo: entry.directory_repo,
+    status: entry.status,
+    issues: entry.issues,
+    claim: entry.data,
+  };
 }
 
-function commandList(args) {
-  const entries = readClaims(args.root).filter((entry) => matches(entry, args));
+async function commandList(args) {
+  const entries = (await readClaimsAsync(args.root)).filter((entry) => matches(entry, args));
   if (args.json) console.log(JSON.stringify({ root: args.root, summary: summarize(entries), claims: entries.map((entry) => publicEntry(args.root, entry)) }, null, 2));
   else console.log(renderList(entries, args.root));
 }
@@ -596,10 +604,10 @@ function commandHandoff(args) {
   else console.log(`agentcoord: handoff ${target}`);
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return usage();
-  if (args.command === "list") commandList(args);
+  if (args.command === "list") await commandList(args);
   else if (args.command === "validate") commandValidate(args);
   else if (args.command === "claim") commandClaim(args);
   else if (args.command === "renew") commandRenew(args);
@@ -610,7 +618,7 @@ function main() {
   else throw new Error(`unknown command: ${args.command}`);
 }
 
-try { main(); } catch (error) {
+main().catch((error) => {
   console.error(`agentcoord: ${error.message}`);
   process.exit(1);
-}
+});
