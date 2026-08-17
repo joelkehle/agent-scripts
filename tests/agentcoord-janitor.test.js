@@ -103,7 +103,7 @@ test("archive moves only old released claims and preserves the relative path", (
   assert.equal(JSON.parse(fs.readFileSync(target, "utf8")).slug, "janitor-test");
 });
 
-test("parallel claim scan keeps 210 delayed reads inside the startup deadline", async (t) => {
+test("parallel claim file reads keep 210 delayed reads under five seconds", async (t) => {
   const root = makeRoot(t, "parallel-startup");
   for (let index = 0; index < 208; index += 1) {
     writeClaim(root, "shared/agent-scripts", `active-${String(index).padStart(3, "0")}`, baseClaim({
@@ -134,7 +134,7 @@ test("parallel claim scan keeps 210 delayed reads inside the startup deadline", 
 
   assert.equal(reads, 210);
   assert.deepEqual(statuses, { active: 208, invalid: 1, stale: 1 });
-  assert.ok(elapsedMs < 5000, `parallel scan took ${elapsedMs}ms; startup limit is 5000ms`);
+  assert.ok(elapsedMs < 5000, `parallel claim reads took ${elapsedMs}ms; file-read budget is 5000ms`);
 });
 
 test("list, validate, and sweep skip claims-archive entirely", (t) => {

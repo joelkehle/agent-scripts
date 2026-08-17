@@ -21,6 +21,7 @@ const {
 
 const DEFAULT_WORKBENCH_SUMMARY = process.env.AGENT_WORKBENCH_SUMMARY || "/home/joelkehle/Projects/shared/dev-dashboard/codex-output/agentic-software-ops/agent-workbench/latest/summary.json";
 const DEFAULT_WORKBENCH_URL = process.env.AGENT_WORKBENCH_URL || "http://beelink:8091/codex-output/agentic-software-ops/agent-workbench/latest/";
+const AGENTCOORD_TIMEOUT_FACTOR = 3;
 const REQUIRED_TOOLS = ["agent-start", "agent-focus", "workspace-preflight", "agent-workspace", "agentcoord", "committer", "docs-list", "bus-discover", "claude", "codex", "agent-check"];
 
 function usage() {
@@ -165,7 +166,7 @@ function summarizeClaims(entries) {
 function collectAgentCoord(root, timeoutMs) {
   const command = resolveAgentCoordCommand();
   const result = run(command, ["list", "--root", root, "--all", "--json"], {
-    timeoutMs,
+    timeoutMs: timeoutMs * AGENTCOORD_TIMEOUT_FACTOR,
     env: { UV_THREADPOOL_SIZE: "32" },
   });
   const failed = (message) => ({
