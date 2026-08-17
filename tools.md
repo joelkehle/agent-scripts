@@ -33,8 +33,8 @@ Local tool catalog for this machine.
 
 ## agent-start
 - Purpose: read-only coding-agent startup packet with weekly focus, workspace
-  preflight, run state, WWI, compliance, bus discovery, AgentCoord claims, docs,
-  git state, and validation dry-run.
+  preflight, run state, bus discovery, AgentCoord claims, docs, git state, and
+  validation dry-run.
 - Location: ~/Projects/shared/agent-scripts/bin/agent-start
 - Docs: ~/Projects/shared/agent-scripts/docs/agent-start.md
 

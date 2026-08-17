@@ -1509,8 +1509,6 @@ not authorize a later rebuild or configuration change.
 Commands:
 
 ```bash
-wwi
-machine-compliance --agent-startup --format text
 docs-list
 bus-discover
 git status --short --branch
@@ -1518,8 +1516,6 @@ git status --short --branch
 
 Observed:
 
-- active and most-recent WWI loops were surfaced;
-- machine compliance: 21 passes, zero warnings, zero failures;
 - the released manifest was old and a newer behavioral bundle existed, but the
   startup command emitted no `WARN` or `FAIL`;
 - matching docs were read;
