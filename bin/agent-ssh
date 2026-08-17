@@ -86,16 +86,8 @@ case "$verdict" in
 esac
 
 case "$method" in
-  sudo-agent)
-    if ! sudo -n -iu agent true 2>/dev/null; then
-      echo "agent-ssh: this needs the agent account. Ask Joel to grant passwordless sudo to 'agent' on $src." >&2
-      exit 1
-    fi
-    exec sudo -n -iu agent ssh -o BatchMode=yes -o IdentitiesOnly=yes "agent@$target" "$@"
-    ;;
-  alias)
-    echo "agent-ssh: from $src, use the shell alias instead: agent-$target" >&2
-    exit 1
+  direct)
+    exec ssh -o BatchMode=yes "$target" "$@"
     ;;
   tunnel-only)
     echo "agent-ssh: $src -> $target is tunnel-only. No shell access. See agent-start output." >&2

@@ -70,7 +70,9 @@ Joel-only step in web UI:
 2. Grant least-privilege access to required env/path(s).
 3. Capture `INFISICAL_CLIENT_ID` and `INFISICAL_CLIENT_SECRET`.
 
-Per-machine shell steps:
+Per-machine shell steps run under the normal host-owner account used by
+interactive helpers. A named service account gets its own setup only when its
+service runbook calls for one.
 
 Required host commands: `infisical`, `gh`, `git`, `curl`, and `jq`.
 
@@ -120,12 +122,14 @@ Expected output includes `kehle-contributor-agent`.
   print the value).
 
 ### `beelink`
-- SSH in as bootstrap user.
+- SSH in as `joelkehle` for interactive helper work.
 - Install Infisical CLI if missing.
 - Keep other project credentials separate; use
   `~/.config/infisical/ua.agent.env` for the `agent-secrets` machine identity.
-- Configure UA for both `joelkehle` and `agent` users if both run agents.
-- Verify `contributor-agent` for the agent runtime user.
+- Configure Universal Auth for `joelkehle`.
+- Configure a second Unix account only for a named service whose runbook needs
+  it, and grant only that service's secrets.
+- Verify `contributor-agent` from the normal interactive shell.
 
 ### `macmini`
 - Repeat same steps as beelink.
@@ -148,18 +152,21 @@ files. Outside this wrapper, `gh` continues to use the user's normal login.
 
 ## Privileged Host Checklist (Joel sudo)
 
-Run on each host:
+For interactive helper access, prove the real login instead of checking for a
+generic `agent` account:
 
 ```bash
-sudo getent passwd agent
-sudo ls -ld /home/agent /home/agent/.ssh /home/agent/.ssh/authorized_keys
-sudo ssh-keygen -lf /home/agent/.ssh/authorized_keys
+id -un
+agent-ssh beelink 'id -un'
 sudo grep -RInE '^(PubkeyAuthentication|PasswordAuthentication|PermitRootLogin|AuthorizedKeysFile)' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/* 2>/dev/null || true
 sudo sshd -T | rg -n '^(pubkeyauthentication|passwordauthentication|permitrootlogin|authorizedkeysfile)'
 ```
 
 Expected baseline:
+- local and remote interactive helper shells report `joelkehle`
 - `PubkeyAuthentication yes`
 - `PasswordAuthentication` disabled where feasible
-- agent key present in `/home/agent/.ssh/authorized_keys`
 - secure permissions (`~/.ssh` = `700`, `authorized_keys` = `600`)
+
+Do not create a general interactive `agent` login or copy an agent SSH grid.
+Named persistent services and untrusted workloads follow their own runbooks.

@@ -176,7 +176,7 @@ function renderSshGrid(sshGrid) {
   if (sshGrid.known === false) {
     out.push(`This machine's hostname '${sshGrid.rawHost}' is not in the SSH grid, so all SSH is blocked.`);
     out.push("If it is a known machine, add its lowercase hostname to hostAliases in lib/ssh-grid.json.");
-    out.push(sshGrid.rule || "Never use joelkehle keys or accounts for automation.");
+    out.push(sshGrid.rule || "Use the current helper's normal SSH identity. Never copy or print private keys.");
     return out;
   }
   if (!sshGrid.allowed.length) {
@@ -188,7 +188,7 @@ function renderSshGrid(sshGrid) {
     }
   }
   if (sshGrid.blocked.length) out.push(`Blocked from ${sshGrid.host}: ${sshGrid.blocked.join(", ")}.`);
-  out.push(sshGrid.rule || "Never use joelkehle keys or accounts for automation.");
+  out.push(sshGrid.rule || "Use the current helper's normal SSH identity. Never copy or print private keys.");
   return out.slice(0, 8);
 }
 

@@ -41,6 +41,14 @@ Before work that answers “what should Joel do today?”, read
 
 ## Cross-Repo Work
 
+- Interactive Codex and Claude sessions are Joel's delegated helpers. Run them
+  under Joel's operating-system account in these normal checkouts. Use separate
+  Unix accounts only for persistent services or untrusted work. Keep GitHub
+  attribution separate through the repo-approved contributor identity.
+- Routine deploys need no fresh approval when a standing service runbook or
+  policy already allows that exact service and action. Ask before changing the
+  deploy boundary, credentials, network exposure, durable data, or rollback
+  policy.
 - Identify the owning repo before editing. Run its `docs-list`, inspect its Git
   state, and use its local validation entrypoint.
 - Do not maintain service status, secrets commands, dependency diagrams, model
