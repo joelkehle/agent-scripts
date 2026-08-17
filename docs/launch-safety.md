@@ -78,10 +78,12 @@ not add an execution layer.
 
 `week_ending` remains current through that complete calendar date in
 `America/Los_Angeles`. On the next Los Angeles calendar date, validation and
-list output mark the registry `EXPIRED`, goal resolution fails closed, and a
-goal-based workspace begin is refused. Structurally valid emergency exceptions
-remain available after expiry so urgent incidents are not forced to masquerade
-as weekly goals.
+list output mark the registry `EXPIRED`. Routine delegated-helper workspace
+begins may continue with a warning when the selected goal has no supervised
+execution requirement or execution reference. Mission, initiative, and
+campaign work still fails closed. Structurally valid emergency exceptions
+remain available to this primitive after expiry; the higher-level Manager
+launcher may apply a narrower exception policy.
 
 Commands:
 

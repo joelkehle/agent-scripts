@@ -1159,17 +1159,41 @@ test("begin rejects simultaneous goal and exception fields", (t) => {
   }), /mutually exclusive/);
 });
 
-test("expired focus blocks goal begin but permits a structured emergency exception", (t) => {
+test("expired focus permits routine begin but blocks supervised begin", (t) => {
   const fixture = makeRunFixture(t, "expired-begin");
-  fs.writeFileSync(fixture.focusFile, focusYaml("", "2026-08-02"));
+  fs.writeFileSync(fixture.focusFile, focusYamlV2("", "2026-08-02"));
   const now = new Date("2026-08-03T07:00:00Z");
+  const routine = beginRun({
+    ...fixture,
+    goalId: "W32-CORE",
+    tool: "codex",
+    pid: process.pid,
+    runId: "expired-routine",
+    now,
+  });
+  assert.equal(routine.manifest.state, "active");
+  assert.equal(routine.focus.focus_status, "expired");
+
+  fs.writeFileSync(fixture.focusFile, focusYamlV2(`    supervised_execution:
+      required: true
+    active_execution_ref:
+      kind: mission
+      id: active-expired
+`, "2026-08-02"));
   assert.throws(() => beginRun({
     ...fixture,
-    goalId: "W31-CORE",
+    goalId: "W32-CORE",
+    executionRef: { kind: "mission", id: "active-expired" },
     tool: "codex",
     pid: process.pid,
     now,
-  }), /expired/);
+  }), /expired.*refuses supervised/);
+});
+
+test("expired focus still permits a structured emergency exception primitive", (t) => {
+  const fixture = makeRunFixture(t, "expired-exception");
+  fs.writeFileSync(fixture.focusFile, focusYamlV2("", "2026-08-02"));
+  const now = new Date("2026-08-03T07:00:00Z");
 
   const begun = beginRun({
     ...fixture,
@@ -1187,6 +1211,28 @@ test("expired focus blocks goal begin but permits a structured emergency excepti
     reason: "Production is unavailable.",
   });
   assert.equal(begun.focus.focus_status, "expired");
+});
+
+test("agent-workspace warns when an expired routine begin continues", (t) => {
+  const fixture = makeRunFixture(t, "expired-cli-warning");
+  fs.writeFileSync(fixture.focusFile, focusYamlV2("", "2026-08-02"));
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-workspace"),
+    "begin",
+    "--root", fixture.root,
+    "--goal", "W32-CORE",
+    "--tool", "codex",
+    "--pid", String(process.pid),
+    "--run-id", "expired-cli-warning",
+    "--focus-file", fixture.focusFile,
+    "--agentcoord-root", fixture.agentcoordRoot,
+    "--quarantine-root", fixture.quarantineRoot,
+    "--state-root", fixture.stateRoot,
+  ], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /WARNING weekly focus expired/);
+  assert.match(result.stderr, /continuing routine delegated-helper run/);
+  assert.match(result.stdout, /agent-workspace: active/);
 });
 
 test("atomic repository entrance permits only one concurrent begin", async (t) => {
