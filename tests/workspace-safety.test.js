@@ -1923,3 +1923,86 @@ test("agent-start read mode permits but surfaces repository hazards", (t) => {
   assert.match(result.stdout, /active_agentcoord_writer/);
   assert.match(result.stdout, /active_run_collision/);
 });
+
+test("routine repository begin carries no goal and no exception", (t) => {
+  const fixture = makeWorkspaceFixture(t, "routine-repo");
+  const repo = makeRepository(t, "routine-repo-child");
+  const child = path.join(fixture.root, "child");
+  fs.renameSync(repo, child);
+  const begun = beginRun({
+    ...fixture,
+    root: child,
+    tool: "codex",
+    pid: process.pid,
+    runId: "routine-repository",
+  });
+  assert.equal(begun.manifest.goal_id, null);
+  assert.equal(begun.manifest.exception, null);
+  const sealed = sealRun({ stateRoot: fixture.stateRoot, runId: begun.manifest.run_id, pid: process.pid, exitCode: 0 });
+  assert.equal(sealed.manifest.state, "sealed");
+});
+
+test("routine workspace begin is allowed without a goal and stays read-only", (t) => {
+  const fixture = makeWorkspaceFixture(t, "routine-workspace");
+  const begun = beginRun({
+    ...fixture,
+    tool: "claude",
+    pid: process.pid,
+    runId: "routine-workspace",
+    sessionKind: "workspace",
+  });
+  assert.equal(begun.manifest.goal_id, null);
+  assert.equal(begun.manifest.exception, null);
+  assert.equal(begun.manifest.authority, "operator");
+  assert.equal(begun.manifest.safety_class, "read");
+});
+
+test("routine begin never reads the weekly focus file", (t) => {
+  const fixture = makeWorkspaceFixture(t, "routine-no-focus");
+  const begun = beginRun({
+    ...fixture,
+    focusFile: path.join(fixture.root, "missing-weekly-focus.yaml"),
+    tool: "claude",
+    pid: process.pid,
+    runId: "routine-no-focus",
+    sessionKind: "workspace",
+  });
+  assert.equal(begun.manifest.goal_id, null);
+});
+
+test("workspace exception sessions without a goal remain refused", (t) => {
+  const fixture = makeWorkspaceFixture(t, "exception-workspace");
+  assert.throws(() => beginRun({
+    ...fixture,
+    exceptionCategory: "production_incident",
+    exceptionReason: "Production unavailable",
+    tool: "codex",
+    pid: process.pid,
+    runId: "exception-workspace",
+    sessionKind: "workspace",
+  }), /workspace operator exception sessions require --goal/);
+});
+
+test("empty exception flags remain refused rather than becoming routine", (t) => {
+  const fixture = makeWorkspaceFixture(t, "empty-exception");
+  assert.throws(() => beginRun({
+    ...fixture,
+    exceptionSpecified: true,
+    tool: "codex",
+    pid: process.pid,
+    runId: "empty-exception",
+    sessionKind: "workspace",
+  }), /ordinary work requires --goal/);
+});
+
+test("explicit goal ids are still resolved and refused when unknown", (t) => {
+  const fixture = makeWorkspaceFixture(t, "routine-strict-goal");
+  assert.throws(() => beginRun({
+    ...fixture,
+    goalId: "NOT-A-GOAL",
+    tool: "codex",
+    pid: process.pid,
+    runId: "routine-strict-goal",
+    sessionKind: "workspace",
+  }), /NOT-A-GOAL/);
+});
