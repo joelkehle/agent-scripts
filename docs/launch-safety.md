@@ -174,7 +174,10 @@ The default state root is:
 ~/.local/state/agent-workspaces/
 ```
 
-Begin requires either a declared weekly goal or a valid exception:
+Begin accepts a routine run with no goal and no exception (Joel-ratified
+2026-08: interactive Claude and Codex sessions are ordinary delegated helpers,
+and weekly focus is optional metadata, not inferred authority). A declared
+weekly goal or a valid exception is still validated strictly when supplied:
 
 ```bash
 agent-workspace begin \

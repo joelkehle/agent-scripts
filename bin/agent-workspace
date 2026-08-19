@@ -106,7 +106,7 @@ function renderBegin(result) {
     `agent-workspace: active run=${manifest.run_id}`,
     `session: ${manifest.session_kind}`,
     `root: ${manifest.repository_root || manifest.workspace_root}`,
-    `goal: ${manifest.goal_id || `exception:${manifest.exception.category}`}`,
+    `goal: ${manifest.goal_id || (manifest.exception ? `exception:${manifest.exception.category}` : "routine")}`,
   ];
   if (manifest.session_kind === "workspace") {
     lines.push(`authority: ${manifest.authority} safety=${manifest.safety_class}`);
