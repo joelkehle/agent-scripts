@@ -447,6 +447,7 @@ function collect(args) {
     host: os.hostname().split(".")[0],
     cwd: process.cwd(),
     root,
+    sessionKindExplicit: args.sessionKindExplicit === true,
     tools: Object.fromEntries(REQUIRED_TOOLS.map((tool) => [tool, commandExists(tool) || null])),
     workbench: readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
     sshGrid: collectSshGrid(os.hostname()),
@@ -550,7 +551,11 @@ function renderText(packet) {
   out.push(`preflight: ${packet.workspacePreflight.ok ? "PASS" : "REFUSE"} mode=${packet.workspacePreflight.mode}`);
   out.push(`session: ${packet.workspacePreflight.session_kind || "unavailable"}`);
   if (packet.workspacePreflight.session_kind === "workspace") {
-    out.push("authority: operator safety=read (no code-write authority)");
+    if (process.env.AGENT_LAUNCH_SUPERVISED === "1" || packet.sessionKindExplicit) {
+      out.push("authority: operator safety=read (no code-write authority)");
+    } else {
+      out.push("authority: unsupervised session; no supervised authority claims, normal tool permissions apply");
+    }
   } else {
     out.push(`origin fetch: ${packet.workspacePreflight.origin_fetch_url || "(unavailable)"}`);
     out.push(`origin push: ${packet.workspacePreflight.origin_push_urls.length ? packet.workspacePreflight.origin_push_urls.join(", ") : "(unavailable)"}`);
