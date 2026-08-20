@@ -111,6 +111,10 @@ function renderBegin(result) {
   if (manifest.session_kind === "workspace") {
     lines.push(`authority: ${manifest.authority} safety=${manifest.safety_class}`);
   } else {
+    lines.push(
+      `source writes: owner=${result.preflight.source_ownership.owner_host} ` +
+      `current=${result.preflight.source_ownership.current_host || "unknown"}`,
+    );
     lines.push(`origin fetch: ${manifest.canonical_remote}`);
     lines.push(`origin push: ${(manifest.origin_push_urls || [manifest.canonical_remote]).join(", ")}`);
   }

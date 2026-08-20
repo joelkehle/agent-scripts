@@ -103,9 +103,9 @@ Use `loop-receipt` to turn the end of a loop into structured next-turn context. 
 
 Use `agent-start` at the beginning of non-trivial coding sessions when the
 runtime has not already provided equivalent startup context. It prints the
-weekly focus, workspace preflight, run state, bus discovery, AgentCoord claims,
-docs, git state, validation dry-run, and workbench summary in one read-only
-packet.
+weekly focus, workspace preflight, source-host ownership, run state, bus
+discovery, docs, git state, validation dry-run, and workbench summary in one
+read-only packet. Read mode also shows legacy AgentCoord claims.
 
 ```bash
 agent-start --root .

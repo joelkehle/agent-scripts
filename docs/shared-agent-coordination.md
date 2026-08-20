@@ -1,5 +1,5 @@
 ---
-summary: "Shared NAS coordination contract for Codex and Claude Code build agents across dev, beelink, and macmini."
+summary: "Dev-owned source writes plus optional NAS handoffs for Codex and Claude Code across dev, beelink, and macmini."
 read_when:
   - Coordinating Codex or Claude Code sessions across dev, beelink, and macmini.
   - Starting overlapping work where multiple coding agents may edit the same project.
@@ -9,9 +9,13 @@ read_when:
 
 # Shared Agent Coordination
 
-This is the cross-host coordination layer for Codex and Claude Code build agents on Dev, Beelink, and Mac Mini.
+Dev is the only source-writing host for Codex and Claude Code build agents.
+Beelink and Mac Mini are remote check targets. AgentCoord is an optional
+cross-host handoff layer.
 
-It is not the Pinakes bus. Pinakes agents are runtime/product services. This layer is for coding sessions coordinating claims, handoffs, patches, proof artifacts, and lightweight logs across the three build hosts.
+It is not the Pinakes bus. Pinakes agents are runtime/product services. This
+layer carries old claims, handoffs, patches, proof artifacts, and lightweight
+logs. It is not a source-write authority service.
 
 ## Control Plane Model
 
@@ -21,7 +25,7 @@ Default architecture:
 Codex / Claude Code runs on dev
   -> edits and tests projects on dev
   -> uses agent-ssh macmini 'cd ~/Projects/<repo> && ...' for macOS-specific work
-  -> stores claims, handoffs, patches, and proof packs in AgentCoord
+  -> may store handoffs, patches, and proof packs in AgentCoord when writable
   -> commits in the repo where the work actually lives
 ```
 
@@ -31,7 +35,11 @@ runbook requires one.
 
 Prefer launching coding agents from Dev. Use Mac Mini as a remote execution target from Dev for macOS-only repos and workflows: launchd, TCC/GUI-adjacent checks, Photos, Voice Memos, Keychain, Apple app automation, and hardware-local probes.
 
-Do not start an independent long-running Codex or Claude Code session on Mac Mini unless Joel explicitly asks, Dev cannot reach the needed macOS surface, or the task truly requires interactive local macOS control. If a Mac Mini-local session is used, it must create/update `AgentCoord` claims and handoffs so Dev remains the coordination point.
+Do not start an independent source-writing Codex or Claude Code session on Mac
+Mini or Beelink. A host-local helper may run checks that Dev cannot run, but it
+must return findings to the Dev session. Source changes happen on Dev. If that
+model cannot support a real task, stop the pilot and move to a small
+coordination service; do not add a bypass flag.
 
 ## Service Identity
 
@@ -45,7 +53,7 @@ Do not start an independent long-running Codex or Claude Code session on Mac Min
 
 ## Use It For
 
-- Cross-host task claims.
+- Reading old cross-host task claims during the pilot.
 - Handoffs between Codex and Claude Code sessions.
 - Patch transfer when Git branch/push state is blocked.
 - Proof packs meant for another host to inspect.
@@ -121,16 +129,19 @@ Use `agentcoord` for claim work instead of hand-writing JSON when possible.
 
 See [AgentCoord CLI](agentcoord.md) for commands, flags, and examples.
 
-Local launch/run ownership is complementary, not a replacement for AgentCoord.
-`workspace-preflight` reads active AgentCoord write claims and
-`agent-workspace` records PID/start-token ownership under
-`~/.local/state/agent-workspaces/`. Cross-host claims remain here; local process
-entrance, exit, and dead-owner reconciliation are documented in
-`docs/launch-safety.md`.
+Local launch/run ownership is the source-write gate. `workspace-preflight`
+refuses source writes outside Dev, and `agent-workspace` records PID/start-token
+ownership under `~/.local/state/agent-workspaces/`. In write mode, these tools
+do not read AgentCoord. Read mode can still show old cross-host claims and
+quarantine records. Local process entrance, exit, and dead-owner reconciliation
+are documented in `docs/launch-safety.md`.
 
-## Claim Contract
+## Legacy Claim Contract
 
-Before overlapping write work, create a claim. Claims are coordination hints, not permanent locks.
+Do not create a NAS claim for normal source work during the Dev-owned pilot.
+Do not overlap source-writing sessions in the same repository. Serialize them
+on Dev and use local workspace run state. Existing claims remain readable for
+transition checks. Claims are coordination hints, not permanent locks.
 
 Example:
 
@@ -159,7 +170,7 @@ Safety values:
 
 For risky write actions, say `destructive write` in human-facing text.
 
-## Atomicity
+## Legacy NAS Atomicity
 
 NFS file locking is not the coordination primitive.
 

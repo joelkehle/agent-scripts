@@ -32,19 +32,22 @@ The packet includes:
 - active and quarantined local workspace-run manifests;
 - command availability for the core agent workbench tools;
 - `bus-discover` when available;
-- AgentCoord validation plus active and stale claims;
+- source-write owner, current host, and allow/refuse result;
+- AgentCoord validation plus active and stale claims in read mode;
 - docs-list output;
 - git status;
 - `agent-check --dry-run` validation entrypoint.
 - the latest daily coding-agent workbench summary, when present.
 
-AgentCoord claim checks use one shared snapshot. Claim files are read in
-parallel, then the same checked data feeds workspace safety, validation, active
-claims, and stale claims. The AgentCoord child gets three times the normal
-command timeout: 15 seconds by default. This bounded extra time covers a live
-NAS mount and directory walk. If the snapshot still cannot be read or parsed in
-time, startup reports AgentCoord as unavailable and exits non-zero instead of
-treating the claim store as empty.
+Write mode is owned by `dev`. It uses local workspace state and does not launch
+an AgentCoord child or read the NAS claim and quarantine trees. A write start on
+beelink, macmini, or an unknown host refuses. There is no public host override.
+
+Read mode keeps AgentCoord visibility. Its claim check uses one shared snapshot.
+Claim files are read in parallel, then the same checked data feeds validation,
+active claims, and stale claims. The AgentCoord child gets three times the
+normal command timeout: 15 seconds by default. If that read fails, startup
+reports AgentCoord as unavailable but the read-only preflight remains allowed.
 
 Use `--skip-bus` only when bus probing is unrelated or temporarily noisy. The normal startup path should keep bus visibility because many Joel workflows should reuse existing Pinakes agents before new local code.
 

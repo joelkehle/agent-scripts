@@ -56,8 +56,11 @@ Before work that answers “what should Joel do today?”, read
   facts from their authoritative docs or runtime.
 - Keep changes, validation, commits, and receipts separated by repo. Do not
   bundle unrelated repositories into one commit or proof claim.
-- For overlapping edits, create an AgentCoord claim before writing. For
-  cross-host handoff, write the handoff before switching runtimes.
+- Dev owns source edits. Do not edit source from beelink, macmini, or an unknown
+  host. Run host-only checks through `agent-ssh`, then bring the result back to
+  Dev. Do not overlap write sessions in the same repo; serialize them through
+  Dev-local workspace run state. AgentCoord is optional handoff storage, not a
+  source-write gate.
 - Prefer launching Codex/Claude from dev. Use macmini through SSH from dev for
   macOS-only execution unless Joel explicitly requests a macmini-local agent.
   The fleet SSH grid blocks beelink from starting a macmini shell.

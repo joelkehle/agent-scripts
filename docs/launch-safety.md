@@ -12,8 +12,8 @@ read_when:
 The launch-safety tools provide three local CLI surfaces:
 
 - `agent-focus`: validate, list, and resolve weekly priority metadata.
-- `workspace-preflight`: read-only Git, worktree, origin-authority, AgentCoord,
-  and quarantine diagnosis.
+- `workspace-preflight`: read-only Git, worktree, origin-authority, source-host,
+  and local run diagnosis.
 - `agent-workspace`: atomic begin, seal, and dead-owner reconciliation records.
 
 These commands are primitives, not an orchestrator, daemon, database, bus
@@ -128,32 +128,27 @@ authority.
 
 For write mode, preflight refuses:
 
+- any source-writing host other than `dev`, including an unknown host;
 - any existing non-Git directory, because repository write checks are unavailable;
 - a detached current worktree;
 - a primary checkout with uncommitted changes;
 - another linked worktree with uncommitted or ambiguous changes and no living
   PID/start-token run owner;
-- an explicit quarantine-registry match;
 - missing or divergent canonical `origin/*` tracking state;
-- an active overlapping AgentCoord writer;
 - a living, stale, or quarantined local run collision;
 - an `origin` fetch URL or any effective `origin` push URL under
   `github.com/ucla-tdg/*`, which is a read-only mirror namespace.
 
-`github.com/kehle-tdg-dev/*` is the TDG development namespace. AgentCoord
-relative scopes are interpreted only after the claim repository matches the
-repository being checked. `agentcoord` and preflight share one claim validator.
-Claims require at least one scope entry.
-An unreadable or invalid claim blocks write preflight only when either its
-parsed repository identity or its claim-directory identity matches the checked
-repository. Mirror policy applies to parsed GitHub URL identity, including
-standard URL forms with explicit ports. Quarantine entries use exact normalized
-repository or absolute-path identity across the current and linked worktrees;
-prefix siblings do not collide. Preflight only diagnoses. It never modifies a
-remote or checkout.
+`github.com/kehle-tdg-dev/*` is the TDG development namespace. Mirror policy
+applies to parsed GitHub URL identity, including standard URL forms with
+explicit ports. Write mode uses Dev-local workspace state and does not read the
+NAS AgentCoord claim or quarantine trees. There is no flag or environment
+variable that changes the source-writing host. Preflight only diagnoses. It
+never modifies a remote or checkout.
 
-Read mode does not block on repository write hazards, but still reports them
-and sets `shouldSurface=true`. The default session kind is `repository`, so a
+Read mode still reads and validates legacy AgentCoord claims and quarantine
+entries. It does not block on repository write hazards, but reports them and
+sets `shouldSurface=true`. The default session kind is `repository`, so a
 non-Git root normally refuses in both modes. `agent-start` recognizes the
 caller's exact `~/Projects` directory as the normal cross-repository workspace
 without requiring another flag. It uses read safety for that workspace root
@@ -169,6 +164,9 @@ Fixture/test overrides:
 - `AGENTCOORD_ROOT`
 - `AGENT_QUARANTINE_ROOT`
 - `AGENT_WORKSPACE_STATE_ROOT`
+
+These overrides do not change the source-writing host. Tests inject host state
+only through the internal library call; the public CLIs have no host override.
 
 ## Run Manifests
 
@@ -295,9 +293,10 @@ States:
 - `resolved`
 
 These local manifests are disposable coordination observations. Git owns source
-and commits; AgentCoord owns cross-host claims; weekly focus owns current
-priority metadata; Manager owns supervised mission, initiative, and campaign
-truth.
+and commits. Dev owns source writes. AgentCoord may carry old claims and
+cross-host handoffs, but it does not grant source-write authority. Weekly focus
+owns current priority metadata. Manager owns supervised mission, initiative,
+and campaign truth.
 
 ## Agent Start
 
@@ -314,6 +313,10 @@ preflight result, and active or quarantined run state. It labels old references,
 active work, and proof separately. `--notice` stays silent when clean and
 surfaces focus, origin, uncommitted-work, collision, or quarantine failures for
 launch wrappers.
+
+In write mode, `agent-start` does not launch an AgentCoord scan. It reports the
+fixed owner (`dev`), the current host, and whether writes are allowed. Read mode
+keeps the bounded AgentCoord report for old claims and cross-host diagnosis.
 
 Manager may later validate that an opaque execution ID exists and belongs to
 the selected repository. Its future launcher wrapper must remain alive as the
