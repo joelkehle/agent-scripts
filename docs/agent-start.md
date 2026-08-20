@@ -145,6 +145,8 @@ files. This makes the manifest revision proof of the installed source bytes.
 
 Manager wraps this via `~/Projects/shared/manager/bin/install-agent-system-links` so bootstrap and runbooks do not depend on the agent-scripts implementation path.
 
-On beelink, the manager installer also wires the `codex` and `claude` shims to
-run `agent-start --notice` before execing the real launcher. Set
+On beelink, the manager installer wires the `codex` and `claude` shims to run
+`agent-start --notice` only for supervised launches (`--supervised`,
+`AGENT_SUPERVISED=1`, `AGENT_SESSIONS_MANAGED=1`, or any `--agent-*` option).
+Plain launches exec the real CLI directly and skip this step. Set
 `CODEX_SKIP_AGENT_START=1` or `AGENT_LAUNCH_PREFLIGHT=0` for debugging.

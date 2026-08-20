@@ -16,7 +16,9 @@ into `main`.
 
 ## Outcome
 
-One contribution pipe serves human contributors, coding agents, and Joel:
+One contribution pipe serves human contributors, coding agents, and Joel.
+The pipe describes supervised (opt-in) contribution work; a plain unsupervised
+session is fine for ordinary work that does not need contribution evidence:
 
 ```text
 weekly goal
@@ -126,7 +128,8 @@ override GitHub.
 
 ## Issue and execution mapping
 
-Use the smallest supervised layer that proves the outcome:
+When running supervised (opt-in), use the smallest supervised layer that
+proves the outcome:
 
 | Work shape | Manager layer | GitHub shape |
 |---|---|---|
@@ -142,8 +145,9 @@ successful execution packet.
 
 When no released layer can cover the work, the operator must say so. It must
 not hide a cross-repo outcome inside unrelated missions. The choices are to
-use a smaller approved work slice, get approval for a fitting policy, or use an
-explicit direct-session contract and record the harness gap.
+use a smaller approved work slice, get approval for a fitting policy, run an
+ordinary unsupervised session, or use an explicit direct-session contract and
+record the harness gap.
 
 ## Normal operator experience
 
@@ -159,7 +163,8 @@ The normal terminal path should be short:
 7. Return only when Joel must decide, grant a new write, or resolve a real
    blocker.
 
-Starting from a folder that is not a Git repo must still support this flow.
+Starting supervised from a folder that is not a Git repo must still support
+this flow (plain launches simply pass through from any folder).
 The launcher should treat that folder as a cross-repo workspace, not fail on a
 Git command. A read-only workspace session may inspect and plan, but it may not
 claim that supervised write work has begun.

@@ -55,7 +55,10 @@ Version 2 has three goal fields for supervised work:
 
 - `supervised_execution.required` is a Boolean. It says whether write-capable
   repository work needs an open active execution. When the object is absent,
-  the value defaults to `false`.
+  the value defaults to `false`. This gate applies only to supervised launches
+  (`--supervised`, `AGENT_SUPERVISED=1`, `AGENT_SESSIONS_MANAGED=1`, or any
+  `--agent-*` option); a plain launch passes through to the real CLI
+  unmodified.
 - `active_execution_ref` is optional and singular. It names the one open
   execution allowed to support current work.
 - `proof_execution_refs` is an optional list. It names finished work used as
@@ -73,7 +76,8 @@ missing or invalid IDs.
 
 The Manager supervised coding control plane remains authoritative for
 existence, repository compatibility, status, descendants, budgets, and
-evidence. Weekly focus carries priority metadata above that hierarchy. It does
+evidence in opted-in supervised sessions. Supervision is no longer mandatory
+for interactive launches. Weekly focus carries priority metadata above that hierarchy. It does
 not add an execution layer.
 
 `week_ending` remains current through that complete calendar date in
