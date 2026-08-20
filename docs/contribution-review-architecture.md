@@ -126,7 +126,8 @@ override GitHub.
 
 ## Issue and execution mapping
 
-Use the smallest supervised layer that proves the outcome:
+When running supervised (opt-in), use the smallest supervised layer that
+proves the outcome:
 
 | Work shape | Manager layer | GitHub shape |
 |---|---|---|
@@ -142,8 +143,9 @@ successful execution packet.
 
 When no released layer can cover the work, the operator must say so. It must
 not hide a cross-repo outcome inside unrelated missions. The choices are to
-use a smaller approved work slice, get approval for a fitting policy, or use an
-explicit direct-session contract and record the harness gap.
+use a smaller approved work slice, get approval for a fitting policy, run an
+ordinary unsupervised session, or use an explicit direct-session contract and
+record the harness gap.
 
 ## Normal operator experience
 

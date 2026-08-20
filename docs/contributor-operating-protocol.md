@@ -116,12 +116,13 @@ learning needs differ, and mentoring applies to humans.
   `start_agent_mission` is the separate operator entry tool. Manager's
   deterministic coding conductor owns local mission state, holds no GitHub
   credential, and is not the lifecycle database.
-- **The issue and execution stay linked.** A supervised request carries the
+- **The issue and execution stay linked.** A supervised (opt-in) request carries the
   weekly goal, issue URL, specification revision, requirement IDs, claim
   generation, and work-layer choice. The pull request links back to the issue
   and the successful execution packet. If a required link is missing, the
   automated path stops.
-- **Use the smallest work layer that fits.** One bounded repo change is a
+- **For supervised (opt-in) work, use the smallest work layer that fits.**
+  One bounded repo change is a
   mission. Several ordered changes in one repo form an initiative. One outcome
   across repos is a campaign. An issue may need more than one mission, and a
   campaign may close more than one issue. The links make that clear.
