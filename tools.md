@@ -33,8 +33,8 @@ Local tool catalog for this machine.
 
 ## agent-start
 - Purpose: read-only coding-agent startup packet with weekly focus, workspace
-  preflight, run state, bus discovery, AgentCoord claims, docs, git state, and
-  validation dry-run.
+  preflight, source-host ownership, run state, bus discovery, docs, git state,
+  and validation dry-run. Read mode also shows AgentCoord claims.
 - Location: ~/Projects/shared/agent-scripts/bin/agent-start
 - Docs: ~/Projects/shared/agent-scripts/docs/agent-start.md
 
@@ -46,7 +46,8 @@ Local tool catalog for this machine.
 
 ## workspace-preflight
 - Purpose: read-only repository authority, worktree ownership, divergence,
-  AgentCoord collision, and quarantine diagnosis for `read|write` mode.
+  source-host ownership, local-run collision, and quarantine diagnosis for
+  `read|write` mode. NAS claim and quarantine state is read-mode visibility.
 - Location: ~/Projects/shared/agent-scripts/bin/workspace-preflight
 - Docs: ~/Projects/shared/agent-scripts/docs/launch-safety.md
 

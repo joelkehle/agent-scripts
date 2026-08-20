@@ -76,7 +76,8 @@ projection.
   `AGENT_WORKSPACE_STATE_ROOT`) holds disposable atomic local coordination
   manifests for coding-process entrance, PID/start-token ownership, exit,
   abandonment, and quarantine observations. Git owns source and commits;
-  AgentCoord claims own cross-host writer hints. Losing these manifests loses
+  Dev owns source writes. AgentCoord may carry legacy cross-host writer hints,
+  but write preflight does not depend on them. Losing these manifests loses
   local collision/reconciliation context but no work noun, source, commit, or
   supervised execution truth. Version 2 records form a repository or workspace
   union. Workspace records require explicit operator admission. They are

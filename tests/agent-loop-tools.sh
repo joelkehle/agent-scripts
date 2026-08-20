@@ -329,7 +329,7 @@ assert_not_contains "$audit_output" "blocked-fixture"
 
 dirty_repo="$workspace/dirty-repo"
 agent_start_card="$tmp/agent-start/card.json"
-agent_start_output="$(AGENTCOORD_ROOT="$coord_root" agent-start --root "$make_repo" --no-bus --card "$agent_start_card")"
+agent_start_output="$(AGENTCOORD_ROOT="$coord_root" agent-start --root "$make_repo" --session-kind workspace --no-bus --card "$agent_start_card")"
 assert_contains "$agent_start_output" "Agent Start"
 assert_contains "$agent_start_output" "== Tool Visibility =="
 assert_contains "$agent_start_output" "== AgentCoord Active Claims =="

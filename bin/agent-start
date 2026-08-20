@@ -17,6 +17,7 @@ const {
   DEFAULT_STATE_ROOT,
   preflightWorkspace,
   publicPreflight,
+  sourceWriteOwnership,
 } = require("../lib/workspace-preflight");
 
 const DEFAULT_WORKBENCH_SUMMARY = process.env.AGENT_WORKBENCH_SUMMARY || "/home/joelkehle/Projects/shared/dev-dashboard/codex-output/agentic-software-ops/agent-workbench/latest/summary.json";
@@ -215,6 +216,24 @@ function collectAgentCoord(root, timeoutMs) {
   };
 }
 
+function coordinationSnapshot(args) {
+  if (args.mode === "write" && args.sessionKind !== "workspace") {
+    const ownership = sourceWriteOwnership();
+    return {
+      available: false,
+      skipped: true,
+      error: null,
+      command: null,
+      status: 0,
+      signal: null,
+      entries: [],
+      summary: { total: 0, active: 0, stale: 0, invalid: 0, released: 0 },
+      reason: `source writes use local workspace ownership on ${ownership.owner_host}`,
+    };
+  }
+  return collectAgentCoord(args.agentcoordRoot, args.timeoutMs);
+}
+
 function renderClaims(entries, root) {
   if (!entries.length) return ["agentcoord: no matching claims"];
   return entries.map((entry) => {
@@ -236,6 +255,20 @@ function renderClaims(entries, root) {
 }
 
 function agentCoordSections(claimState, root) {
+  if (claimState.skipped) {
+    const section = (title) => ({
+      title,
+      command: "not run",
+      status: 0,
+      signal: null,
+      output: [`agentcoord: not scanned; ${claimState.reason}`],
+    });
+    return [
+      section("AgentCoord Validate"),
+      section("AgentCoord Active Claims"),
+      section("AgentCoord Stale Claims"),
+    ];
+  }
   if (!claimState.available) {
     const section = (title) => ({
       title,
@@ -439,7 +472,7 @@ function collectSafety(args, root, claimState) {
 
 function collect(args) {
   const root = args.sessionKind === "workspace" ? path.resolve(args.root) : gitRoot(args.root);
-  const claimState = collectAgentCoord(args.agentcoordRoot, args.timeoutMs);
+  const claimState = coordinationSnapshot(args);
   const packet = {
     label: "Coding-agent startup brief",
     safetyClass: "read",
@@ -456,6 +489,8 @@ function collect(args) {
     results: [],
     agentCoord: {
       available: claimState.available,
+      skipped: claimState.skipped === true,
+      reason: claimState.reason || null,
       error: claimState.error,
       command: claimState.command,
       summary: claimState.summary,
@@ -557,6 +592,11 @@ function renderText(packet) {
       out.push("authority: unsupervised session; no supervised authority claims, normal tool permissions apply");
     }
   } else {
+    out.push(
+      `source writes: owner=${packet.workspacePreflight.source_ownership.owner_host} ` +
+      `current=${packet.workspacePreflight.source_ownership.current_host || "unknown"} ` +
+      `allowed=${packet.workspacePreflight.source_ownership.write_allowed}`,
+    );
     out.push(`origin fetch: ${packet.workspacePreflight.origin_fetch_url || "(unavailable)"}`);
     out.push(`origin push: ${packet.workspacePreflight.origin_push_urls.length ? packet.workspacePreflight.origin_push_urls.join(", ") : "(unavailable)"}`);
   }
@@ -610,19 +650,19 @@ try {
   }
   if (args.notice) {
     const root = args.sessionKind === "workspace" ? path.resolve(args.root) : gitRoot(args.root);
-    const claimState = collectAgentCoord(args.agentcoordRoot, args.timeoutMs);
+    const claimState = coordinationSnapshot(args);
     const safety = collectSafety(args, root, claimState);
     process.stdout.write(renderNotice(
       readWorkbenchSummary(args.workbenchSummary, args.workbenchUrl, args.explicitWorkbenchSummary),
       safety,
     ));
-    process.exit(claimState.available ? 0 : 1);
+    process.exit(safety.workspacePreflight.ok ? 0 : 1);
   }
   const packet = collect(args);
   if (args.cardPath) writeCard(args.cardPath, packet);
   if (args.json) console.log(JSON.stringify(packet, null, 2));
   else process.stdout.write(renderText(packet));
-  if (!packet.agentCoord.available) process.exitCode = 1;
+  if (!packet.workspacePreflight.ok) process.exitCode = 1;
 } catch (error) {
   console.error(`agent-start: ${error.message}`);
   process.exit(1);

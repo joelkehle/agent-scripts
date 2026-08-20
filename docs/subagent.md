@@ -199,4 +199,7 @@ Tmux is for persistent/interactive long jobs, debuggers, servers, or manual exte
 
 Pinakes bus agents are application/runtime services. Before adding agentic product capability, check existing bus agents and docs first; do not confuse bus service reuse with coding-task delegation.
 
-For cross-host Codex / Claude Code coordination across Dev, Beelink, and Mac Mini, use the shared NAS coordination layer. Read `docs/shared-agent-coordination.md`, create claims before overlapping write work, and write handoffs before switching hosts or runtimes.
+For cross-host Codex / Claude Code work, Dev owns source edits. Use Beelink and
+Mac Mini for host-only checks, then return findings to the Dev session. Read
+`docs/shared-agent-coordination.md`. AgentCoord handoffs are optional and never
+grant source-write authority.

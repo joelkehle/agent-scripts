@@ -53,6 +53,11 @@ function render(result) {
   if (result.session_kind === "workspace") {
     lines.push("authority: operator safety=read");
   } else {
+    lines.push(
+      `source writes: owner=${result.source_ownership.owner_host} ` +
+      `current=${result.source_ownership.current_host || "unknown"} ` +
+      `allowed=${result.source_ownership.write_allowed}`,
+    );
     lines.push(`origin fetch: ${result.origin_fetch_url || "(unavailable)"}`);
     lines.push(`origin push: ${result.origin_push_urls.length ? result.origin_push_urls.join(", ") : "(unavailable)"}`);
     lines.push(`branch: ${result.branch || "(detached)"} head=${result.starting_head || "(unavailable)"}`);

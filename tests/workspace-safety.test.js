@@ -96,6 +96,13 @@ function baseObservation(overrides = {}) {
     }],
     claims: { available: true, active: [], invalid: [] },
     quarantine: { available: true, matches: [] },
+    source_ownership: {
+      schema: "source-write-ownership.v1",
+      owner_host: "dev",
+      current_host: "dev",
+      write_allowed: true,
+      coordination: "local-workspace",
+    },
     runs: [],
     invalid_runs: [],
     ...overrides,
@@ -133,7 +140,7 @@ function makeRunFixture(t, name) {
   fs.mkdirSync(agentcoordRoot, { recursive: true });
   fs.mkdirSync(quarantineRoot, { recursive: true });
   fs.writeFileSync(focusFile, focusYaml());
-  return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot };
+  return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot, currentHost: "dev" };
 }
 
 function makeWorkspaceFixture(t, name) {
@@ -148,8 +155,61 @@ function makeWorkspaceFixture(t, name) {
   fs.mkdirSync(agentcoordRoot);
   fs.mkdirSync(quarantineRoot);
   fs.writeFileSync(focusFile, focusYaml(`    execution_refs:\n      - kind: mission\n        id: mission-context\n`));
-  return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot };
+  return { root, focusFile, stateRoot, agentcoordRoot, quarantineRoot, currentHost: "dev" };
 }
+
+test("source write ownership allows Dev and refuses every other host", () => {
+  const dev = evaluateWorkspace(baseObservation(), "write");
+  assert.equal(dev.ok, true);
+
+  for (const currentHost of ["beelink", "macmini", null]) {
+    const result = evaluateWorkspace(baseObservation({
+      source_ownership: {
+        schema: "source-write-ownership.v1",
+        owner_host: "dev",
+        current_host: currentHost,
+        write_allowed: false,
+        coordination: "local-workspace",
+      },
+    }), "write");
+    assert.equal(result.ok, false);
+    const refusal = result.issues.find((item) => item.code === "source_write_host_refused");
+    assert.equal(refusal.owner_host, "dev");
+    assert.equal(refusal.current_host, currentHost);
+  }
+});
+
+test("Dev write preflight does not read WAN coordination state", (t) => {
+  const fixture = makeRunFixture(t, "dev-local-write");
+  const missing = path.join(path.dirname(fixture.stateRoot), "missing-wan-root");
+  const result = preflightWorkspace(fixture.root, "write", {
+    ...fixture,
+    agentcoordRoot: missing,
+    quarantineRoot: missing,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_ownership.write_allowed, true);
+  assert.equal(result.observation.claims.skipped, true);
+  assert.equal(result.observation.quarantine.skipped, true);
+  assert.equal(result.issues.some((item) => item.code === "agentcoord_unavailable"), false);
+  assert.equal(result.issues.some((item) => item.code === "quarantine_registry_unavailable"), false);
+});
+
+test("non-Dev write preflight refuses without WAN coordination state", (t) => {
+  const fixture = makeRunFixture(t, "nondev-local-write");
+  const missing = path.join(path.dirname(fixture.stateRoot), "missing-wan-root");
+  const result = preflightWorkspace(fixture.root, "write", {
+    ...fixture,
+    currentHost: "beelink",
+    agentcoordRoot: missing,
+    quarantineRoot: missing,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.source_ownership.write_allowed, false);
+  assert.deepEqual(result.blocking_issues.map((item) => item.code), ["source_write_host_refused"]);
+  assert.equal(result.observation.claims.skipped, true);
+  assert.equal(result.observation.quarantine.skipped, true);
+});
 
 test("non-Git write preflight refuses with ok=false and a non-zero CLI exit", (t) => {
   const fixture = makeWorkspaceFixture(t, "shapes");
@@ -361,7 +421,7 @@ test("agent-start requires explicit workspace admission and then uses read safet
     t.skip("sandbox blocks nested process execution");
     return;
   }
-  assert.equal(implicit.status, 0, implicit.stderr);
+  assert.equal(implicit.status, 1, implicit.stderr);
   assert.equal(JSON.parse(implicit.stdout).workspacePreflight.ok, false);
 
   const explicit = spawnSync("node", [...baseArgs, "--session-kind", "workspace"], {
@@ -1102,11 +1162,11 @@ test("linked worktree quarantine paths are included in repository aliases", (t) 
     `${linked} | QUARANTINED\n`,
   );
 
-  const linkedPreflight = preflightWorkspace(linked, "write", fixture);
-  assert.equal(linkedPreflight.ok, false);
+  const linkedPreflight = preflightWorkspace(linked, "read", fixture);
+  assert.equal(linkedPreflight.ok, true);
   assert.ok(linkedPreflight.issues.some((item) => item.code === "repository_quarantined"));
-  const primaryPreflight = preflightWorkspace(fixture.root, "write", fixture);
-  assert.equal(primaryPreflight.ok, false);
+  const primaryPreflight = preflightWorkspace(fixture.root, "read", fixture);
+  assert.equal(primaryPreflight.ok, true);
   assert.ok(primaryPreflight.issues.some((item) => item.code === "repository_quarantined"));
 });
 
@@ -1741,6 +1801,7 @@ process.stdout.write(${JSON.stringify(`${JSON.stringify(payload)}\n`)});
   const result = spawnSync("node", [
     path.join(repoRoot, "bin/agent-start"),
     "--root", fixture.root,
+    "--mode", "read",
     "--focus-file", fixture.focusFile,
     "--no-bus",
     "--workbench-summary", support.workbench,
@@ -1808,6 +1869,7 @@ setTimeout(() => process.stdout.write(${JSON.stringify(`${JSON.stringify(payload
   const result = spawnSync("node", [
     path.join(repoRoot, "bin/agent-start"),
     "--root", fixture.root,
+    "--mode", "read",
     "--focus-file", fixture.focusFile,
     "--no-bus",
     "--timeout", "200",
@@ -1829,11 +1891,36 @@ setTimeout(() => process.stdout.write(${JSON.stringify(`${JSON.stringify(payload
   assert.match(result.stdout, /== AgentCoord Stale Claims ==[\s\S]*?status: 0[\s\S]*?stale-from-delayed-snapshot/);
 });
 
-test("agent-start exits non-zero and warns when the claim snapshot fails", (t) => {
+test("agent-start read mode warns when the claim snapshot fails", (t) => {
   const fixture = makeRunFixture(t, "agent-start-claim-failure");
   const support = makeAgentStartSupport(fixture);
   const stub = path.join(path.dirname(fixture.stateRoot), "agentcoord-failure");
   fs.writeFileSync(stub, "#!/bin/sh\nprintf 'NFS claim read failed\\n' >&2\nexit 2\n", { mode: 0o755 });
+
+  const result = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-start"),
+    "--root", fixture.root,
+    "--mode", "read",
+    "--focus-file", fixture.focusFile,
+    "--no-bus",
+    "--workbench-summary", support.workbench,
+  ], {
+    encoding: "utf8",
+    env: { ...support.env, AGENTCOORD_BIN: stub },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /shouldSurface=true/);
+  assert.match(result.stdout, /agentcoord_unavailable/);
+  assert.match(result.stdout, /claim scan failed: NFS claim read failed/);
+});
+
+test("agent-start write mode does not launch an AgentCoord scan", (t) => {
+  const fixture = makeRunFixture(t, "agent-start-write-no-scan");
+  const support = makeAgentStartSupport(fixture);
+  const marker = path.join(path.dirname(fixture.stateRoot), "claim-scan-ran.txt");
+  const stub = path.join(path.dirname(fixture.stateRoot), "agentcoord-must-not-run");
+  fs.writeFileSync(stub, `#!/bin/sh\nprintf ran > "${marker}"\nexit 2\n`, { mode: 0o755 });
 
   const result = spawnSync("node", [
     path.join(repoRoot, "bin/agent-start"),
@@ -1846,10 +1933,23 @@ test("agent-start exits non-zero and warns when the claim snapshot fails", (t) =
     env: { ...support.env, AGENTCOORD_BIN: stub },
   });
 
-  assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stdout, /shouldSurface=true/);
-  assert.match(result.stdout, /agentcoord_unavailable/);
-  assert.match(result.stdout, /claim scan failed: NFS claim read failed/);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(marker), false);
+  assert.match(result.stdout, /agentcoord: not scanned; source writes use local workspace ownership on dev/);
+  assert.doesNotMatch(result.stdout, /agentcoord_unavailable/);
+
+  const notice = spawnSync("node", [
+    path.join(repoRoot, "bin/agent-start"),
+    "--notice",
+    "--root", fixture.root,
+    "--focus-file", fixture.focusFile,
+    "--workbench-summary", support.workbench,
+  ], {
+    encoding: "utf8",
+    env: { ...support.env, AGENTCOORD_BIN: stub },
+  });
+  assert.equal(notice.status, 0, notice.stderr);
+  assert.equal(fs.existsSync(marker), false);
 });
 
 test("agent-start read mode permits but surfaces repository hazards", (t) => {
