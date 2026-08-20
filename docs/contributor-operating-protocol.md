@@ -26,8 +26,8 @@ and state ownership described here.
 
 ## What Joel should see
 
-Joel should not have to remember the system map. A normal coding session should
-do this:
+Joel should not have to remember the system map. A supervised (opt-in) coding
+session should do this (a plain unsupervised session skips this flow):
 
 1. Show the current weekly goals.
 2. Ask which goal this work serves.

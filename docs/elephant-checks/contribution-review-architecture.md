@@ -46,6 +46,9 @@ This serves both Maintainer Charter missions:
 
 ## 3. Whole-system chain
 
+The chain covers supervised (opt-in) contribution work; plain unsupervised
+sessions sit outside it.
+
 ```text
 captured intent
   -> faithful GitHub issue and conflict-safe claim
