@@ -10,7 +10,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.27 (2026-08-03)
+Version: 1.28 (2026-08-22)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -28,14 +28,16 @@ projection.
 | UCLA work nouns | `ucla-tdg-project-agents` project-manager (SQLite `project-manager.db`) | canonical UCLA `project_id`, tasks, deadlines, escalation runtime, proposals, invention seeds, and owner-attention state | a proposal *into* it |
 | Repository engineering lifecycle | GitHub issues and PRs, including versioned `issue-claim.v1` issue-comment events and `owner-attention.v1` PR events | issue definitions and claim leases for repo engineering; personal/shared repo-bound ready-for-Joel attention and disposition by exact head | assignment, label, dashboard, coordinator cursor, or private receipt projection |
 | Supervised coding orchestration | Manager Projects MCP durable state under `~/.local/state/claude-projects-mcp/agent-{missions,initiatives,campaigns}/` | exact mission, initiative, and campaign lifecycle records; contiguous audit journals; bounded parent/child intent; supervised child-run references; validation and independent-review receipts; immutable ready packets; terminal outcomes and recovery evidence | non-authoritative disposable standalone agent-run working state, or a dashboard, metric, WWI breadcrumb, GitHub artifact, or narrative summary |
-| Stories / narrative | UCLA TDG Wiki (MediaWiki, `wiki.techtransfer.agency`) | SOPs, process rules, deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
+| Stories / narrative (UCLA) | RETIRED as an owner for UCLA matter work (Joel, 2026-08-22: the MediaWiki path is not happening; the goal is a 30-hour-a-week job). Narrative history lives in git-tracked docs and in REGISTRAR matter projections; executable requirements live in git, never in a wiki | deal/invention/person history, "why we decided this" — citing noun IDs | a draft |
 | Personal narrative | JK `llm-wiki` | same role, scope `personal` | a draft |
 | Personal life events | `life-events` single-writer service; immutable one-record-per-file log at `nas:state/life-events/log/` | personal timeline event assertions, their EDTF dates and attribution, event identity, provenance pointers, and immutable correction/retraction history; never evidence bytes or narrative truth | a rebuildable local-SSD projection, wiki draft, feed, or dashboard |
 | Personal / Joel Inc decision lifecycle | NOUS Decision Ledger, written only through the protected JK `llm-wiki` NOUS server; canonical append-only events in the existing private `llm-wiki` PostgreSQL | `scope=personal` or `scope=joel_inc` decision-time forecasts and recommendations, action selection, verified outcomes, attributable Joel assessments, lessons, corrections/retractions, and the exact values, goals, and evidence bindings used | a Collective Chat link, wiki narrative, policy-evaluation input, dashboard, mutable stream head, or query index |
 | Interactions | `ucla-tdg-project-agents` project-manager `interactions` table for `scope=ucla`; `life-events` event log for promoted `scope=personal` timeline events | the fact and provenance of communication events (meetings, email threads, calls, voice memos, message threads), including what outputs they produced; never task state, identities, or narrative truth | a projection into PM proposals, wiki drafts, timelines, or dashboards |
 | Source evidence | NAS `/mnt/synology-share1/evidence/<channel>/<id>/` canonical owned copies; Gmail, Krisp, Apple, and other vendor clouds are capture devices and convenience caches | the immutable record: media, transcript, message/export bytes, manifest, hashes, and stable `source_ref` / `evidence_ref` | never copied as truth |
 | Mail synchronization governance | `mail-mirror` append-only, metadata-only synchronization ledger at the future scope-separated namespace `nas:state/mail-mirror/sync-ledger/<scope>/<opaque-account-ref>/` (approved; not operational) | opaque synchronization stream, generation, and epoch IDs; committed IMAP and Gmail History boundaries; synchronization gaps; machine-only capture, reconciliation, metadata-refresh, and gap-resolution obligations, including canonical opaque provider message and thread locator IDs required to execute them; capture attempt/outcome classifications; recovery, freeze, verification, and promotion records; immutable references and locator hashes pointing to canonical evidence | SQLite and other local indexes are rebuildable projections; scheduler state, leases, holders, fences, page progress, and governor-token state are ephemeral or disposable; mail evidence remains owned by the Source evidence tier |
-| Agent working state | each repo's `data/` | run artifacts, caches, learned policy docs; disposable and regenerable | n/a — never authoritative |
+| Agent working state | each repo's `data/`, classified BY FACT FAMILY, never by path (a `data/` path also holds the authoritative project-manager database) | run artifacts, caches, host-local projections — each family names its owner, single writer, rebuild source, retention, and host; learned policy docs are projections of rulings + corrections | n/a — a family without a named owner is an unlabeled source of truth: fix that |
+| Joel rulings and executable policy text | git-tracked ruled markdown in the owning repo (for UCLA matter work: `ucla-tdg-email-triage`, target `tdg-matters` after its ruled rename); each ruling carries a stable ruling id and provenance | protected rules, standing instructions, style requirements, ruled email wording, policy decisions; a change needs recorded Joel approval (a reviewed commit) | prompt context, distilled policy, and agent memory are labeled projections citing the ruling id and exact git object |
+| Controlled document templates | the work document store — Google Drive (Joel, 2026-08-22); existing Box folders named in current rulings stay valid until migrated | reusable office forms, term sheets, document bodies | git and local files hold pointers, requirements, fixtures, or clearly labeled examples only |
 | Agent org governance | `shared/manager/ops/config/agent-org.json` | Joel Inc agent titles, reporting lines, trust level, safety class, and escalation policy | a projection into bus passports, dashboards, docs, or wiki pages |
 | Transport | pinakes bus (UCLA :8080, JK :8081) | agent registration secrets for HMAC identity; no durable workflow facts (see `~/Projects/shared/pinakes/docs/ECOSYSTEM_ARCHITECTURE.md`) | — |
 
@@ -55,6 +57,18 @@ projection.
    or agreement metadata as wiki facts.
 5. **The bus is never storage.** Bus message archives (e.g. `data/agent-mail/`) are
    logs subject to retention, not state anyone reads back for truth.
+
+## Ruling↔EVENT LOG bridge (trial, 2026-08-22)
+
+For automation that acts WITHOUT Joel's per-action click (DELEGATED
+AUTHORITY in the matter system), a git ruling is executable authority only
+when the REGISTRAR has filed a bridge FILING in the EVENT LOG carrying the
+ruling id, repo, commit SHA, path, anchor, content hash, approval provenance,
+EVENT TIME, FILED TIME, and supersession link — and the hash matches the git
+bytes. Joel and agents may read and follow any committed ruling; only
+unattended execution waits for the bridge. Joel's note: this is strictness on
+trial — if it creates friction comparable to the over-tightened LLM harness,
+loosen it rather than defend it.
 
 ## Ownership Rulings
 
@@ -376,6 +390,12 @@ projection.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.28 (2026-08-22): add owners for Joel rulings (git-tracked ruled docs with
+  ruling ids) and controlled document templates (Google Drive); classify
+  agent working state by fact family, not path; retire the UCLA MediaWiki as
+  an owner; add the ruling↔EVENT LOG bridge rule on trial for unattended
+  automation. Source: ucla-tdg-email-triage docs/STATE_INVENTORY.md (agreed
+  Claude+Codex, ruled Joel).
 - 1.27 (2026-08-03): define weekly-focus version 2. One active execution,
   finished proof, and the supervision requirement use separate fields. Old
   files stay readable, and mixed files fail closed.
