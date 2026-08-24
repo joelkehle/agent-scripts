@@ -1,7 +1,7 @@
 ---
 summary: The approved machine-to-machine SSH grid and the agent-ssh helper that enforces it.
 read_when:
-  - An agent session needs to reach another machine (dev, beelink, lab, macmini).
+  - An agent session needs to reach another machine (dev, beelink, macmini).
   - Changing lib/ssh-grid.json, bin/agent-ssh, or the SSH Grid section of agent-start.
   - Debugging a "blocked by the SSH grid" error.
 ---

@@ -1,6 +1,6 @@
 {
-  "comment": "Approved 6x6 SSH grid by source host. Cells not listed are blocked. Interactive helpers use the caller's normal SSH identity. Keystone is outside this helper grid.",
-  "hosts": ["laptop", "dev", "beelink", "lab", "keystone", "macmini"],
+  "comment": "Approved 5x5 SSH grid by source host. Cells not listed are blocked. Interactive helpers use the caller's normal SSH identity. Keystone is outside this helper grid.",
+  "hosts": ["laptop", "dev", "beelink", "keystone", "macmini"],
   "hostAliasesComment": "Lowercase real hostnames -> grid names. Only list hostnames that differ from the grid name.",
   "hostAliases": {
     "joelsurface5": "laptop"
@@ -9,18 +9,15 @@
     "laptop": {
       "dev": { "method": "direct", "command": "agent-ssh dev" },
       "beelink": { "method": "direct", "command": "agent-ssh beelink" },
-      "lab": { "method": "direct", "command": "agent-ssh lab" },
       "macmini": { "method": "direct", "command": "agent-ssh macmini" }
     },
     "dev": {
       "beelink": { "method": "direct", "command": "agent-ssh beelink" },
-      "lab": { "method": "direct", "command": "agent-ssh lab" },
       "macmini": { "method": "direct", "command": "agent-ssh macmini" }
     },
     "beelink": {
       "keystone": { "method": "tunnel-only", "command": null, "note": "tunnel only, no shell" }
     },
-    "lab": {},
     "keystone": {},
     "macmini": {}
   },
