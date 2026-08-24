@@ -42,18 +42,18 @@ function runAgentSsh(args, host, extraEnv = {}) {
 
 test("ssh-grid.json parses and matches the approved grid shape", () => {
   const grid = JSON.parse(fs.readFileSync(gridPath, "utf8"));
-  assert.deepEqual(grid.hosts, ["laptop", "dev", "beelink", "lab", "keystone", "macmini"]);
+  assert.deepEqual(grid.hosts, ["laptop", "dev", "beelink", "keystone", "macmini"]);
   for (const host of grid.hosts) {
     assert.ok(Object.prototype.hasOwnProperty.call(grid.grid, host), `grid row missing for ${host}`);
   }
 
-  assert.deepEqual(Object.keys(grid.grid.laptop), ["dev", "beelink", "lab", "macmini"]);
+  assert.deepEqual(Object.keys(grid.grid.laptop), ["dev", "beelink", "macmini"]);
   for (const [target, cell] of Object.entries(grid.grid.laptop)) {
     assert.equal(cell.method, "direct");
     assert.equal(cell.command, `agent-ssh ${target}`);
   }
 
-  assert.deepEqual(Object.keys(grid.grid.dev), ["beelink", "lab", "macmini"]);
+  assert.deepEqual(Object.keys(grid.grid.dev), ["beelink", "macmini"]);
   for (const [target, cell] of Object.entries(grid.grid.dev)) {
     assert.equal(cell.method, "direct");
     assert.equal(cell.command, `agent-ssh ${target}`);
@@ -63,7 +63,6 @@ test("ssh-grid.json parses and matches the approved grid shape", () => {
   assert.equal(grid.grid.beelink.keystone.method, "tunnel-only");
   assert.equal(grid.grid.beelink.keystone.command, null);
 
-  assert.deepEqual(grid.grid.lab, {});
   assert.deepEqual(grid.grid.keystone, {});
   assert.deepEqual(grid.grid.macmini, {});
 
@@ -72,7 +71,7 @@ test("ssh-grid.json parses and matches the approved grid shape", () => {
 });
 
 test("agent-ssh maps the real laptop hostname JoelSurface5 to the laptop row", () => {
-  for (const target of ["dev", "beelink", "lab", "macmini"]) {
+  for (const target of ["dev", "beelink", "macmini"]) {
     const result = runAgentSsh([target], "JoelSurface5");
     assert.equal(result.status, 0);
     assert.equal(result.stdout, `ssh:-o BatchMode=yes ${target}\n`);
@@ -100,16 +99,16 @@ test("agent-ssh fails closed on an unknown hostname and points at hostAliases", 
 });
 
 test("agent-ssh blocks a forbidden cell with exit 1", () => {
-  const result = runAgentSsh(["dev"], "lab");
+  const result = runAgentSsh(["dev"], "keystone");
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /blocked by the SSH grid: lab -> dev\. See agent-start output\./);
+  assert.match(result.stderr, /blocked by the SSH grid: keystone -> dev\. See agent-start output\./);
 });
 
 test("agent-ssh rejects an unknown target and lists valid ones", () => {
   const result = runAgentSsh(["nonesuch"], "dev");
   assert.equal(result.status, 1);
   assert.match(result.stderr, /unknown target 'nonesuch'/);
-  assert.match(result.stderr, /laptop, dev, beelink, lab, keystone, macmini/);
+  assert.match(result.stderr, /laptop, dev, beelink, keystone, macmini/);
 });
 
 test("agent-ssh refuses tunnel-only cells with a plain explanation", () => {
@@ -125,10 +124,10 @@ test("agent-ssh uses the caller's normal SSH identity on allowed hops", () => {
 });
 
 test("agent-ssh ignores AGENT_SSH_HOST and trusts only hostname(1)", () => {
-  // The real host is lab (blocked from dev); the env tries to claim dev.
-  const result = runAgentSsh(["dev"], "lab", { AGENT_SSH_HOST: "dev" });
+  // The real host is keystone (blocked from dev); the env tries to claim dev.
+  const result = runAgentSsh(["dev"], "keystone", { AGENT_SSH_HOST: "dev" });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /blocked by the SSH grid: lab -> dev/);
+  assert.match(result.stderr, /blocked by the SSH grid: keystone -> dev/);
 });
 
 test("agent-ssh with no arguments prints usage", () => {

@@ -37,9 +37,6 @@ seconds before it checks Git.
 
 The installer is safe to run again. It prints each file and service action.
 
-The lab machine is not covered yet. Do not install this timer there until its
-checkout and service setup are agreed.
-
 ## Check It On Linux
 
 ```bash
