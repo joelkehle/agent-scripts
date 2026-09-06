@@ -1,9 +1,9 @@
 ---
-summary: "Definition-of-done contracts and external stop rules for bounded agent work, learned from agent-scripts PR #20."
+summary: "Scope, evidence, and stop rules for bounded agent work."
 read_when:
   - Starting any non-trivial task, review loop, repair loop, or agent delegation.
   - Designing intake gates, review processes, or agent-to-agent workflows.
-  - An agent says "one more round," "almost done," or proposes work beyond the ratified scope.
+  - An agent says "one more round," "almost done," or proposes work beyond the user's scope.
 ---
 
 # Measurable Done: Give Every Loop A Ceiling
@@ -39,38 +39,35 @@ overbuilding. Quality gates raise the floor; they do not supply a ceiling.
 Treat these as operational constraints. Do not rely on an in-loop model,
 including yourself, to supply proportionality after momentum has formed.
 
-## The Definition-Of-Done Contract
+## Scope And Evidence
 
-Before non-trivial write work begins, establish a ratified contract containing:
+Before work, read the user's request, the nearest instructions, and the
+relevant source. The request defines the scope for ordinary interactive work.
+Use a short working brief when it helps keep a larger task bounded. It may name:
 
 1. **Goal:** the requested outcome in one sentence.
 2. **Acceptance criteria:** each criterion names the evidence or command that
    proves it and the exact passing result.
 3. **Non-goals:** behavior and hardening explicitly outside the slice.
-4. **Kill criteria:** measurable trigger, required action, and decision time.
-5. **Budget:** review rounds plus a time, token, or complexity bound when useful.
-6. **Defer policy:** where real but non-required findings go.
-7. **Ratification evidence:** Joel's explicit approval of the contract. A
-   direct request that already states a clear contract counts; do not add a
-   redundant approval ceremony.
+4. **Stop rule or review budget:** when the task needs one.
 
-A lightweight task must be reversible, single-repository, and have no schema,
-auth, credential, deployment, migration, new dependency, reachable-service, or
-destructive external-write impact. Its inline contract still needs the
-outcome, exact proof and passing result, explicit non-goal, stop rule,
-one-round review cap, standing defer policy, and Joel-attributable ratification
-evidence. "Robust," "clean," and "works well" are not self-grading criteria.
+This is planning and evidence, not a second permission system. Do not require
+a fixed field list, a local ratification receipt, or another Joel approval for
+work he already asked for. Use the product's native permission controls and
+real OS/API limits. Ask only when a material product choice is unclear or an
+action is outside the user's scope or is an unapproved destructive write.
 
 ## Rules During Work
 
-1. **No contract, no non-trivial work.** Draft the missing contract and stop
-   for ratification.
-2. **Classify every finding:** `within_dod`, `beyond_dod`, or `contract_gap`.
-   Beyond-DoD findings default to deferred; contract gaps return to the
-   maintainer rather than silently expanding scope.
-3. **Enforce the budget externally.** At the review cap, stop automatic repair
+1. **Keep the stated scope.** When useful details are missing, make the
+   narrowest reasonable choice or ask one question if it would materially
+   change the result.
+2. **Classify every finding:** in scope, beyond scope, or a material choice.
+   Beyond-scope findings default to deferred; material choices return to Joel
+   rather than silently expanding scope.
+3. **Enforce a chosen budget.** At a review cap, stop automatic repair
    and present the remaining choices to Joel.
-4. **A P1 blocks retained unsafe behavior; it does not authorize unlimited
+4. **A serious defect blocks retained unsafe behavior; it does not authorize unlimited
    engineering.** Joel chooses among fixing it, removing the affected
    capability, narrowing the guarantee, or stopping the release.
 5. **Scope reduction is a successful outcome.** Deleting a feature,
@@ -94,7 +91,7 @@ AND no unresolved P1 affects retained behavior
 AND review budget is not exceeded
 ```
 
-After the budget, lower-severity or beyond-DoD findings become explicit
+After the budget, lower-severity or beyond-scope findings become explicit
 accept/defer decisions. A newly discovered P1 triggers a maintainer decision,
 not an automatic new repair round.
 

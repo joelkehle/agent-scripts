@@ -6,48 +6,24 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const fixtures = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "fixtures", "direct-session-dod.json"), "utf8"),
-);
-const impactFields = [
-  "schema",
-  "auth",
-  "credential",
-  "deployment",
-  "migration",
-  "new_dependency",
-  "reachable_service",
-  "destructive_external_write",
-];
+test("shared instructions use direct scope and native controls, without local ratification gates", () => {
+  const globalAgents = fs.readFileSync(path.join(root, "AGENTS.MD"), "utf8");
+  const loopModel = fs.readFileSync(path.join(root, "docs", "loop-operating-model.md"), "utf8");
+  const instructionArchitecture = fs.readFileSync(
+    path.join(root, "docs", "instruction-architecture.md"),
+    "utf8",
+  );
+  const decision = fs.readFileSync(
+    path.join(root, "docs", "interactive-permissions-2026-09-06.md"),
+    "utf8",
+  );
 
-function directSessionDecision(fixture) {
-  const { task, contract } = fixture;
-  const lightweight =
-    task.reversible === true &&
-    task.repositories === 1 &&
-    impactFields.every((field) => task[field] === false);
-  const completeInline =
-    contract &&
-    [
-      "outcome",
-      "proof",
-      "pass_condition",
-      "non_goal",
-      "stop_rule",
-      "defer_policy",
-      "ratification_evidence",
-    ].every((field) => typeof contract[field] === "string" && contract[field].trim() !== "") &&
-    contract.max_review_rounds === 1;
-  return lightweight && completeInline ? "proceed" : "draft_and_stop";
-}
+  assert.match(globalAgents, /Joel's stated scope and the native vendor permission prompts/);
+  assert.match(loopModel, /Do not add a local ratification or fixed\s+definition-of-done gate/);
+  assert.match(decision, /Native vendor permission prompts and real OS,\s+API, service, and product controls remain in force/);
+  assert.match(instructionArchitecture, /agent-env-install` materializes\s+regular workspace copies/);
+  assert.doesNotMatch(instructionArchitecture, /installed links live under/);
 
-test("direct-session fixtures enforce the ratified lightweight boundary", () => {
-  for (const fixture of fixtures) {
-    assert.equal(directSessionDecision(fixture), fixture.expected_action, fixture.name);
-  }
-});
-
-test("ship, review, and repair skills carry the same direct-session ceiling", () => {
   for (const skill of ["ship-loop", "review-loop", "repair-loop"]) {
     const canonical = path.join(
       root,
@@ -69,10 +45,34 @@ test("ship, review, and repair skills carry the same direct-session ceiling", ()
       "SKILL.md",
     );
     const text = fs.readFileSync(canonical, "utf8");
-    assert.match(text, /docs\/measurable-done\.md/);
-    assert.match(text, /within_dod/);
-    assert.match(text, /beyond_dod/);
-    assert.match(text, /contract_gap/);
+    assert.match(text, /Do not require a local ratification/);
+    assert.doesNotMatch(text, /ratified definition of done/);
+    assert.doesNotMatch(text, /one-round review cap/);
+    assert.doesNotMatch(text, /production config, schema migration, deployment/);
     assert.equal(fs.readFileSync(packaged, "utf8"), text, `${skill} packaged copy drifted`);
   }
+
+  const hygieneCanonical = path.join(
+    root,
+    "workspace-roots",
+    "projects",
+    ".agents",
+    "skills",
+    "hygiene-loop",
+    "SKILL.md",
+  );
+  const hygienePackaged = path.join(
+    root,
+    "workspace-roots",
+    "projects",
+    "plugins",
+    "joel-agent-ops",
+    "skills",
+    "hygiene-loop",
+    "SKILL.md",
+  );
+  const hygiene = fs.readFileSync(hygieneCanonical, "utf8");
+  assert.match(hygiene, /outside the user's authorized scope/);
+  assert.doesNotMatch(hygiene, /deleting tracked files, changing branches, force-pushing, deploying/);
+  assert.equal(fs.readFileSync(hygienePackaged, "utf8"), hygiene, "hygiene-loop packaged copy drifted");
 });
