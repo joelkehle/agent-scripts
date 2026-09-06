@@ -35,10 +35,12 @@ If it is missing, say so once and continue.
 - Commit with `committer`. Conventional Commits.
 - Push right after you commit. Commit-without-push is the anomaly.
   Done means merged to `main` and pushed, unless Joel waives it.
-- Branch switching, force-push, migrations, and tags: ask first. A routine
-  deploy may proceed when an existing service runbook or standing policy
-  already allows that exact service and action. Ask before changing deploy
-  authority, credentials, network exposure, durable data, or rollback policy.
+- Follow Joel's stated scope and the native vendor permission prompts for
+  ordinary interactive work. Ask only when an action is outside that scope or
+  is an unapproved destructive write, such as force-push, a migration, or a
+  change to deploy authority, credentials, network exposure, durable data, or
+  rollback policy. A routine deploy may proceed when an existing service
+  runbook or standing policy already allows that exact service and action.
   Never `reset --hard`, `clean`, `restore`, or broad checkout.
 - Give Joel the full PR URL every time — never a bare number — and repeat it
   in later summaries.
@@ -74,6 +76,8 @@ That is the routing table. Core routers in this repo:
 
 - docs/instruction-architecture.md — who reads which instruction file
 - docs/loop-operating-model.md — coding-agent loops
+- docs/interactive-permissions-2026-09-06.md — current rule for direct
+  interactive work and native permissions
 - docs/elephant/README.md — elephant protocol
 - docs/STATE_ARCHITECTURE.md — where state lives
 - docs/bus-discovery.md — live bus capabilities (`bus-discover`)

@@ -46,8 +46,10 @@ the global file merely to make a rule visible.
   `AGENTS.md` link above); a fresh machine must create it by hand, e.g.
   `ln -s shared/agent-scripts/workspace-roots/projects/.dockerignore ~/Projects/.dockerignore`.
 - Shared skill source:
-  `workspace-roots/projects/.agents/skills/`; installed links live under
-  `~/Projects/.agents/skills/` and `~/.agents/skills/`.
+  `workspace-roots/projects/.agents/skills/`. `agent-env-install` materializes
+  regular workspace copies under its install prefix; the Codex plugin cache has
+  separate packaged copies. Do not assume workspace or home `.agents` paths
+  are installed links.
 
 ## Byte Budgets
 

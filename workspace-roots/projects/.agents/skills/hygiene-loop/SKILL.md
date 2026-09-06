@@ -23,6 +23,8 @@ Process:
 7. Run `agent-check` when a repo has a gate; for docs-only repos without a gate, run `docs-list` and `git diff --check`.
 8. After commit, write `loop-receipt --from-head` so receipt files come from the committed work.
 
-Stop and ask if cleanup would require deleting tracked files, changing branches, force-pushing, deploying, rewriting history, or deciding whether ambiguous WIP belongs to Joel or another agent.
+Stop and ask only if cleanup needs an unresolved material decision, an action
+outside the user's authorized scope, an unapproved destructive write, or a
+decision about ambiguous WIP ownership.
 
 For detailed policy, read `~/Projects/shared/agent-scripts/docs/loop-operating-model.md`.

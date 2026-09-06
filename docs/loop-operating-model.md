@@ -40,37 +40,35 @@ Say `destructive write` when a write can send, delete, archive, label, deploy, m
 
 Default coding work is local `write` inside the current repo. External `write` and every `destructive write` need explicit user intent.
 
-## Loop Contract
+## Scope And Proportionality
 
-Before non-trivial write or review work, establish a measurable definition of
-done. A direct user request that already states the outcome, proof, scope, and
-stop rule may ratify it; do not add redundant approval ceremony. Otherwise
-draft the contract and stop for ratification. See `docs/measurable-done.md`.
+The direct user request, nearest instructions, and native vendor permissions
+govern ordinary interactive work. Do not add a local ratification or fixed
+definition-of-done gate. Use a short plan when it helps: goal, evidence,
+non-goals, and a stop rule or review budget where useful. See
+`docs/measurable-done.md`.
 
-The lightweight inline path is narrow: the task must be reversible,
-single-repository, and free of schema, auth, credential, deployment, migration,
-new-dependency, reachable-service, and destructive external-write impact. Joel
-must already have supplied the outcome, exact proof and passing result,
-explicit non-goal, stop rule, one-round review cap, and standing defer policy.
-Record his request as ratification evidence. If any condition is absent, use
-the full contract and stop before non-trivial write or review work until Joel
-ratifies it.
+Ask only when a material product choice is unclear or an action is outside the
+user's scope or is an unapproved destructive write. Preserve real OS/API
+controls, product permission prompts, tests, backups, data checks, and any
+explicit mailbox-action limit. These are safety controls, not a replacement
+approval ceremony.
 
 Every loop must define:
 
 - Trigger: user task, failing test, PR feedback, stale docs, scheduled check, or explicit skill call.
 - Context: nearest `AGENTS.md`, relevant docs with `read_when`, source files, tests, issue/PR context, and live bus discovery when agentic capability is involved.
 - Allowed actions: read, propose, write, or destructive write.
-- Definition of done: gradeable acceptance evidence, explicit non-goals, kill
-  criteria, budget, defer policy, and ratification evidence.
+- Definition of done: proportionate acceptance evidence, explicit non-goals,
+  and a stop rule or review budget when useful.
 - Feedback: exact commands or runtime probes that prove or disprove progress.
 - Repair limit: default three focused attempts on the same failure.
 - Stop rule: validation passes, scope expands, risky system change is required, product behavior is unclear, or the repair limit is hit.
 - Receipt: changed files, checks run, failures repaired, unresolved risks, and proof-pack URL when needed.
 
-During review and repair, classify new findings as within the definition of
-done, beyond it, or evidence of a contract gap. Beyond-contract findings
-default to deferred. A P1 blocks retaining the affected behavior, but the
+During review and repair, classify new findings as in scope, beyond scope, or
+a material choice. Beyond-scope findings default to deferred. A P1 blocks
+retaining the affected behavior, but the
 maintainer may fix it, remove the capability, narrow the guarantee, or stop the
 release; severity does not silently authorize unbounded repair.
 
@@ -93,9 +91,10 @@ Default behavior:
 - `learn-loop`: propose by default; write and commit only when Joel asked for a
   durable doc/instruction update.
 
-Stop and ask before committing if the change needs a product decision, secrets,
-production config, schema migration, deployment, destructive write, force-push,
-branch change, or if ownership of the dirty files is ambiguous.
+Stop and ask before committing only when a material product decision is
+unresolved, the action is outside the user's authorized scope, an unapproved
+destructive write is required, or ownership of dirty files is ambiguous. Keep
+using native vendor permissions and real OS/API controls for every action.
 
 ## Receipts And Resume
 
@@ -202,7 +201,8 @@ Rules:
 3. Make one focused fix.
 4. Rerun only the failed command first.
 5. Repeat up to three focused attempts for the same failure.
-6. Stop if the likely fix needs new scope, schema changes, secrets, deployment changes, destructive write, or unclear product behavior.
+6. Stop if the likely fix needs a material product decision, is outside the
+   user's authorized scope, or requires an unapproved destructive write.
 
 Do not convert a repair loop into a broad refactor unless the user asks.
 When the repair belongs to an active write task, commit the focused green fix

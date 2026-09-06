@@ -37,6 +37,17 @@ reject_text() {
   fi
 }
 
+require_no_duplicate_ratification_gate() {
+  local file="$1"
+  for stale in \
+    "ratified definition of done" \
+    "stop for Joel's ratification" \
+    "one-round review cap" \
+    "standing defer policy"; do
+    reject_text "$file" "$stale"
+  done
+}
+
 check_max_bytes "$global_agents" 12288
 check_max_bytes "$workspace_agents" 4096
 
@@ -60,6 +71,15 @@ for stale in \
   "OpenAI GPT-5.2" \
   "## Session start: surface open loops"; do
   reject_text "$global_agents" "$stale"
+done
+
+require_text "$global_agents" "native vendor permission prompts"
+require_no_duplicate_ratification_gate "$repo_root/docs/measurable-done.md"
+require_no_duplicate_ratification_gate "$repo_root/docs/loop-operating-model.md"
+for skill in ship-loop review-loop repair-loop; do
+  canonical="$repo_root/workspace-roots/projects/.agents/skills/$skill/SKILL.md"
+  require_text "$canonical" "Do not require a local ratification"
+  require_no_duplicate_ratification_gate "$canonical"
 done
 
 for file in "$oracle_doc" "$oracle_skill" "$tools_doc"; do
