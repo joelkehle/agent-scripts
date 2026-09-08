@@ -85,6 +85,24 @@ run_cmd() {
   printf 'agent-check: root=%s\n' "$repo_root"
   printf 'agent-check: command=%s\n' "$(command_text "$@")"
   if [ "$dry_run" -eq 0 ]; then
+    if [ -f go.mod ] && [ "$(hostname -s)" = dev ]; then
+      # Use the normal shared cache and disk scratch, including for tests.
+      # Checking actual available blocks excludes root's reserved space.
+      export GOCACHE="$HOME/.cache/go-build"
+      export GOTMPDIR=/tmp TMPDIR=/tmp
+      free_kib="$(df -Pk "$GOTMPDIR" | awk 'NR == 2 {print $4}')"
+      if ! [[ "$free_kib" =~ ^[0-9]+$ ]]; then
+        printf 'agent-check: cannot read available build space; no build started\n' >&2
+        return 75
+      fi
+      if [ "$free_kib" -lt 8388608 ]; then
+        printf 'agent-check: HOLD: less than 8 GiB free; no build started\n' >&2
+        return 75
+      fi
+      if [ "$free_kib" -lt 12582912 ]; then
+        printf 'agent-check: WARN: less than 12 GiB free for this build\n' >&2
+      fi
+    fi
     AGENT_CHECK_ACTIVE=1 "$@"
   fi
 }

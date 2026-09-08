@@ -264,6 +264,42 @@ fi
 assert_contains "$recursive_output" "agent-check: command=npm run agent:check"
 assert_contains "$recursive_output" "agent-check: command=npm test"
 
+disk_repo="$tmp/disk-go"
+disk_bin="$tmp/disk-bin"
+mkdir -p "$disk_repo" "$disk_bin"
+printf 'module example.invalid/disk\n' > "$disk_repo/go.mod"
+cat > "$disk_bin/hostname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "${AGENT_TEST_HOST:-dev}"
+SH
+cat > "$disk_bin/df" <<'SH'
+#!/usr/bin/env bash
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted\n/dev/test 75000000 0 %s 0%% /\n' "$AGENT_TEST_FREE"
+SH
+cat > "$disk_bin/go" <<'SH'
+#!/usr/bin/env bash
+printf 'GO_RAN cache=%s temp=%s\n' "$GOCACHE" "$GOTMPDIR"
+SH
+chmod +x "$disk_bin/hostname" "$disk_bin/df" "$disk_bin/go"
+set +e
+disk_low="$(PATH="$disk_bin:$PATH" AGENT_TEST_FREE=8388607 agent-check --root "$disk_repo" 2>&1)"
+disk_rc=$?
+set -e
+[ "$disk_rc" -eq 75 ] || fail "low-space gate = $disk_rc, want 75"
+assert_contains "$disk_low" 'HOLD: less than 8 GiB'
+assert_not_contains "$disk_low" GO_RAN
+disk_warn="$(PATH="$disk_bin:$PATH" AGENT_TEST_FREE=8388608 GOCACHE=/tmp/old-cache GOTMPDIR=/dev/shm agent-check --root "$disk_repo" 2>&1)"
+assert_contains "$disk_warn" 'WARN: less than 12 GiB'
+assert_contains "$disk_warn" "GO_RAN cache=$HOME/.cache/go-build temp=/tmp"
+disk_ok="$(PATH="$disk_bin:$PATH" AGENT_TEST_FREE=12582912 agent-check --root "$disk_repo" 2>&1)"
+assert_contains "$disk_ok" GO_RAN
+assert_not_contains "$disk_ok" WARN
+disk_dry="$(PATH="$disk_bin:$PATH" AGENT_TEST_FREE=0 agent-check --root "$disk_repo" --dry-run 2>&1)"
+assert_not_contains "$disk_dry" HOLD
+assert_not_contains "$disk_dry" GO_RAN
+disk_other="$(PATH="$disk_bin:$PATH" AGENT_TEST_HOST=beelink AGENT_TEST_FREE=0 GOCACHE=/tmp/existing GOTMPDIR=/tmp/existing-work agent-check --root "$disk_repo" 2>&1)"
+assert_contains "$disk_other" 'GO_RAN cache=/tmp/existing temp=/tmp/existing-work'
+
 home="$tmp/home"
 workspace="$tmp/Projects"
 mkdir -p "$home/.codex" "$workspace"

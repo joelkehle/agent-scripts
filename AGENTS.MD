@@ -86,6 +86,7 @@ That is the routing table. Core routers in this repo:
 - docs/shared-agent-coordination.md — overlapping or cross-host work
 - docs/service-runtime-policy.md — running services
 - docs/self-update.md — fleet checkout self-update timer
+- docs/build-storage.md — Go cache access, disk build space, and generated-file cleanup
 - docs/oracle.md, tools.md, and the design-walkthrough skill — oracle and tools
 
 Assume commercial LLM inference, local tools, and Joel as the only human gate.
