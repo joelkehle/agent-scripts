@@ -401,7 +401,7 @@ function buildSurface(packet) {
     if (!location) reasons.push(`missing tool: ${tool}`);
   }
   for (const section of packet.results) {
-    if (["AgentCoord Validate", "Docs", "Validation Entrypoint"].includes(section.title) && section.status !== 0) {
+    if (["AgentCoord Validate", "Docs", "Validation Entrypoint", "Gmail Boundary"].includes(section.title) && section.status !== 0) {
       reasons.push(`${section.title} failed: ${section.command}`);
     }
   }
@@ -497,6 +497,7 @@ function collect(args) {
     },
     ...collectSafety(args, root, claimState),
   };
+  packet.results.push(sectionFromCommand("Gmail Boundary", run("python3", [path.join(__dirname, "../lib/gmail-boundary.py"), "check"], { timeoutMs: args.timeoutMs }), 12));
   if (!args.skipBus) packet.results.push(sectionFromCommand("Bus Discovery", busDiscovery(Math.max(args.timeoutMs, 8000)), 120));
   packet.results.push(...agentCoordSections(claimState, args.agentcoordRoot));
   const docs = docsList(root, args.timeoutMs);
