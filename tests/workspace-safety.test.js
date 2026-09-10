@@ -441,6 +441,8 @@ test("agent-start quietly recognizes the caller's Projects directory as a worksp
   const env = {
     ...support.env,
     HOME: path.dirname(fixture.root),
+    CODEX_HOME: path.join(path.dirname(fixture.root), ".codex"),
+    CLAUDE_CONFIG_DIR: path.join(path.dirname(fixture.root), ".claude"),
   };
   const baseArgs = [
     path.join(repoRoot, "bin/agent-start"),
@@ -450,6 +452,13 @@ test("agent-start quietly recognizes the caller's Projects directory as a worksp
     "--workbench-summary", support.workbench,
     "--no-bus",
   ];
+  const missing = spawnSync("node", [...baseArgs, "--json"], { encoding: "utf8", env });
+  assert.equal(missing.status, 0, missing.stderr);
+  const missingPacket = JSON.parse(missing.stdout);
+  assert.equal(missingPacket.shouldSurface, true);
+  assert.equal(missingPacket.results.find(({ title }) => title === "Gmail Boundary").status, 1);
+  const install = spawnSync("python3", [path.join(repoRoot, "lib/gmail-boundary.py"), "install"], { encoding: "utf8", env });
+  assert.equal(install.status, 0, install.stderr);
   const result = spawnSync("node", [...baseArgs, "--json"], {
     encoding: "utf8",
     env,
