@@ -10,7 +10,7 @@ read_when:
 
 # State Architecture
 
-Version: 1.28 (2026-08-22)
+Version: 1.29 (2026-09-10)
 
 This is the normative contract. Rationale and the longer intake design live in
 `~/Projects/shared/brainstorm/universal-intake-state-architecture.md`. If a change
@@ -18,6 +18,23 @@ moves state ownership, update this doc in the same commit, bump the version, and
 a changelog line.
 
 ## Tier Table
+
+**Joel portfolio ruling, 2026-09-09; execution released 2026-09-10 UTC:**
+Joel's living patent portfolio belongs in Airtable TDG Docket, with original
+Inteum exports in private Google Drive TDG Reference. Inteum remains the source
+of record. This specific ruling overrides the older IP docket and source-export
+ownership language below for this portfolio. It does not retire assistant-db,
+move identity records, change mail custody, or enable automatic synchronization.
+The existing Airtable `global.tool-routing` rule dated 2026-09-01 already names
+TDG Docket as shared TDG operational state; its absence from this file was a
+documentation gap, not proof that Joel had made no such ruling.
+
+Use base `appK0m7kX7kiYxxy4`, Patents `tblryFi0QjMFdZVSx`, Portfolio Imports
+`tblW4AeQ6uZrYfeak`, and export folder `1eRQkEl83PR2hA8BYZHKq2ZbuJsJq4A7d`.
+All assistants read active Agent Rules and the portfolio SOP through their
+native Airtable/Drive tools. Implementation and safe manual diff steps live in
+`ucla-tdg-patent-docket/docs/PATENT_PORTFOLIO.md`. Old assistant-db patent rows are
+historical for this portfolio, not the home for current answers or imports.
 
 Every category of fact has exactly one home. Everything else holding a copy is a
 projection.
@@ -391,6 +408,9 @@ loosen it rather than defend it.
   (email-triage 0c32bed); source notes live in repo-local `data/source-notes/`.
 
 ## Changelog
+- 1.29 (2026-09-10): record Joel's approved Airtable living patent portfolio and
+  private Drive original exports, scoped precedence over older docket/source
+  rows, manual import safeguards, and unchanged assistant-db runtime.
 - 1.28 (2026-08-22): add owners for Joel rulings (git-tracked ruled docs with
   ruling ids) and agreement templates (Box, TDG Contracts, no agent access) and other templates (Google Drive); classify
   agent working state by fact family, not path; retire the UCLA MediaWiki as
