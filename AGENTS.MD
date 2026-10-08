@@ -27,7 +27,8 @@ dead from an error message, try a cheap probe first.
 ## Session Start
 
 Run `agent-start --root .` before the first reply. Surface every WARN and FAIL.
-If it is missing, say so once and continue.
+If it is missing, say so once and continue. On Joel's Windows laptop it is not
+installed by design: skip it silently and run only the checks the task needs.
 
 ## Local conventions the model cannot guess
 
@@ -80,6 +81,8 @@ That is the routing table. Core routers in this repo:
   interactive work and native permissions
 - docs/elephant/README.md — elephant protocol
 - docs/STATE_ARCHITECTURE.md — where state lives
+- docs/tdg-docket.md — any UCLA TDG work (cases, agreements, OFRAS, licensing):
+  read it first; Airtable TDG Docket is shared state across all agents
 - docs/bus-discovery.md — live bus capabilities (`bus-discover`)
 - docs/stack-priority.md — layer labels and the pick-next-work rule
 - docs/github-issues.md — canonical issue labeling and filing conventions
