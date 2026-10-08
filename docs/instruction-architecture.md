@@ -31,7 +31,10 @@ the global file merely to make a rule visible.
 ## Canonical Paths
 
 - Global source: `~/Projects/shared/agent-scripts/AGENTS.MD`.
-- Codex global link: `~/.codex/AGENTS.md` -> the global source.
+- Codex global link: `~/.codex/AGENTS.md` -> the global source. On the
+  Windows laptop this is a byte-identical copy; re-copy after every change.
+- Claude Code global: `~/.claude/CLAUDE.md` contains only an `@` import of the
+  global source, so Claude Code sessions load it from any starting folder.
 - Workspace source: `workspace-roots/projects/AGENTS.md`.
 - Workspace link: `~/Projects/AGENTS.md` -> the workspace source.
 - `~/AGENTS.MD` is a compatibility symlink to the global source. If a platform

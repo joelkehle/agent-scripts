@@ -56,6 +56,7 @@ for router in \
   "docs/loop-operating-model.md" \
   "docs/elephant/README.md" \
   "docs/STATE_ARCHITECTURE.md" \
+  "docs/tdg-docket.md" \
   "docs/bus-discovery.md" \
   "docs/shared-agent-coordination.md" \
   "docs/service-runtime-policy.md" \
