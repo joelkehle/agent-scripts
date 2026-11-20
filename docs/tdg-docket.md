@@ -39,6 +39,16 @@ UCLA Technology Development Group work is shared across agents through:
 - Put durable TDG to-dos in TDG Docket Tasks, not in local agent memory; local
   memory is invisible to every other agent and to other folders on the same
   machine.
+- Patent deadlines (standing duty, Joel 2026-11-19): whenever an email from
+  outside counsel, the patents desk (UCLAPatents), or Inteum states a patent
+  deadline, record it in the Case's `Deadline` field in the same session, with
+  its source (sender, date, message id) on the Case row and a Log entry that
+  gives the prior value. `Deadline` holds the nearest hard date for the case;
+  estimates, internal targets, and agreement end dates do not go there. Where
+  counsel wants instructions earlier than the deadline, make that a Task with
+  its own due date. `Deadline Decision` and `Deadline Decision For` are Joel's
+  marks: set them only on his word, and a mark counts only while
+  `Deadline Decision For` equals `Deadline`.
 - UCLA blocks the Box MCP connector. Box work goes through the Box Drive sync
   folder on Joel's Windows laptop (`C:\Users\joel\Box`); agents cannot see Box
   sharing settings.

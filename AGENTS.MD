@@ -82,7 +82,9 @@ That is the routing table. Core routers in this repo:
 - docs/elephant/README.md — elephant protocol
 - docs/STATE_ARCHITECTURE.md — where state lives
 - docs/tdg-docket.md — any UCLA TDG work (cases, agreements, OFRAS, licensing):
-  read it first; Airtable TDG Docket is shared state across all agents
+  read it first; Airtable TDG Docket is shared state across all agents. When
+  mail from outside counsel, the patents desk, or Inteum states a patent
+  deadline, record it on the case in the same session (rule in that doc)
 - docs/bus-discovery.md — live bus capabilities (`bus-discover`)
 - docs/stack-priority.md — layer labels and the pick-next-work rule
 - docs/github-issues.md — canonical issue labeling and filing conventions
